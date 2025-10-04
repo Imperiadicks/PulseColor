@@ -1,0 +1,41 @@
+{
+    "sections": [
+        {
+            "title": "Эффекты",
+            "items": [
+                {
+                    "id": "enableCustomWaveBeta",
+                    "name": "Кастомная Волна - БЕТА",
+                    "description": "Включает или отключает кастомную волну (бета-версия).",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": false
+                },
+                {
+                    "id": "enableBackgroundImage",
+                    "name": "Включить обновление фонового изображения",
+                    "description": "Включает или отключает автоматическое обновление фонового изображения.",
+                    "type": "button",
+                    "bool": false,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "FullVibe",
+                    "name": "Измените размера Vibe",
+                    "description": "Изменяет размер Vibe на 88vh, что делает вашу волну/vibe полноразмерным.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": false
+                },
+                {
+                    "id": "enableAvatarZoom",
+                    "name": "Включить эффект зума аватара",
+                    "description": "Включает или отключает эффект зума при наведении на аватар.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,323 @@
+/* ─────────────────── Общие доработки интерфейса ─────────────────── */
+[class*="MainPage_vibe"] {
+  transition: height 1.5s ease;
+  overflow: hidden;
+}
+
+@keyframes backgroundMovement {
+  0% {
+    background-position: 20% 20%;
+    background-size: 110%;
+  }
+  25% {
+    background-position: 80% 20%;
+    background-size: 115%;
+  }
+  50% {
+    background-position: 80% 80%;
+    background-size: 120%;
+  }
+  75% {
+    background-position: 20% 80%;
+    background-size: 115%;
+  }
+  100% {
+    background-position: 20% 20%;
+    background-size: 110%;
+  }
+}
+[class*="bg-cover"] {
+  animation: backgroundMovement 15s infinite
+    cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
+  margin-bottom:10px;
+}
+.avatar-zoom {
+  cursor: zoom-in;
+  overflow: hidden;
+  transform-origin: center;
+}
+.kc5CjvU5hT9KEj0iTt3C:hover, .kc5CjvU5hT9KEj0iTt3C:focus 
+{
+  backdrop-filter: none;
+}
+.PlayButton_root__nYKdN:not(:disabled), .PlayButton_root__nYKdN:not(:disabled) {
+  transition: all 0.2s ease-in-out;
+}
+.PageHeaderPlaylist_root__yJBii, .CommonAlbumPage_averageColorBackground__hs1_3, .PlaylistPage_averageColorBackground__3wEkw, .ArtistPage_averageColorBackground__wXTSY{
+  background: linear-gradient(var(--ym-controls-color-secondary-default-enabled, var(--ym-background-color-secondary-enabled-blur)) 0, transparent 100%)
+}
+.PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs,
+.Content_rootOld__g85_m,
+.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
+.LikesAndHistory_historyIconContainer__KPPbS, .LikesAndHistoryItem_root__oI1gk{
+  background: none;
+  background-color: transparent !important;
+}
+.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK{
+  border:1px solid var(--color-light-1) !important;
+  box-shadow:0 0 0 1px var(--color-light-1) inset; /* чтобы выделялась и на прозрачном */
+}
+.CommonLayout_root__WC_W1 {
+  background: radial-gradient(circle at 70% 70%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 70%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+
+  box-shadow: inset 0 0 40px 10px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 12px;
+}
+.PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.WithTopBanner_root__P__x3 {
+  background: radial-gradient(circle at 65% 65%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 60%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+}
+.WithTopBanner_root__P__x3 {
+    box-shadow: inset 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+}
+.By12CU9obvaH0jYtauNw {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.By12CU9obvaH0jYtauNw::-webkit-scrollbar {
+  display: none;
+}
+.VibeBlock_controls__BpDFL
+{
+  z-index: 2;
+}
+.VibeAnimation_enter_active__j0jOl, .VibeAnimation_enter_done__Oi2Kz, .VibeAnimation_exit__ioGXk {opacity: 0 !important;}
+
+.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068, 
+.WsKeF73pWotx9W1tWdYY, .JjlbHZ4FaP9EAcR_1DxF, 
+.SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
+.vqAVPWFJlhAOleK_SLk4, .wy8tgXoSb23KtiD3EFWg, .Meta_title__GGBnH{
+  color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.rWukOKAJh5Ga7JuIp62L{
+  background: var(--ym-controls-color-secondary-default-enabled);
+}
+.rWukOKAJh5Ga7JuIp62L:hover, .LikesAndHistory_historyIconContainer__KPPbS:hover, .LikesAndHistoryItem_root__oI1gk:hover{
+  background: var(--ym-controls-color-secondary-default-hovered) !important;
+}
+.JjlbHZ4FaP9EAcR_1DxF:hover{
+  color: var(--ym-controls-color-primary-default-hovered) !important;
+}
+.PlaylistFilters_filter_selected__y3GuB{
+  border-color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+
+/* ── техпанель: чекбокс — минимальный стиль (базовый, перезапишется Glass-UI ниже) ── */
+#osu-tech-panel { pointer-events:auto; }
+#osu-tech-body input[type="checkbox"]{
+  appearance: none;
+  width: 16px; height: 16px; border-radius: 4px;
+  border:1px solid rgba(255,255,255,.35); display:inline-block; position:relative;
+  background: rgba(255,255,255,.06);
+}
+#osu-tech-body input[type="checkbox"]:checked::after{
+  content:''; position:absolute; inset:3px; background:#fff; border-radius:3px;
+}
+
+/* ── Гасим родную волну ЯМ ── */
+.VibeAnimation_enter_active__j0jOl,
+.VibeAnimation_enter_done__Oi2Kz,
+.VibeAnimation_exit__ioGXk { opacity:0 !important; }
+[class*="VibeAnimation_enter_active__"],
+[class*="VibeAnimation_enter_done__"],
+[class*="VibeAnimation_exit__"] { opacity:0 !important; }
+
+/* ─────────────────── Музыкальный пульс (наш) ─────────────────── */
+/* контейнер волны */
+#osu-pulse{
+  position:fixed; inset:0; z-index:5; pointer-events:none; contain:layout paint;
+  opacity: var(--osu-alpha, .04);
+  filter: brightness(var(--osu-bright, 1));
+  transform: translate3d(var(--osu-offset-xvw, 1vw), 0, 0);
+  transition: filter 120ms ease, opacity 140ms ease;
+}
+
+/* два независимых слоя */
+#osu-pulse-outer, #osu-pulse-inner{
+  position:absolute; inset:0; pointer-events:none;
+  transition: transform 160ms cubic-bezier(.22,.61,.36,1), opacity 200ms ease;
+}
+
+/* внешний (beat) — scale; плюс мягкое «кольцо» через ::after */
+#osu-pulse-outer{
+  transform: scale(var(--osu-scale,1));
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 45%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 24%, transparent) 35%,
+      transparent 75%);
+  opacity: var(--osu-outer-opacity, 1);
+}
+#osu-pulse-outer::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 60%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 20%, transparent) 24%,
+      transparent 70%);
+  opacity:0; transform:scale(.86);
+}
+#osu-pulse-outer.pulse::after{ animation: osuRing 440ms cubic-bezier(.22,.61,.36,1); }
+@keyframes osuRing{
+  0%   { opacity:0;   transform:scale(.86); }
+  14%  { opacity:.28; transform:scale(.94); }
+  45%  { opacity:.18; transform:scale(1.02); }
+  100% { opacity:0;   transform:scale(1.10); }
+}
+
+/* внутренний (voice) — scale + translate (движется только он) */
+#osu-pulse-inner{
+  transform: translate3d(
+    var(--inner-tx, var(--inner-dx, 0)),
+    var(--inner-ty, var(--inner-dy, 0)),
+    0
+  ) scale(var(--osu-scale,1));
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 50%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 28%, transparent) 32%,
+      transparent 70%);
+  mix-blend-mode: screen;
+  opacity: .92;
+}
+
+/* картинка-фон .bg-cover не пульсирует */
+[class*="bg-cover"]{ will-change: auto; }
+
+/* 
+.CommonLayout_root__WC_W1{
+  background: radial-gradient(circle at 70% 70%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 70%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+  box-shadow: inset 0 0 40px 10px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 12px;
+}
+*/
+
+/* ─────────────────── Tech Panel: glass UI (красивая панель) ─────────────────── */
+#osu-tech-panel { pointer-events: auto; font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* Кнопка открытия */
+#osu-tech-gear{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 12px; border-radius:10px;
+  border:1px solid color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.25)) 60%, transparent);
+  background: color-mix(in hsl, var(--ym-background-color-primary-enabled-popover, rgba(10,10,10,.65)) 86%, transparent);
+  color: var(--ym-controls-color-secondary-text-enabled, #fff);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  backdrop-filter: saturate(130%) blur(10px);
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+#osu-tech-gear:hover{ transform: translateY(-1px); box-shadow: 0 10px 26px rgba(0,0,0,.45); }
+#osu-tech-gear:active{ transform: translateY(0); }
+
+/* Тело панели */
+#osu-tech-body{
+  min-width: 280px; max-width: 320px; max-height: 72vh; overflow:auto;
+  padding: 12px; border-radius: 14px;
+  border:1px solid color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.25)) 55%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in hsl, var(--ym-background-color-primary-enabled-popover, rgba(14,14,16,.78)) 92%, transparent), transparent 180%),
+    var(--color-light-1-4, transparent);
+  box-shadow: 0 16px 36px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: saturate(140%) blur(14px);
+}
+
+/* Группа */
+#osu-tech-body .group-title{
+  display:block; margin:8px 0 6px; font-weight:700; letter-spacing:.2px;
+  color: var(--ym-controls-color-secondary-on_default-enabled, #fff);
+}
+#osu-tech-body .group-box{
+  padding:8px; border-radius:12px;
+  background: color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.04)) 30%, transparent);
+  border:1px solid color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.2)) 40%, transparent);
+  box-shadow: 0 2px 10px rgba(0,0,0,.18) inset;
+  margin-bottom:10px;
+}
+
+/* Collapsible заголовок группы */
+#osu-tech-body .group-header{
+  all: unset;
+  display:flex; justify-content:space-between; align-items:center;
+  width:100%; padding:6px 4px; border-radius:8px; cursor:pointer;
+}
+#osu-tech-body .group-header:hover{
+  background: color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.08)) 32%, transparent);
+}
+#osu-tech-body .group-header .group-toggle{ transition: transform .18s ease; opacity:.9; }
+#osu-tech-body .group-header[aria-expanded="false"] .group-toggle{ transform: rotate(-90deg); }
+
+/* Ряд с контролом */
+#osu-tech-body label{
+  display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px;
+  padding:6px 4px; border-radius:8px;
+}
+#osu-tech-body label:hover{
+  background: color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.06)) 30%, transparent);
+}
+
+/* Подписи */
+#osu-tech-body label > span{
+  color: var(--ym-controls-color-secondary-text-enabled, #eaeaea);
+}
+
+/* Числовые инпуты */
+#osu-tech-body input[type="number"]{
+  width:130px; padding:6px 8px; border-radius:8px;
+  border:1px solid color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.28)) 60%, transparent);
+  background: color-mix(in hsl, var(--ym-background-color-primary-enabled-content, rgba(18,18,22,.65)) 82%, transparent);
+  color: var(--ym-controls-color-secondary-on_default-enabled, #fff);
+  outline: none;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+#osu-tech-body input[type="number"]::placeholder{ color: var(--color-light-4-10, rgba(255,255,255,.38)) !important; }
+#osu-tech-body input[type="number"]:focus{
+  border-color: color-mix(in hsl, var(--ym-controls-color-primary-default-enabled, #fff) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in hsl, var(--ym-controls-color-primary-default-enabled, #fff) 18%, transparent);
+}
+
+/* Чекбоксы */
+#osu-tech-body input[type="checkbox"]{
+  appearance:none; -webkit-appearance:none;
+  width:18px; height:18px; border-radius:6px;
+  border:1px solid color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.35)) 65%, transparent);
+  background: color-mix(in hsl, var(--ym-background-color-primary-enabled-content, rgba(18,18,22,.65)) 78%, transparent);
+  display:inline-grid; place-items:center; position:relative;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+#osu-tech-body input[type="checkbox"]::after{
+  content:''; width:10px; height:10px; border-radius:3px; transform:scale(0);
+  background: var(--ym-controls-color-primary-default-enabled, #fff);
+  box-shadow: 0 1px 0 rgba(0,0,0,.25);
+  transition: transform .18s ease;
+}
+#osu-tech-body input[type="checkbox"]:checked::after{ transform:scale(1); }
+#osu-tech-body input[type="checkbox"]:focus{
+  box-shadow: 0 0 0 3px color-mix(in hsl, var(--ym-controls-color-primary-default-enabled, #fff) 18%, transparent);
+}
+
+/* Маленькие хинты */
+#osu-tech-body .hint{
+  display:block; margin:-2px 0 6px 0; font-size:11px; opacity:.75;
+  color: var(--ym-controls-color-secondary-on_default-enabled, #ddd);
+}
+
+/* Скроллтонкая */
+#osu-tech-body::-webkit-scrollbar{ width: 8px; }
+#osu-tech-body::-webkit-scrollbar-thumb{
+  background: color-mix(in hsl, var(--ym-controls-color-secondary-outline-enabled_stroke, rgba(255,255,255,.4)) 65%, transparent);
+  border-radius: 6px;
+}
+#osu-tech-body::-webkit-scrollbar-track{ background: transparent; }

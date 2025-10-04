@@ -1,0 +1,20 @@
+{
+    "name": "PulseColor",
+    "image": "image.png",
+    "banner": "banner.png",
+    "author": [
+        "imperiadicks",
+        "Desaichk"
+    ],
+    "version": "1.0.0",
+    "description": "полноценная тема, где вы получаете более динамические цвета с PulseColor",
+    "css": "style.css",
+    "script": "script.js",
+    "type": "theme",
+    "tags": [
+        "PulseSync",
+        "Colored"
+    ],
+    "dependencies": [],
+    "fromPext": true
+}
