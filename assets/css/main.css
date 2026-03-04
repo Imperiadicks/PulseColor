@@ -1,0 +1,189 @@
+/* ─────────────────── Общие доработки интерфейса ─────────────────── */
+[class*="MainPage_vibe"] {
+  transition: height 1.5s ease;
+  overflow: hidden;
+}
+
+@keyframes backgroundMovement {
+  0% {
+    background-position: 20% 20%;
+    background-size: 110%;
+  }
+  25% {
+    background-position: 80% 20%;
+    background-size: 115%;
+  }
+  50% {
+    background-position: 80% 80%;
+    background-size: 120%;
+  }
+  75% {
+    background-position: 20% 80%;
+    background-size: 115%;
+  }
+  100% {
+    background-position: 20% 20%;
+    background-size: 110%;
+  }
+}
+[class*="bg-cover"] {
+  animation: backgroundMovement 15s infinite
+    cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
+  margin-bottom:10px;
+}
+.avatar-zoom {
+  cursor: zoom-in;
+  overflow: hidden;
+  transform-origin: center;
+}
+.kc5CjvU5hT9KEj0iTt3C:hover, .kc5CjvU5hT9KEj0iTt3C:focus 
+{
+  backdrop-filter: none;
+}
+.PlayButton_root__nYKdN:not(:disabled), .PlayButton_root__nYKdN:not(:disabled) {
+  transition: all 0.2s ease-in-out;
+}
+.PageHeaderPlaylist_root__yJBii, .CommonAlbumPage_averageColorBackground__hs1_3, .PlaylistPage_averageColorBackground__3wEkw, .ArtistPage_averageColorBackground__wXTSY{
+  background: linear-gradient(var(--ym-controls-color-secondary-default-enabled, var(--ym-background-color-secondary-enabled-blur)) 0, transparent 100%)
+}
+.PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs,
+.Content_rootOld__g85_m,
+.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
+.LikesAndHistory_historyIconContainer__KPPbS, .LikesAndHistoryItem_root__oI1gk{
+  background: none;
+  background-color: transparent !important;
+}
+.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK{
+  border:1px solid var(--color-light-1) !important;
+  box-shadow:0 0 0 1px var(--color-light-1) inset; /* чтобы выделялась и на прозрачном */
+}
+.CommonLayout_root__WC_W1 {
+  background: radial-gradient(circle at 70% 70%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 70%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+
+  box-shadow: inset 0 0 40px 10px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 12px;
+}
+.PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.WithTopBanner_root__P__x3 {
+  background: radial-gradient(circle at 65% 65%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 60%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+}
+.WithTopBanner_root__P__x3 {
+    box-shadow: inset 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+}
+.By12CU9obvaH0jYtauNw {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.By12CU9obvaH0jYtauNw::-webkit-scrollbar {
+  display: none;
+}
+.VibeBlock_controls__BpDFL
+{
+  z-index: 2;
+}
+.VibeAnimation_enter_active__j0jOl, .VibeAnimation_enter_done__Oi2Kz, .VibeAnimation_exit__ioGXk {opacity: 0 !important;}
+
+.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068, 
+.WsKeF73pWotx9W1tWdYY, 
+.SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
+.vqAVPWFJlhAOleK_SLk4, .wy8tgXoSb23KtiD3EFWg, .Meta_title__GGBnH{
+  color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.rWukOKAJh5Ga7JuIp62L{
+  background: var(--ym-controls-color-secondary-default-enabled);
+}
+.rWukOKAJh5Ga7JuIp62L:hover, .LikesAndHistory_historyIconContainer__KPPbS:hover, .LikesAndHistoryItem_root__oI1gk:hover{
+  background: var(--ym-controls-color-secondary-default-hovered) !important;
+}
+.JjlbHZ4FaP9EAcR_1DxF:active{
+  color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.JjlbHZ4FaP9EAcR_1DxF:hover{
+  color: var(--ym-controls-color-primary-default-hovered) !important;
+}
+.PlaylistFilters_filter_selected__y3GuB{
+  border-color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.ChangeVolume_icon__5Zv2a:hover{
+  color: var(--ym-controls-color-primary-default-hovered) !important;
+} 
+
+
+/* ── Гасим родную волну ЯМ ── */
+.VibeAnimation_enter_active__j0jOl,
+.VibeAnimation_enter_done__Oi2Kz,
+.VibeAnimation_exit__ioGXk { opacity:0 !important; }
+[class*="VibeAnimation_enter_active__"],
+[class*="VibeAnimation_enter_done__"],
+[class*="VibeAnimation_exit__"] { opacity:0 !important; }
+
+/* ─────────────────── Музыкальный пульс (наш) ─────────────────── */
+/* контейнер волны */
+#osu-pulse{
+  position:fixed; inset:0; z-index:5; pointer-events:none; contain:layout paint;
+  opacity: var(--osu-alpha, .04);
+  filter: brightness(var(--osu-bright, 1));
+  transform: translate3d(var(--osu-offset-xvw, 1vw), 0, 0);
+  transition: filter 120ms ease, opacity 140ms ease;
+}
+
+/* два независимых слоя */
+#osu-pulse-outer, #osu-pulse-inner{
+  position:absolute; inset:0; pointer-events:none;
+  transition: transform 160ms cubic-bezier(.22,.61,.36,1), opacity 200ms ease;
+}
+
+/* внешний (beat) — scale; плюс мягкое «кольцо» через ::after */
+#osu-pulse-outer{
+  transform: scale(var(--osu-scale,1));
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 45%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 24%, transparent) 35%,
+      transparent 75%);
+  opacity: var(--osu-outer-opacity, 1);
+}
+#osu-pulse-outer::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 60%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 20%, transparent) 24%,
+      transparent 70%);
+  opacity:0; transform:scale(.86);
+}
+#osu-pulse-outer.pulse::after{ animation: osuRing 440ms cubic-bezier(.22,.61,.36,1); }
+@keyframes osuRing{
+  0%   { opacity:0;   transform:scale(.86); }
+  14%  { opacity:.28; transform:scale(.94); }
+  45%  { opacity:.18; transform:scale(1.02); }
+  100% { opacity:0;   transform:scale(1.10); }
+}
+
+/* внутренний (voice) — scale + translate (движется только он) */
+#osu-pulse-inner{
+  transform: translate3d(
+    var(--inner-tx, var(--inner-dx, 0)),
+    var(--inner-ty, var(--inner-dy, 0)),
+    0
+  ) scale(var(--osu-scale,1));
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 50%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 28%, transparent) 32%,
+      transparent 70%);
+  mix-blend-mode: screen;
+  opacity: .92;
+}
+
+/* картинка-фон .bg-cover не пульсирует */
+[class*="bg-cover"]{ will-change: auto; }
+

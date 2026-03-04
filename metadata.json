@@ -1,0 +1,31 @@
+{
+  "name": "PulseColor",
+  "image": "image.png",
+  "banner": "banner.png",
+  "libraryLogo": "",
+  "author": [
+    "imperiadicks",
+    "Desaichk"
+  ],
+  "description": "полноценная тема, где вы получаете более динамические цвета с PulseColor",
+  "version": "1.0.2",
+  "css": "style.css",
+  "script": "script.js",
+  "type": "theme",
+  "tags": [
+    "PulseSync",
+    "Colored"
+  ],
+  "dependencies": [],
+  "allowedUrls": [
+    "http://127.0.0.1:2007",
+    "https://r.jina.ai",
+    "https://r.jina.ai/http://",
+    "https://r.jina.ai/https://",
+    "https://duckduckgo.com",
+    "https://bpmdatabase.com",
+    "https://musicstax.com"
+  ],
+  "supportedVersions": [],
+  "fromPext": true
+}
