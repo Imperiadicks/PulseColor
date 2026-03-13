@@ -21,7 +21,7 @@
 
     const cssText = await res.text();
 
-    // защита от "сервер вернул HTML/ошибку с кодом 200"
+    
     if (cssText.trim().startsWith("<")) {
       throw new Error("CSS response looks like HTML (wrong endpoint/theme?): " + url);
     }
