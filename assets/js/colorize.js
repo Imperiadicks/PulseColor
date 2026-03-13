@@ -44,6 +44,8 @@
 
   /*──────────────────────── settings ────────────────────────*/
   const HANDLE = 'PulseColor';
+  const COLOR_TRANSITION_MS = 950;
+  let colorTransitionTimer = null;
 
   const getSettings = async () => {
     try {
@@ -487,12 +489,115 @@
   `;
 
   const THEME_CSS_SHARED = `
+  #sc-color-wipe {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483646;
+  overflow: hidden;
+  opacity: 0;
+  }
+
+  #sc-color-wipe.is-running {
+    opacity: 1;
+  }
+
+  #sc-color-wipe .sc-color-wipe__old,
+  #sc-color-wipe .sc-color-wipe__new {
+    position: absolute;
+    inset: -12%;
+    will-change: transform, opacity, filter;
+  }
+
+  #sc-color-wipe .sc-color-wipe__old {
+    opacity: 0;
+    filter: blur(44px) saturate(130%);
+    transition: opacity 420ms ease;
+  }
+
+  #sc-color-wipe .sc-color-wipe__new {
+    opacity: 0;
+    transform: translate3d(-115%, 0, 0);
+    filter: blur(26px) saturate(155%);
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, .06) 6%,
+      rgba(0, 0, 0, .78) 18%,
+      rgba(0, 0, 0, .98) 50%,
+      rgba(0, 0, 0, .78) 82%,
+      rgba(0, 0, 0, .06) 94%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, .06) 6%,
+      rgba(0, 0, 0, .78) 18%,
+      rgba(0, 0, 0, .98) 50%,
+      rgba(0, 0, 0, .78) 82%,
+      rgba(0, 0, 0, .06) 94%,
+      transparent 100%
+    );
+  }
+
+  html.sc-colorize-animating *,
+  html.sc-colorize-animating *::before,
+  html.sc-colorize-animating *::after,
+  body.sc-colorize-animating *,
+  body.sc-colorize-animating *::before,
+  body.sc-colorize-animating *::after {
+    transition:
+      color 760ms ease,
+      background-color 760ms ease,
+      border-color 760ms ease,
+      box-shadow 760ms ease,
+      fill 760ms ease,
+      stroke 760ms ease,
+      opacity 760ms ease,
+      filter 760ms ease,
+      backdrop-filter 760ms ease !important;
+  }
+
+  body.sc-has-grad::before,
+  .bg-layer,
+  .bg-cover,
+  .bg-gradient {
+    transition:
+      opacity 900ms ease,
+      filter 900ms ease,
+      background 900ms ease,
+      background-color 900ms ease !important;
+  }
+
     .DefaultLayout_root__*, .CommonLayout_root__* {
       background: transparent !important;
     }
 
     .Root {
       background: var(--ym-background-color-primary-enabled-content) !important;
+    }
+
+    html.sc-colorize-animating *,
+    body.sc-colorize-animating *,
+    html.sc-colorize-animating *::before,
+    html.sc-colorize-animating *::after,
+    body.sc-colorize-animating *::before,
+    body.sc-colorize-animating *::after {
+      transition:
+        color ${COLOR_TRANSITION_MS}ms ease,
+        background-color ${COLOR_TRANSITION_MS}ms ease,
+        background ${COLOR_TRANSITION_MS}ms ease,
+        border-color ${COLOR_TRANSITION_MS}ms ease,
+        outline-color ${COLOR_TRANSITION_MS}ms ease,
+        fill ${COLOR_TRANSITION_MS}ms ease,
+        stroke ${COLOR_TRANSITION_MS}ms ease,
+        box-shadow ${COLOR_TRANSITION_MS}ms ease,
+        text-shadow ${COLOR_TRANSITION_MS}ms ease,
+        filter ${COLOR_TRANSITION_MS}ms ease,
+        backdrop-filter ${COLOR_TRANSITION_MS}ms ease,
+        opacity ${Math.max(420, COLOR_TRANSITION_MS - 220)}ms ease !important;
+      will-change: color, background-color, background, border-color, fill, stroke, box-shadow, filter, backdrop-filter, opacity;
     }
 
     body.sc-has-grad::before {
@@ -503,13 +608,24 @@
       opacity: .14;
       z-index: -1;
       pointer-events: none;
+      transition: opacity ${COLOR_TRANSITION_MS}ms ease, filter ${COLOR_TRANSITION_MS}ms ease, background ${COLOR_TRANSITION_MS}ms ease;
     }
 
     [class*="MainPage_vibe"] {
       position: relative;
       overflow: hidden;
       isolation: isolate;
-      transition: height 1.5s ease;
+      transition: height 1.5s ease, background ${COLOR_TRANSITION_MS}ms ease, box-shadow ${COLOR_TRANSITION_MS}ms ease;
+    }
+
+    .bg-layer,
+    .bg-cover,
+    .bg-gradient {
+      transition:
+        opacity ${COLOR_TRANSITION_MS}ms ease,
+        filter ${COLOR_TRANSITION_MS}ms ease,
+        background ${COLOR_TRANSITION_MS}ms ease,
+        background-color ${COLOR_TRANSITION_MS}ms ease !important;
     }
 
     .CommonLayout_root__WC_W1,
@@ -687,6 +803,7 @@
     canvas {
       opacity: .18 !important;
       filter: blur(280px) !important;
+      transition: opacity ${COLOR_TRANSITION_MS}ms ease, filter ${COLOR_TRANSITION_MS}ms ease !important;
     }
 
     .VibeBlock_vibeAnimation__XVEE6::after,
@@ -711,15 +828,15 @@
     .PinsList_root_hasPins__3LXlo:before,
     .NavbarDesktop_scrollableContainer__HLc9D:before,
     .NavbarDesktop_scrollableContainer__HLc9D:after,
-    .SearchPage_skeletonStickyHeader__SQqeV.SearchPage_important__z3aCa{
-    background:
-      linear-gradient(
-        ◯turn  /* браузер-фикс от YM */
-        var(--fade-background-color,
-        var(--ym-background-color-secondary-enabled-blur)) 0,
-        hsla(0 0% 5% / .90) 100%);
+    .SearchPage_skeletonStickyHeader__SQqeV.SearchPage_important__z3aCa {
+      background:
+        linear-gradient(
+          0turn,
+          var(--fade-background-color, var(--ym-background-color-secondary-enabled-blur)) 0,
+          hsla(0 0% 5% / .90) 100%);
     }
 
+    html.ym-light-theme body.sc-has-grad::before,
     body.ym-light-theme.sc-has-grad::before,
     .ym-light-theme body.sc-has-grad::before {
       opacity: .08;
@@ -793,6 +910,20 @@
     st.textContent = css;
   };
 
+  const startColorTransition = () => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    html?.classList.add('sc-colorize-animating');
+    body?.classList.add('sc-colorize-animating');
+
+    clearTimeout(colorTransitionTimer);
+    colorTransitionTimer = setTimeout(() => {
+      html?.classList.remove('sc-colorize-animating');
+      body?.classList.remove('sc-colorize-animating');
+    }, COLOR_TRANSITION_MS + 120);
+  };
+
   function ensureGradientOverlay() {
     if (document.getElementById('sc-grad-overlay')) return;
     const st = document.createElement('style');
@@ -817,6 +948,92 @@
   let lastBackgroundURL = '';
   let lastPageURL = location.href;
 
+  const COLOR_WIPE_MS = 1350;
+let WIPE = null;
+let lastAppliedGrad = '';
+
+const currentThemeMode = () => {
+  const html = document.documentElement;
+  const body = document.body;
+
+  return html.classList.contains('ym-light-theme') || body?.classList.contains('ym-light-theme')
+    ? 'light'
+    : 'dark';
+};
+
+function ensureColorWipe() {
+  if (WIPE && document.body.contains(WIPE)) return WIPE;
+
+  WIPE = document.createElement('div');
+  WIPE.id = 'sc-color-wipe';
+  WIPE.innerHTML = `
+    <div class="sc-color-wipe__old"></div>
+    <div class="sc-color-wipe__new"></div>
+  `;
+
+  document.body.appendChild(WIPE);
+  return WIPE;
+}
+
+function startColorTransition() {
+  const html = document.documentElement;
+  const body = document.body;
+  if (!body) return;
+
+  html.classList.remove('sc-colorize-animating');
+  body.classList.remove('sc-colorize-animating');
+
+  void body.offsetWidth;
+
+  html.classList.add('sc-colorize-animating');
+  body.classList.add('sc-colorize-animating');
+
+  clearTimeout(startColorTransition._timer);
+  startColorTransition._timer = setTimeout(() => {
+    html.classList.remove('sc-colorize-animating');
+    body.classList.remove('sc-colorize-animating');
+  }, COLOR_WIPE_MS + 220);
+}
+
+function runDirectionalThemeWipe(nextGrad) {
+  if (!nextGrad || !document.body) return;
+
+  const wipe = ensureColorWipe();
+  const oldLayer = wipe.querySelector('.sc-color-wipe__old');
+  const newLayer = wipe.querySelector('.sc-color-wipe__new');
+
+  const computedGrad = getComputedStyle(document.documentElement)
+    .getPropertyValue('--grad-main')
+    .trim();
+
+  const prevGrad = computedGrad || lastAppliedGrad || nextGrad;
+
+  oldLayer.style.background = prevGrad;
+  newLayer.style.background = nextGrad;
+
+  wipe.classList.remove('is-running');
+
+  oldLayer.style.opacity = '1';
+  newLayer.style.transition = 'none';
+  newLayer.style.transform = 'translate3d(-115%, 0, 0)';
+  newLayer.style.opacity = '1';
+
+  void wipe.offsetWidth;
+
+  wipe.classList.add('is-running');
+  newLayer.style.transition = `transform ${COLOR_WIPE_MS}ms cubic-bezier(.22,.61,.36,1), opacity 260ms ease`;
+  newLayer.style.transform = 'translate3d(115%, 0, 0)';
+
+  clearTimeout(wipe._hideTimer);
+  wipe._hideTimer = setTimeout(() => {
+    oldLayer.style.opacity = '0';
+    newLayer.style.opacity = '0';
+    wipe.classList.remove('is-running');
+  }, COLOR_WIPE_MS + 120);
+
+  lastAppliedGrad = nextGrad;
+}
+
   async function getHiResCover() {
     const img = document.querySelector('[class*="PlayerBarDesktopWithBackgroundProgressBar_cover"] img');
     if (img && img.src.includes('/100x100')) return img.src.replace('/100x100', '/1000x1000');
@@ -836,7 +1053,7 @@
 
       const wrapper = document.createElement('div');
       wrapper.className = 'bg-layer';
-      wrapper.style.cssText = 'position:absolute; inset:0; z-index:0; pointer-events:none;';
+      wrapper.style.cssText = 'position:absolute; inset:0; z-index:0; pointer-events:none; opacity:1; transition:opacity .7s ease, filter .95s ease, background .95s ease;';
 
       const imageLayer = document.createElement('div');
       imageLayer.className = 'bg-cover';
@@ -848,7 +1065,7 @@
         background-position:center;
         background-repeat:no-repeat;
         opacity:0;
-        transition:opacity 1s ease;
+        transition:opacity 1s ease, filter ${COLOR_TRANSITION_MS}ms ease;
         pointer-events:none;
       `;
 
@@ -865,6 +1082,7 @@
         opacity:.72;
         pointer-events:none;
         z-index:1;
+        transition:opacity ${COLOR_TRANSITION_MS}ms ease, background ${COLOR_TRANSITION_MS}ms ease, filter ${COLOR_TRANSITION_MS}ms ease;
       `;
 
       [...target.querySelectorAll('.bg-layer')].forEach(layer => {
@@ -963,6 +1181,7 @@
       if (!force && hex === lastHex) return;
       gradC1 = gradC2 = base = normL(parseHEX(hex));
       lastHex = hex;
+      lastSrc = '';
     } else {
       if (!force && src === lastSrc) return;
       const pair = await colorsFromCover(src) || fallbackHSL();
@@ -975,11 +1194,23 @@
         l: +((gradC1.l + gradC2.l) / 2).toFixed(1)
       };
       lastSrc = src;
+      lastHex = '';
     }
 
+    startColorTransition();
+
+    const darkVars = buildVars(base, 'dark');
+    const lightVars = buildVars(base, 'light');
+    const nextGrad = currentThemeMode() === 'light'
+      ? lightVars['--grad-main']
+      : darkVars['--grad-main'];
+
+    startColorTransition();
+    runDirectionalThemeWipe(nextGrad);
+
     applyVars({
-      dark: buildVars(base, 'dark'),
-      light: buildVars(base, 'light')
+      dark: darkVars,
+      light: lightVars
     });
 
     ensureGradientOverlay();
