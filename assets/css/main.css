@@ -184,6 +184,11 @@
   opacity: .92;
 }
 
+.VibeWidget_root__Chpsm
+{
+  background: linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0, var(--ym-controls-color-secondary-text-disabled) 80%)
+}
+
 /* картинка-фон .bg-cover не пульсирует */
 [class*="bg-cover"]{ will-change: auto; }
 
