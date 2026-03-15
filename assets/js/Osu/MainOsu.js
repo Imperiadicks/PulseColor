@@ -88,9 +88,29 @@ function __audioOn() {
     __ensureLoopAlive();
   });
 
-  setInterval(() => {
-    if (!document.hidden) __ensureLoopAlive();
-  }, 2000);
+  const mediaLifecycleBound = new WeakSet();
+  function attachAudioLifecycle(el) {
+    if (!el || mediaLifecycleBound.has(el)) return;
+    mediaLifecycleBound.add(el);
+
+    const ping = () => {
+      __resumeCtxIfNeeded();
+      __ensureLoopAlive();
+    };
+
+    [
+      'play',
+      'playing',
+      'canplay',
+      'canplaythrough',
+      'loadeddata',
+      'loadedmetadata',
+      'durationchange',
+      'seeked',
+      'ratechange',
+      'timeupdate'
+    ].forEach(evt => el.addEventListener(evt, ping, { passive: true }));
+  }
 
   // already patched?
   // Раньше тут было: if (!OSU.__tapRaf) OSU.__tapRaf = requestAnimationFrame(loop);
@@ -118,6 +138,12 @@ function __audioOn() {
         OSU.fftBins = a.frequencyBinCount;
         OSU.spec = b.spec;
         OSU.timeBuf = new Uint8Array(a.fftSize);
+        try {
+          if (!ctx.__osuStateBound && typeof ctx.addEventListener === 'function') {
+            ctx.addEventListener('statechange', __ensureLoopAlive);
+            ctx.__osuStateBound = true;
+          }
+        } catch { }
         window.showLog?.('[Tap] bound main analyser');
       }
     }
@@ -170,13 +196,19 @@ function __audioOn() {
       window.showLog?.('[Tap] mediaElementSource failed: ' + e?.name);
     }
   }
-  document.querySelectorAll('audio').forEach(tapMediaElement);
+  document.querySelectorAll('audio').forEach(el => { tapMediaElement(el); attachAudioLifecycle(el); });
   new MutationObserver(muts => {
     for (const m of muts) {
       m.addedNodes && m.addedNodes.forEach(n => {
         if (n && n.nodeType === 1) {
-          if (n.tagName === 'AUDIO') tapMediaElement(n);
-          n.querySelectorAll && n.querySelectorAll('audio').forEach(tapMediaElement);
+          if (n.tagName === 'AUDIO') {
+            tapMediaElement(n);
+            attachAudioLifecycle(n);
+          }
+          n.querySelectorAll && n.querySelectorAll('audio').forEach(el => {
+            tapMediaElement(el);
+            attachAudioLifecycle(el);
+          });
         }
       });
     }

@@ -987,50 +987,160 @@
     }
   };
 
-  const init = async () => {
+  let syncFrame = 0;
+  let syncForce = false;
+  let syncNeedBg = false;
+  let syncRunning = false;
+  let coverObserver = null;
+  let vibeObserver = null;
+  let treeObserver = null;
 
-    try {
-      applyCoreSettings();
-    } catch {}
+  function scheduleSync({ force = false, bg = false } = {}) {
+    syncForce = syncForce || !!force;
+    syncNeedBg = syncNeedBg || !!bg;
+    if (syncFrame) return;
 
-    checkVibeReturn();
-    await recolor(true);
-  };
+    syncFrame = requestAnimationFrame(async () => {
+      syncFrame = 0;
 
-  document.readyState === 'loading'
-    ? document.addEventListener('DOMContentLoaded', init)
-    : init();
-
-  new MutationObserver(() => recolor()).observe(document.body, { childList: true, subtree: true });
-
-  function checkVibeReturn() {
-    let lastCover = '';
-    return setInterval(async () => {
-      const vibe = document.querySelector('[class*="MainPage_vibe"]');
-      if (!vibe) return;
-
-      const src = coverURL();
-      const hasBackground = vibe.style.backgroundImage?.includes('url(');
-
-      if (!hasBackground || src !== lastCover) {
-        lastCover = src;
-        window.OsuBeat?.retune?.({ presetBpm: window.OsuBeat?.bpm?.() || 120 });
-        await recolor(true);
+      if (syncRunning) {
+        scheduleSync({ force: syncForce, bg: syncNeedBg });
+        return;
       }
-    }, 1200);
+
+      const runForce = syncForce;
+      const runBg = syncNeedBg;
+      syncForce = false;
+      syncNeedBg = false;
+      syncRunning = true;
+
+      try {
+        if (runBg) await tryInjectBackground();
+        await recolor(runForce || runBg);
+      } catch (e) {
+        LOG('sync error', e);
+      } finally {
+        syncRunning = false;
+        if (syncForce || syncNeedBg) scheduleSync({ force: syncForce, bg: syncNeedBg });
+      }
+    });
   }
 
-  const monitorPageChangeAndSetBackground = () => {
-    const checkPage = () => {
-      const currentURL = location.href;
-      if (currentURL !== lastPageURL) {
-        lastPageURL = currentURL;
-        tryInjectBackground();
+  function getCoverNode() {
+    return document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
+      || document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"] img[data-test-id="ENTITY_COVER_IMAGE"]')
+      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
+  }
+
+  function bindCoverObserver() {
+    const node = getCoverNode();
+    if (coverObserver?.__node === node) return;
+    if (coverObserver) coverObserver.disconnect();
+    coverObserver = null;
+    if (!node) return;
+
+    coverObserver = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === 'attributes' && m.attributeName === 'src') {
+          scheduleSync({ force: true, bg: true });
+          break;
+        }
       }
+    });
+    coverObserver.__node = node;
+    coverObserver.observe(node, { attributes: true, attributeFilter: ['src'] });
+  }
+
+  function bindVibeObserver() {
+    const vibe = document.querySelector('[class*="MainPage_vibe"]');
+    if (vibeObserver?.__node === vibe) return;
+    if (vibeObserver) vibeObserver.disconnect();
+    vibeObserver = null;
+    if (!vibe) return;
+
+    vibeObserver = new MutationObserver(() => {
+      const hasBgLayer = !!vibe.querySelector('.bg-layer');
+      if (!hasBgLayer) scheduleSync({ bg: true });
+    });
+    vibeObserver.__node = vibe;
+    vibeObserver.observe(vibe, { childList: true });
+  }
+
+  function isRelevantNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.matches?.('[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]')) return true;
+    return !!node.querySelector?.('[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]');
+  }
+
+  function bindTreeObserver() {
+    if (treeObserver) return;
+
+    treeObserver = new MutationObserver((muts) => {
+      let shouldSync = false;
+      let shouldBg = false;
+
+      for (const m of muts) {
+        if (m.type !== 'childList') continue;
+
+        for (const n of m.addedNodes) {
+          if (isRelevantNode(n)) {
+            shouldSync = true;
+            shouldBg = true;
+            break;
+          }
+        }
+        if (shouldSync) break;
+
+        for (const n of m.removedNodes) {
+          if (isRelevantNode(n)) {
+            shouldSync = true;
+            shouldBg = true;
+            break;
+          }
+        }
+        if (shouldSync) break;
+      }
+
+      bindCoverObserver();
+      bindVibeObserver();
+
+      if (shouldSync) scheduleSync({ force: true, bg: shouldBg });
+    });
+
+    treeObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function handleRouteChange() {
+    const currentURL = location.href;
+    if (currentURL === lastPageURL) return;
+    lastPageURL = currentURL;
+    bindCoverObserver();
+    bindVibeObserver();
+    scheduleSync({ force: true, bg: true });
+  }
+
+  function bindHistoryObserver() {
+    if (window.__PulseColorHistoryHooked) return;
+    window.__PulseColorHistoryHooked = true;
+
+    const { pushState, replaceState } = history;
+    history.pushState = function (...args) {
+      const out = pushState.apply(this, args);
+      queueMicrotask(handleRouteChange);
+      return out;
+    };
+    history.replaceState = function (...args) {
+      const out = replaceState.apply(this, args);
+      queueMicrotask(handleRouteChange);
+      return out;
     };
 
-    setInterval(checkPage, 300);
-  };
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('hashchange', handleRouteChange);
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleSync({ force: true, bg: true });
+    });
+  }
 
   async function tryInjectBackground() {
     const core = (typeof CORE === 'object' && CORE) ? CORE : getCoreSettings();
@@ -1046,5 +1156,20 @@
     backgroundReplace(image);
   }
 
-  monitorPageChangeAndSetBackground();
+  const init = async () => {
+    try {
+      applyCoreSettings();
+    } catch {}
+
+    bindHistoryObserver();
+    bindCoverObserver();
+    bindVibeObserver();
+    bindTreeObserver();
+
+    await recolor(true);
+  };
+
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', init)
+    : init();
 })();

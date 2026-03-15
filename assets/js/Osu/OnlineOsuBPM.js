@@ -23,8 +23,6 @@
     }
   };
 
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
   const fetchText = async (url, timeoutMs = 8000) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -223,10 +221,15 @@
   })();
 
   let curSig = '';
+  let curTrackKey = '';
   let seq = 0;
   let onlineInFlight = 0;
   let lastNet = { status: 'idle', src: '', bpm: 0 };
   let lastApplied = { sig: '', src: '', bpm: 0 };
+  let resolveTrackRaf = 0;
+  let coverObserver = null;
+  let treeObserver = null;
+  const mediaLifecycleBound = new WeakSet();
 
   const publishNet = () => { try { window.__PulseColorNet = { ...lastNet }; } catch { } };
   publishNet();
@@ -250,7 +253,7 @@
     lastNet = { status: 'pending', src: '', bpm: 0 }; publishNet();
 
     const out = await lookupOnline(meta);
-    if (mySeq !== seq) return; 
+    if (mySeq !== seq) return;
 
     if (out.bpm) {
       lastNet = { status: 'hit', src: out.src, bpm: out.bpm }; publishNet();
@@ -265,6 +268,130 @@
 
     lastNet = { status: 'miss', src: '', bpm: 0 }; publishNet();
   };
+
+  const getCoverSig = () => {
+    const img = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
+      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
+    const src = img?.src || '';
+    return src.replace(/\/(?:100x100|200x200|400x400|1000x1000)(?=[/?]|$)/g, '');
+  };
+
+  function queueTrackResolve() {
+    if (resolveTrackRaf) return;
+
+    resolveTrackRaf = requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
+        resolveTrackRaf = 0;
+        const meta = getTrackMeta();
+        if (!meta?.sig || !meta.title || !meta.artist) return;
+        const mySeq = seq;
+        onlineInFlight = mySeq;
+        await resolveTrack(meta, mySeq);
+      });
+    });
+  }
+
+  function resetForTrack(meta = null) {
+    seq++;
+    TapTempo.reset();
+    window.OsuBeat?.reset?.();
+    curSig = meta?.sig || '';
+    lastApplied = { sig: '', src: '', bpm: 0 };
+    lastNet = { status: 'idle', src: '', bpm: 0 };
+    publishNet();
+  }
+
+  function checkTrackChange(forceResolve = false) {
+    const meta = getTrackMeta();
+    const coverSig = getCoverSig();
+    const key = coverSig || meta?.sig || '';
+
+    if (key && key !== curTrackKey) {
+      curTrackKey = key;
+      resetForTrack(meta);
+      queueTrackResolve();
+      return;
+    }
+
+    if (meta?.sig && meta.sig !== curSig) {
+      curSig = meta.sig;
+      queueTrackResolve();
+      return;
+    }
+
+    if (forceResolve && meta?.sig) queueTrackResolve();
+  }
+
+  function bindCoverObserver() {
+    const node = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
+      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
+
+    if (coverObserver?.__node === node) return;
+    if (coverObserver) coverObserver.disconnect();
+    coverObserver = null;
+    if (!node) return;
+
+    coverObserver = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === 'attributes' && m.attributeName === 'src') {
+          checkTrackChange(true);
+          break;
+        }
+      }
+    });
+    coverObserver.__node = node;
+    coverObserver.observe(node, { attributes: true, attributeFilter: ['src'] });
+  }
+
+  function attachAudioLifecycle(el) {
+    if (!el || mediaLifecycleBound.has(el)) return;
+    mediaLifecycleBound.add(el);
+
+    const ping = () => checkTrackChange(true);
+    [
+      'play',
+      'playing',
+      'loadedmetadata',
+      'loadeddata',
+      'durationchange',
+      'seeked',
+      'emptied',
+      'canplay',
+      'canplaythrough'
+    ].forEach(evt => el.addEventListener(evt, ping, { passive: true }));
+  }
+
+  function isRelevantNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.matches?.('audio, div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], img[data-test-id="ENTITY_COVER_IMAGE"]')) return true;
+    return !!node.querySelector?.('audio, div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], img[data-test-id="ENTITY_COVER_IMAGE"]');
+  }
+
+  function bindTreeObserver() {
+    if (treeObserver) return;
+
+    treeObserver = new MutationObserver((muts) => {
+      let relevant = false;
+
+      for (const m of muts) {
+        if (m.type !== 'childList') continue;
+        for (const n of m.addedNodes) {
+          if (isRelevantNode(n)) { relevant = true; break; }
+        }
+        if (relevant) break;
+        for (const n of m.removedNodes) {
+          if (isRelevantNode(n)) { relevant = true; break; }
+        }
+        if (relevant) break;
+      }
+
+      document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+      bindCoverObserver();
+      if (relevant) checkTrackChange(true);
+    });
+
+    treeObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
 
   window.addEventListener('osu-kick', (e) => {
     const bpmLocked = window.OsuBeat?.isLocked?.();
@@ -282,34 +409,13 @@
     lastApplied = { sig: curSig, src: 'tap', bpm: b };
   });
 
-  setInterval(() => {
-    const meta = getTrackMeta();
-    if (!meta?.sig) return;
-
-    if (meta.sig !== curSig) {
-      curSig = meta.sig;
-      seq++;
-      TapTempo.reset();
-
-      window.OsuBeat?.reset?.();
-
-      const mySeq = seq;
-      onlineInFlight = mySeq;
-
-      (async () => {
-        await sleep(350);
-        const meta2 = getTrackMeta();
-        if (mySeq !== seq) return;
-
-        if (!meta2.title || !meta2.artist) {
-          await sleep(600);
-        }
-        const meta3 = getTrackMeta();
-        if (mySeq !== seq) return;
-
-        await resolveTrack(meta3, mySeq);
-      })();
-    }
-  }, 800);
+  document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+  bindCoverObserver();
+  bindTreeObserver();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkTrackChange(true);
+  });
+  window.addEventListener('focus', () => checkTrackChange(true));
+  window.addEventListener('pageshow', () => checkTrackChange(true));
+  checkTrackChange(true);
 })();
-
