@@ -43,26 +43,12 @@
   };
 
   /*──────────────────────── settings ────────────────────────*/
-  const HANDLE = 'PulseColor';
-
-  const getSettings = async () => {
-    try {
-      const r = await fetch(`http://localhost:2007/get_handle?name=${HANDLE}`);
-      const j = await r.json();
-      const s = {};
-      j?.data?.sections?.forEach(sec => {
-        s[sec.title] = {};
-        sec.items.forEach(it => {
-          if ('bool' in it) s[sec.title][it.id] = it.bool;
-          if ('input' in it) s[sec.title][it.id] = it.input;
-        });
-      });
-      return s;
-    } catch (e) {
-      LOG('settings error', e);
-      return {};
+  const getSettings = async () => ({
+    'Тема': {
+      useCustomColor: false,
+      baseColor: ''
     }
-  };
+  });
 
   /*──────────────────────── cover helpers ───────────────────*/
   const coverURL = () => {
@@ -1002,8 +988,6 @@
   };
 
   const init = async () => {
-    SETTINGS = await getSettings();
-    lastSETTINGS_JSON = JSON.stringify(SETTINGS);
 
     try {
       applyCoreSettings();
@@ -1018,17 +1002,6 @@
     : init();
 
   new MutationObserver(() => recolor()).observe(document.body, { childList: true, subtree: true });
-
-  setInterval(async () => {
-    const newSettings = await getSettings();
-    const newJSON = JSON.stringify(newSettings);
-
-    if (newJSON !== lastSETTINGS_JSON) {
-      SETTINGS = newSettings;
-      lastSETTINGS_JSON = newJSON;
-      await recolor(true);
-    }
-  }, 500);
 
   function checkVibeReturn() {
     let lastCover = '';
