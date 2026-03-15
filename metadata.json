@@ -24,7 +24,10 @@
     "https://r.jina.ai/https://",
     "https://duckduckgo.com",
     "https://bpmdatabase.com",
-    "https://musicstax.com"
+    "https://musicstax.com",
+    "https://api.onlysq.ru/ai/v2",
+    "https://api.onlysq.ru/",
+    "https://api.onlysq.ru/ai/"
   ],
   "supportedVersions": [],
   "fromPext": true

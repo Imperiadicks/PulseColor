@@ -1,8 +1,11 @@
-
 /* ========================== PulseColor: Online BPM + TapTempo fallback ========================== */
 (() => {
-  const CACHE_KEY = 'PulseColor.bpmCache.v3';
+  const CACHE_KEY = 'PulseColor.bpmCache.v6';
   const CACHE_LIMIT = 450;
+  const REQUEST_COOLDOWN_MS = 15000;
+  const MISS_COOLDOWN_MS = 45000;
+  const ERROR_COOLDOWN_MS = 60000;
+  const RATE_LIMIT_COOLDOWN_MS = 180000;
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const normBpm = (b) => {
@@ -13,34 +16,11 @@
     return clamp(b, 50, 210);
   };
 
-  const proxy = (url) => {
-    try {
-      if (url.startsWith('https://')) return 'https://r.jina.ai/https://' + url.slice('https://'.length);
-      if (url.startsWith('http://')) return 'https://r.jina.ai/http://' + url.slice('http://'.length);
-      return url;
-    } catch {
-      return url;
-    }
-  };
-
-  const fetchText = async (url, timeoutMs = 8000) => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: ctrl.signal, credentials: 'omit', cache: 'no-store' });
-      if (!res.ok) return '';
-      return await res.text();
-    } catch {
-      return '';
-    } finally {
-      clearTimeout(t);
-    }
-  };
-
   const loadCache = () => {
     try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') || {}; }
     catch { return {}; }
   };
+
   const saveCache = (obj) => {
     try {
       const keys = Object.keys(obj);
@@ -51,7 +31,7 @@
           .forEach(k => { delete obj[k]; });
       }
       localStorage.setItem(CACHE_KEY, JSON.stringify(obj));
-    } catch { }
+    } catch {}
   };
 
   const normalizeSig = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
@@ -59,70 +39,156 @@
   const getTrackMeta = () => {
     const md = navigator.mediaSession?.metadata;
     const title = md?.title || '';
-    // md.artist обычно уже готов, но иногда пусто — тогда берём md.albumArtist (если есть) или пусто
     const artist = md?.artist || md?.albumArtist || '';
     const sig = normalizeSig(`${artist} - ${title}`);
     return { title: title.trim(), artist: artist.trim(), sig };
   };
 
-  const parseBpmFromPage = (txt) => {
+  const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
+  const AI_MODEL = 'gemini-2.0-flash-lite';
+  const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
+
+  const parseBpmValue = (raw) => {
+    if (raw == null) return 0;
+
+    if (typeof raw === 'number') return normBpm(raw);
+
+    const txt = String(raw).trim();
     if (!txt) return 0;
 
-    // bpmdatabase / musicstax / разные форматы
-    const rx = [
-      /\bBPM\b[^0-9]{0,12}(\d{2,3})\b/i,
-      /\b(\d{2,3})\s*BPM\b/i,
-      /"tempo"\s*:\s*(\d{2,3})\b/i,
-      /"bpm"\s*:\s*(\d{2,3})\b/i,
-      /\btempo\b[^0-9]{0,12}(\d{2,3})\b/i,
-    ];
-    for (const r of rx) {
-      const m = txt.match(r);
-      if (m && m[1]) {
-        const b = normBpm(m[1]);
-        if (b) return b;
+    try {
+      const j = JSON.parse(txt);
+      if (typeof j?.bpm !== 'undefined') return normBpm(j.bpm);
+    } catch {}
+
+    const m = txt.match(/\b(\d{2,3})\b/);
+    return m ? normBpm(m[1]) : 0;
+  };
+
+  const buildBpmPrompt = (artist, track) => {
+    const artSafe = artist || '—';
+    const trackSafe = track || '—';
+
+    return [
+      'Ты всегда должен писать на русском.',
+      'Ты определяешь BPM музыкального трека.',
+      'Используй только информацию из открытых интернет-источников; не придумывай факты.',
+      'Имя артиста и название трека используй строго буквально, без правок и сокращений.',
+      'Если по данной записи не найдено точное надёжное значение BPM — верни только 0.',
+      'Никаких пояснений, слов, markdown, единиц измерения, JSON и лишнего текста.',
+      'Ответ должен быть только одним числом, например: 120',
+      '',
+      '=== Артист ===',
+      artSafe,
+      '',
+      '=== Трек ===',
+      `${artSafe} — ${trackSafe}`
+    ].join('\n');
+  };
+
+  let activeLookupSig = '';
+  let activeLookupPromise = null;
+  const requestCooldowns = new Map();
+
+  const setCooldown = (sig, ms) => {
+    if (!sig || !ms) return;
+    requestCooldowns.set(sig, Date.now() + ms);
+  };
+
+  const getRetryAfterMs = (res) => {
+    const raw = res?.headers?.get?.('retry-after');
+    if (!raw) return RATE_LIMIT_COOLDOWN_MS;
+    const num = Number(raw);
+    if (Number.isFinite(num) && num > 0) return Math.max(RATE_LIMIT_COOLDOWN_MS, num * 1000);
+    const when = Date.parse(raw);
+    if (Number.isFinite(when)) return Math.max(RATE_LIMIT_COOLDOWN_MS, when - Date.now());
+    return RATE_LIMIT_COOLDOWN_MS;
+  };
+
+  const fetchAIBpm = async ({ artist, title, sig }) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 9000);
+
+    try {
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${AI_KEY}`
+        },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          model: AI_MODEL,
+          request: {
+            messages: [
+              {
+                role: 'user',
+                content: buildBpmPrompt(artist, title)
+              }
+            ]
+          }
+        })
+      });
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          setCooldown(sig, getRetryAfterMs(res));
+          return { bpm: 0, src: 'ai-rate-limit' };
+        }
+
+        setCooldown(sig, ERROR_COOLDOWN_MS);
+        return { bpm: 0, src: 'ai-http-' + res.status };
       }
+
+      const j = await res.json();
+      const content =
+        j?.choices?.[0]?.message?.content ??
+        j?.message?.content ??
+        j?.content ??
+        '';
+
+      const bpm = parseBpmValue(content);
+
+      if (bpm) {
+        setCooldown(sig, REQUEST_COOLDOWN_MS);
+        return { bpm, src: 'ai' };
+      }
+
+      setCooldown(sig, MISS_COOLDOWN_MS);
+      return { bpm: 0, src: 'ai-miss' };
+    } catch {
+      setCooldown(sig, ERROR_COOLDOWN_MS);
+      return { bpm: 0, src: 'ai-error' };
+    } finally {
+      clearTimeout(t);
     }
-    return 0;
   };
 
-  const pickFirstLink = (html, domain) => {
-    if (!html) return '';
-    const re = new RegExp(`href="(https?:\\/\\/[^"]*${domain}[^"]*)"`, 'ig');
-    const m = re.exec(html);
-    return m?.[1] || '';
-  };
-
-  const ddgSearch = async (query) => {
-    const url = proxy(`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-    const html = await fetchText(url, 9000);
-    return html || '';
-  };
-
-  const lookupOnline = async ({ title, artist } = {}) => {
+  const lookupOnline = async ({ title, artist, sig } = {}) => {
     const t = (title || '').trim();
     const a = (artist || '').trim();
-    if (!t || !a) return { bpm: 0, src: 'net' };
+    const s = (sig || '').trim();
+    if (!t || !a || !s) return { bpm: 0, src: 'ai-miss' };
 
-    const q1 = `site:bpmdatabase.com ${a} ${t} bpm`;
-    const ddg1 = await ddgSearch(q1);
-    const l1 = pickFirstLink(ddg1, 'bpmdatabase.com');
-    if (l1) {
-      const page = await fetchText(proxy(l1), 9000);
-      const bpm = parseBpmFromPage(page);
-      if (bpm) return { bpm, src: 'bpmdatabase' };
+    const cooldownUntil = requestCooldowns.get(s) || 0;
+    if (cooldownUntil > Date.now()) {
+      return { bpm: 0, src: 'ai-cooldown' };
     }
 
-    const q2 = `site:musicstax.com ${a} ${t} bpm`;
-    const ddg2 = await ddgSearch(q2);
-    const l2 = pickFirstLink(ddg2, 'musicstax.com');
-    if (l2) {
-      const page = await fetchText(proxy(l2), 9000);
-      const bpm = parseBpmFromPage(page);
-      if (bpm) return { bpm, src: 'musicstax' };
+    if (activeLookupPromise && activeLookupSig === s) {
+      return await activeLookupPromise;
     }
 
-    return { bpm: 0, src: 'net' };
+    activeLookupSig = s;
+    activeLookupPromise = fetchAIBpm({ artist: a, title: t, sig: s })
+      .finally(() => {
+        if (activeLookupSig === s) {
+          activeLookupSig = '';
+          activeLookupPromise = null;
+        }
+      });
+
+    return await activeLookupPromise;
   };
 
   const TapTempo = (() => {
@@ -192,9 +258,7 @@
         const t2 = state.beats[state.beats.length - 2];
         const t1 = state.beats[state.beats.length - 3];
         const pred = t2 + (t2 - t1);
-        if (!isNear(t3, pred, 0.14)) {
-          state.stableHits = 0;
-        }
+        if (!isNear(t3, pred, 0.14)) state.stableHits = 0;
       }
 
       if (state.iois.length >= 3) {
@@ -206,7 +270,6 @@
             if (state.bpm && Math.abs(state.bpm - bpmMed) <= 2) state.stableHits++;
             else state.stableHits = 1;
             state.bpm = bpmMed;
-
             if (state.stableHits >= 2) return state.bpm;
           } else {
             state.stableHits = 0;
@@ -223,23 +286,25 @@
   let curSig = '';
   let curTrackKey = '';
   let seq = 0;
-  let onlineInFlight = 0;
   let lastNet = { status: 'idle', src: '', bpm: 0 };
   let lastApplied = { sig: '', src: '', bpm: 0 };
   let resolveTrackRaf = 0;
+  let queuedSig = '';
   let coverObserver = null;
   let treeObserver = null;
   const mediaLifecycleBound = new WeakSet();
 
-  const publishNet = () => { try { window.__PulseColorNet = { ...lastNet }; } catch { } };
+  const publishNet = () => { try { window.__PulseColorNet = { ...lastNet }; } catch {} };
   publishNet();
+
+  const isProtectedSrc = (src) => src === 'ai' || src === 'cache';
 
   const applyFromCacheSoft = (sig, cache) => {
     const row = cache[sig];
     if (!row?.bpm) return 0;
     const b = normBpm(row.bpm);
     if (!b) return 0;
-    window.OsuBeat?.preset?.(b);
+    window.OsuBeat?.retune?.({ presetBpm: b, source: row.src || 'cache' });
     lastApplied = { sig, src: row.src || 'cache', bpm: b };
     return b;
   };
@@ -248,17 +313,35 @@
     if (!meta?.sig) return;
     const cache = loadCache();
 
-    applyFromCacheSoft(meta.sig, cache);
+    if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) {
+      return;
+    }
 
-    lastNet = { status: 'pending', src: '', bpm: 0 }; publishNet();
+    const cached = applyFromCacheSoft(meta.sig, cache);
+    if (cached) {
+      lastNet = { status: 'hit', src: 'cache', bpm: cached };
+      publishNet();
+      return;
+    }
+
+    const cooldownUntil = requestCooldowns.get(meta.sig) || 0;
+    if (cooldownUntil > Date.now()) {
+      lastNet = { status: 'cooldown', src: 'ai', bpm: 0 };
+      publishNet();
+      return;
+    }
+
+    lastNet = { status: 'pending', src: '', bpm: 0 };
+    publishNet();
 
     const out = await lookupOnline(meta);
     if (mySeq !== seq) return;
 
     if (out.bpm) {
-      lastNet = { status: 'hit', src: out.src, bpm: out.bpm }; publishNet();
+      lastNet = { status: 'hit', src: out.src, bpm: out.bpm };
+      publishNet();
 
-      window.OsuBeat?.retune?.({ presetBpm: out.bpm });
+      window.OsuBeat?.retune?.({ presetBpm: out.bpm, source: out.src });
       lastApplied = { sig: meta.sig, src: out.src, bpm: out.bpm };
 
       cache[meta.sig] = { bpm: out.bpm, src: out.src, ts: Date.now() };
@@ -266,7 +349,12 @@
       return;
     }
 
-    lastNet = { status: 'miss', src: '', bpm: 0 }; publishNet();
+    lastNet = {
+      status: out.src === 'ai-rate-limit' ? 'rate-limit' : (out.src === 'ai-cooldown' ? 'cooldown' : 'miss'),
+      src: out.src || '',
+      bpm: 0
+    };
+    publishNet();
   };
 
   const getCoverSig = () => {
@@ -277,16 +365,25 @@
   };
 
   function queueTrackResolve() {
-    if (resolveTrackRaf) return;
+    const meta = getTrackMeta();
+    if (!meta?.sig || !meta.title || !meta.artist) return;
 
+    if (activeLookupPromise && activeLookupSig === meta.sig) return;
+    if (resolveTrackRaf && queuedSig === meta.sig) return;
+    if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) return;
+
+    queuedSig = meta.sig;
+
+    if (resolveTrackRaf) cancelAnimationFrame(resolveTrackRaf);
     resolveTrackRaf = requestAnimationFrame(() => {
       requestAnimationFrame(async () => {
         resolveTrackRaf = 0;
-        const meta = getTrackMeta();
-        if (!meta?.sig || !meta.title || !meta.artist) return;
+        queuedSig = '';
+        const fresh = getTrackMeta();
+        if (!fresh?.sig || !fresh.title || !fresh.artist) return;
+        if (activeLookupPromise && activeLookupSig === fresh.sig) return;
         const mySeq = seq;
-        onlineInFlight = mySeq;
-        await resolveTrack(meta, mySeq);
+        await resolveTrack(fresh, mySeq);
       });
     });
   }
@@ -319,7 +416,11 @@
       return;
     }
 
-    if (forceResolve && meta?.sig) queueTrackResolve();
+    if (forceResolve && meta?.sig) {
+      if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) return;
+      if (activeLookupPromise && activeLookupSig === meta.sig) return;
+      queueTrackResolve();
+    }
   }
 
   function bindCoverObserver() {
@@ -395,7 +496,8 @@
 
   window.addEventListener('osu-kick', (e) => {
     const bpmLocked = window.OsuBeat?.isLocked?.();
-    if (bpmLocked && lastApplied?.src && (lastApplied.src === 'bpmdatabase' || lastApplied.src === 'musicstax')) return;
+    const externalLocked = window.OsuBeat?.isExternalLocked?.();
+    if (bpmLocked && (externalLocked || isProtectedSrc(lastApplied?.src))) return;
 
     const strength = +e.detail?.strength || 0;
     const t = performance.now();
