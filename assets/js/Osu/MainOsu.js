@@ -88,9 +88,29 @@ function __audioOn() {
     __ensureLoopAlive();
   });
 
-  setInterval(() => {
-    if (!document.hidden) __ensureLoopAlive();
-  }, 2000);
+  const mediaLifecycleBound = new WeakSet();
+  function attachAudioLifecycle(el) {
+    if (!el || mediaLifecycleBound.has(el)) return;
+    mediaLifecycleBound.add(el);
+
+    const ping = () => {
+      __resumeCtxIfNeeded();
+      __ensureLoopAlive();
+    };
+
+    [
+      'play',
+      'playing',
+      'canplay',
+      'canplaythrough',
+      'loadeddata',
+      'loadedmetadata',
+      'durationchange',
+      'seeked',
+      'ratechange',
+      'timeupdate'
+    ].forEach(evt => el.addEventListener(evt, ping, { passive: true }));
+  }
 
   // already patched?
   // Раньше тут было: if (!OSU.__tapRaf) OSU.__tapRaf = requestAnimationFrame(loop);
@@ -118,6 +138,12 @@ function __audioOn() {
         OSU.fftBins = a.frequencyBinCount;
         OSU.spec = b.spec;
         OSU.timeBuf = new Uint8Array(a.fftSize);
+        try {
+          if (!ctx.__osuStateBound && typeof ctx.addEventListener === 'function') {
+            ctx.addEventListener('statechange', __ensureLoopAlive);
+            ctx.__osuStateBound = true;
+          }
+        } catch { }
         window.showLog?.('[Tap] bound main analyser');
       }
     }
@@ -170,13 +196,19 @@ function __audioOn() {
       window.showLog?.('[Tap] mediaElementSource failed: ' + e?.name);
     }
   }
-  document.querySelectorAll('audio').forEach(tapMediaElement);
+  document.querySelectorAll('audio').forEach(el => { tapMediaElement(el); attachAudioLifecycle(el); });
   new MutationObserver(muts => {
     for (const m of muts) {
       m.addedNodes && m.addedNodes.forEach(n => {
         if (n && n.nodeType === 1) {
-          if (n.tagName === 'AUDIO') tapMediaElement(n);
-          n.querySelectorAll && n.querySelectorAll('audio').forEach(tapMediaElement);
+          if (n.tagName === 'AUDIO') {
+            tapMediaElement(n);
+            attachAudioLifecycle(n);
+          }
+          n.querySelectorAll && n.querySelectorAll('audio').forEach(el => {
+            tapMediaElement(el);
+            attachAudioLifecycle(el);
+          });
         }
       });
     }
@@ -229,6 +261,9 @@ function __audioOn() {
   let locked = false, conf = 0;
   let nextBeat = 0, beatIndex = 0;
   let lastRetempo = 0;
+  let bpmSource = 'none';
+
+  const isExternalSource = () => bpmSource === 'ai' || bpmSource === 'cache' || bpmSource === 'external';
 
   const now = () => performance.now();
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -336,21 +371,21 @@ function __audioOn() {
         const ibi = t - lastBeatT;
         if (ibi >= 180 && ibi <= 1200) { ibIs.push(ibi); if (ibIs.length > 32) ibIs.shift(); }
       }
-      if (t - lastRetempo >= CFG.retempoEveryMs) {
+      if (!isExternalSource() && t - lastRetempo >= CFG.retempoEveryMs) {
         lastRetempo = t;
         const est = estimateTempoByIOI();
         if (est) {
           const targetPeriod = 60000 / est;
-          if (!locked) { bpm = est; periodMs = targetPeriod; locked = true; conf = Math.max(conf, 0.30); }
-          else { bpm = Math.round(bpm * 0.6 + est * 0.4); periodMs = periodMs * 0.6 + targetPeriod * 0.4; conf = Math.min(1, conf + 0.05); }
+          if (!locked) { bpm = est; periodMs = targetPeriod; locked = true; conf = Math.max(conf, 0.30); bpmSource = 'local'; }
+          else { bpm = Math.round(bpm * 0.6 + est * 0.4); periodMs = periodMs * 0.6 + targetPeriod * 0.4; conf = Math.min(1, conf + 0.05); bpmSource = 'local'; }
         } else {
           conf = Math.max(0, conf - 0.02);
-          if (conf < 0.12) locked = false;
+          if (conf < 0.12) { locked = false; bpmSource = 'none'; }
         }
       }
 
       lastBeatT = t;
-      if (locked) { nextBeat = t + periodMs; }
+      if (locked && !isExternalSource()) { nextBeat = t + periodMs; }
       const payload = { time: t, bpm: bpm || null, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
       dispatch('osu-beat', payload);
       dispatch('osu-beat-visual', payload);
@@ -382,6 +417,8 @@ function __audioOn() {
     OsuBeat.confidence = () => conf;
     OsuBeat.phase = () => phase;
     OsuBeat.isLocked = () => !!locked;
+    OsuBeat.source = () => bpmSource;
+    OsuBeat.isExternalLocked = () => !!locked && isExternalSource();
 
     requestAnimationFrame(loop);
   }
@@ -392,18 +429,23 @@ function __audioOn() {
   OsuBeat.confidence = () => 0;
   OsuBeat.phase = () => 0;
   OsuBeat.isLocked = () => false;
+  OsuBeat.source = () => 'none';
+  OsuBeat.isExternalLocked = () => false;
   OsuBeat.onBeat = (fn) => { window.addEventListener('osu-beat', e => fn?.(e.detail)); };
-  OsuBeat.retune = ({ presetBpm } = {}) => {
+  OsuBeat.retune = ({ presetBpm, source = 'external' } = {}) => {
     if (!presetBpm) return;
     const b = clamp(Math.round(presetBpm), CFG.bpmMin, CFG.bpmMax);
-    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs;
+    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs; bpmSource = source || 'external';
   };
 
-  OsuBeat.preset = (presetBpm) => {
+  OsuBeat.preset = (presetBpm, options = {}) => {
     if (!presetBpm) return;
     const b = clamp(Math.round(presetBpm), CFG.bpmMin, CFG.bpmMax);
-    bpm = b; periodMs = 60000 / b; locked = false; conf = Math.max(conf, 0.20);
-    nextBeat = now() + periodMs; beatIndex = 0;
+    const opts = (options && typeof options === 'object') ? options : {};
+    const source = opts.source || 'external';
+    const lock = opts.lock !== false;
+    bpm = b; periodMs = 60000 / b; locked = !!lock; conf = Math.max(conf, lock ? 0.50 : 0.20);
+    nextBeat = now() + periodMs; beatIndex = 0; bpmSource = source;
   };
   OsuBeat.reset = () => {
     fluxBuf = []; timeBuf = [];
@@ -412,7 +454,7 @@ function __audioOn() {
     bpm = 0; periodMs = 0;
     locked = false; conf = 0;
     nextBeat = 0; beatIndex = 0;
-    lastRetempo = 0;
+    lastRetempo = 0; bpmSource = 'none';
   };
 
   requestAnimationFrame(loop);

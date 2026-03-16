@@ -53,6 +53,129 @@
     ENABLE_CUSTOM_WAVE: true
   };
 
+
+  const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
+  const MODAL_ANIM_MS = 220;
+
+  function lockPageInteraction() {
+    const body = document.body;
+    const html = document.documentElement;
+    const next = Number(window[MODAL_LOCK_KEY] || 0) + 1;
+    window[MODAL_LOCK_KEY] = next;
+
+    if (next !== 1 || !body || !html) return;
+
+    body.dataset.pcPrevOverflow = body.style.overflow || "";
+    body.dataset.pcPrevTouchAction = body.style.touchAction || "";
+    body.dataset.pcPrevPaddingRight = body.style.paddingRight || "";
+
+    const scrollbarWidth = Math.max(0, window.innerWidth - html.clientWidth);
+
+    html.dataset.pulsecolorModalLocked = "1";
+    body.dataset.pulsecolorModalLocked = "1";
+    body.style.overflow = "hidden";
+    body.style.touchAction = "none";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+  }
+
+  function unlockPageInteraction() {
+    const body = document.body;
+    const html = document.documentElement;
+    const next = Math.max(0, Number(window[MODAL_LOCK_KEY] || 0) - 1);
+    window[MODAL_LOCK_KEY] = next;
+
+    if (next !== 0 || !body || !html) return;
+
+    body.style.overflow = body.dataset.pcPrevOverflow || "";
+    body.style.touchAction = body.dataset.pcPrevTouchAction || "";
+    body.style.paddingRight = body.dataset.pcPrevPaddingRight || "";
+
+    body.removeAttribute("data-pc-prev-overflow");
+    body.removeAttribute("data-pc-prev-touch-action");
+    body.removeAttribute("data-pc-prev-padding-right");
+    body.removeAttribute("data-pulsecolor-modal-locked");
+    html.removeAttribute("data-pulsecolor-modal-locked");
+  }
+
+  function primeModalShell(portal, dialog, backdrop) {
+    if (portal) {
+      portal.style.position = "fixed";
+      portal.style.inset = "0";
+      portal.style.zIndex = "2147483646";
+      portal.style.pointerEvents = "auto";
+    }
+
+    const stage = dialog?.parentElement;
+    if (stage) {
+      stage.style.position = "fixed";
+      stage.style.inset = "0";
+      stage.style.zIndex = "1";
+      stage.style.pointerEvents = "none";
+    }
+
+    if (backdrop) {
+      backdrop.style.position = "fixed";
+      backdrop.style.inset = "0";
+      backdrop.style.zIndex = "0";
+      backdrop.style.pointerEvents = "auto";
+      backdrop.style.background = "rgba(6, 10, 18, 0.62)";
+      backdrop.style.backdropFilter = "blur(10px)";
+      backdrop.style.webkitBackdropFilter = "blur(10px)";
+      backdrop.style.opacity = "0";
+      backdrop.style.transition = `opacity ${MODAL_ANIM_MS}ms cubic-bezier(.22,1,.36,1)`;
+    }
+
+    if (dialog) {
+      dialog.setAttribute("aria-modal", "true");
+      dialog.style.pointerEvents = "auto";
+      dialog.style.opacity = "0";
+      dialog.style.willChange = "opacity, transform";
+      dialog.style.transform = "translate(-50%, calc(-50% + 16px)) scale(.965)";
+      dialog.style.transition = `opacity ${MODAL_ANIM_MS}ms cubic-bezier(.22,1,.36,1), transform ${MODAL_ANIM_MS}ms cubic-bezier(.22,1,.36,1)`;
+      dialog.style.boxShadow = "0 24px 80px rgba(0,0,0,.42)";
+    }
+  }
+
+  function animateModalIn(dialog, backdrop) {
+    requestAnimationFrame(() => {
+      if (backdrop) backdrop.style.opacity = "1";
+      if (dialog) {
+        dialog.style.opacity = "1";
+        dialog.style.transform = "translate(-50%, -50%) scale(1)";
+      }
+    });
+  }
+
+  function animateModalOut(portal, dialog, backdrop, done) {
+    if (!portal || portal.dataset.closing === "1") return;
+    portal.dataset.closing = "1";
+
+    if (backdrop) backdrop.style.opacity = "0";
+    if (dialog) {
+      dialog.style.opacity = "0";
+      dialog.style.transform = "translate(-50%, calc(-50% + 16px)) scale(.965)";
+    }
+
+    window.setTimeout(() => {
+      try { done && done(); } catch { }
+    }, MODAL_ANIM_MS + 40);
+  }
+
+  function blockOutsideInteraction(portal, dialog) {
+    if (!portal || !dialog) return;
+
+    const stopIfOutside = (e) => {
+      if (dialog.contains(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    ["click", "dblclick", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchmove", "contextmenu"].forEach((evt) => {
+      portal.addEventListener(evt, stopIfOutside, true);
+    });
+    portal.addEventListener("wheel", stopIfOutside, { capture: true, passive: false });
+  }
+
   const CFG_META = [
     {
       group: "Общее",
@@ -397,11 +520,23 @@
 
   function closeModal() {
     const portal = document.getElementById(PORTAL_ID);
-    if (portal) portal.remove();
+    const dialog = portal?.querySelector("#_r_mh_");
+    const backdrop = portal?.querySelector('div[data-floating-ui-inert][aria-hidden="true"]');
+
     if (__modalOnEsc) {
       document.removeEventListener("keydown", __modalOnEsc, true);
       __modalOnEsc = null;
     }
+
+    if (!portal) {
+      unlockPageInteraction();
+      return;
+    }
+
+    animateModalOut(portal, dialog, backdrop, () => {
+      portal.remove();
+      unlockPageInteraction();
+    });
   }
 
   function openModal() {
@@ -845,9 +980,13 @@
       dialog.style.position = "fixed";
       dialog.style.top = "50%";
       dialog.style.left = "50%";
-      dialog.style.transform = "translate(-50%, -50%)";
       dialog.style.zIndex = "2147483647";
     }
+
+    primeModalShell(portal, dialog, inertOverlay);
+    blockOutsideInteraction(portal, dialog);
+    lockPageInteraction();
+    animateModalIn(dialog, inertOverlay);
 
     if (ul) {
       ul.style.overflow = "auto";
@@ -857,7 +996,6 @@
     }
 
     if (content) content.style.overflow = "hidden";
-    if (inertOverlay) inertOverlay.style.pointerEvents = "none";
 
     const closeBtn = portal.querySelector('button[aria-label="Закрыть"]');
 

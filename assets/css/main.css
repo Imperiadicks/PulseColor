@@ -1,4 +1,4 @@
-/* ─────────────────── Общие доработки интерфейса ─────────────────── */
+/* /* ─────────────────── Общие доработки интерфейса ─────────────────── */
 [class*="MainPage_vibe"] {
   transition: height 1.5s ease;
   overflow: hidden;
@@ -116,8 +116,6 @@
   color: var(--ym-controls-color-primary-default-hovered) !important;
 } 
 
-
-/* ── Гасим родную волну ЯМ ── */
 .VibeAnimation_enter_active__j0jOl,
 .VibeAnimation_enter_done__Oi2Kz,
 .VibeAnimation_exit__ioGXk { opacity:0 !important; }
@@ -125,8 +123,8 @@
 [class*="VibeAnimation_enter_done__"],
 [class*="VibeAnimation_exit__"] { opacity:0 !important; }
 
-/* ─────────────────── Музыкальный пульс (наш) ─────────────────── */
-/* контейнер волны */
+/* ─────────────────── Волна ─────────────────── */
+
 #osu-pulse{
   position:fixed; inset:0; z-index:5; pointer-events:none; contain:layout paint;
   opacity: var(--osu-alpha, .04);
@@ -135,13 +133,11 @@
   transition: filter 120ms ease, opacity 140ms ease;
 }
 
-/* два независимых слоя */
 #osu-pulse-outer, #osu-pulse-inner{
   position:absolute; inset:0; pointer-events:none;
   transition: transform 160ms cubic-bezier(.22,.61,.36,1), opacity 200ms ease;
 }
 
-/* внешний (beat) — scale; плюс мягкое «кольцо» через ::after */
 #osu-pulse-outer{
   transform: scale(var(--osu-scale,1));
   background:
@@ -168,7 +164,6 @@
   100% { opacity:0;   transform:scale(1.10); }
 }
 
-/* внутренний (voice) — scale + translate (движется только он) */
 #osu-pulse-inner{
   transform: translate3d(
     var(--inner-tx, var(--inner-dx, 0)),
@@ -184,6 +179,107 @@
   opacity: .92;
 }
 
+.VibeWidget_root__Chpsm
+{
+  background: linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0, var(--ym-controls-color-secondary-text-disabled) 80%)
+}
+
 /* картинка-фон .bg-cover не пульсирует */
 [class*="bg-cover"]{ will-change: auto; }
+/* ─────────────────── Light theme inversion fixes ─────────────────── */
+.ym-light-theme .Content_main__8_wIa,
+.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK{
+  border:1px solid var(--color-dark-1) !important;
+  box-shadow:0 0 0 1px var(--color-dark-1) inset !important;
+}
 
+.ym-light-theme .CommonLayout_root__WC_W1 {
+  background: radial-gradient(circle at 70% 70%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 72%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+  box-shadow: inset 0 0 34px 8px rgba(255, 255, 255, 0.28) !important;
+  border-radius: 12px;
+}
+
+.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ym-light-theme .WithTopBanner_root__P__x3 {
+  background: radial-gradient(circle at 65% 65%,
+    var(--ym-background-color-secondary-enabled-blur) 0%,
+    var(--ym-background-color-primary-enabled-content) 60%,
+    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+  box-shadow: inset 0 10px 28px rgba(255, 255, 255, 0.22) !important;
+}
+
+.ym-light-theme .SonataFullscreenControlsDesktop_sonataButton__69FFc,
+.ym-light-theme .iJVAJMgccD4vj4E4o068,
+.ym-light-theme .WsKeF73pWotx9W1tWdYY,
+.ym-light-theme .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
+.ym-light-theme .vqAVPWFJlhAOleK_SLk4,
+.ym-light-theme .wy8tgXoSb23KtiD3EFWg,
+.ym-light-theme .Meta_title__GGBnH{
+  color: var(--ym-controls-color-primary-text-enabled) !important;
+}
+
+.ym-light-theme .rWukOKAJh5Ga7JuIp62L{
+  background: var(--ym-controls-color-secondary-default-enabled);
+}
+
+.ym-light-theme .rWukOKAJh5Ga7JuIp62L:hover,
+.ym-light-theme .LikesAndHistory_historyIconContainer__KPPbS:hover,
+.ym-light-theme .LikesAndHistoryItem_root__oI1gk:hover{
+  background: var(--ym-controls-color-secondary-default-hovered) !important;
+}
+
+.ym-light-theme .JjlbHZ4FaP9EAcR_1DxF:active{
+  color: var(--ym-controls-color-primary-on_default-enabled) !important;
+}
+
+.ym-light-theme .JjlbHZ4FaP9EAcR_1DxF:hover,
+.ym-light-theme .ChangeVolume_icon__5Zv2a:hover{
+  color: var(--ym-controls-color-primary-text-hovered) !important;
+}
+
+.ym-light-theme .PlaylistFilters_filter_selected__y3GuB{
+  border-color: var(--ym-controls-color-primary-text-enabled) !important;
+}
+
+.ym-light-theme #osu-pulse{
+  opacity: var(--osu-alpha, .06);
+  filter: brightness(var(--osu-bright, .92));
+}
+
+.ym-light-theme #osu-pulse-outer{
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.08)) 34%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.08)) 18%, transparent) 35%,
+      transparent 75%);
+}
+
+.ym-light-theme #osu-pulse-outer::after{
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.12)) 46%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.12)) 14%, transparent) 24%,
+      transparent 70%);
+}
+
+.ym-light-theme #osu-pulse-inner{
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 32%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 16%, transparent) 32%,
+      transparent 70%);
+  mix-blend-mode: multiply;
+  opacity: .72;
+}
+
+.ym-light-theme .VibeWidget_root__Chpsm{
+  background: linear-gradient(180deg,
+    var(--ym-background-color-primary-enabled-content) 0,
+    var(--ym-background-color-secondary-enabled-blur) 82%) !important;
+}
