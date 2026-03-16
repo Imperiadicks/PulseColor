@@ -221,6 +221,36 @@
     return vars;
   };
 
+
+  const PALETTE_ANIMATION_MS = 820;
+  const PALETTE_FRAME_MS = 34;
+
+  const cloneHSL = (o) => ({
+    h: ((+o.h % 360) + 360) % 360,
+    s: +(+o.s).toFixed(1),
+    l: +(+o.l).toFixed(1)
+  });
+
+  const easePalette = (t) => 1 - Math.pow(1 - t, 3);
+
+  const mixHue = (from, to, t) => {
+    const delta = ((to - from + 540) % 360) - 180;
+    return (from + delta * t + 360) % 360;
+  };
+
+  const mixBase = (from, to, t) => ({
+    h: mixHue(from.h, to.h, t),
+    s: from.s + (to.s - from.s) * t,
+    l: from.l + (to.l - from.l) * t
+  });
+
+  const isSameBase = (a, b) => {
+    if (!a || !b) return false;
+    return Math.abs((((a.h - b.h) + 540) % 360) - 180) < 0.3
+      && Math.abs(a.s - b.s) < 0.15
+      && Math.abs(a.l - b.l) < 0.15;
+  };
+
   /*──────────────────────── YM MAPS ───────────────────────*/
   const YM_DARK_MAP = `
     --ym-background-color-primary-enabled-basic: var(--color-dark-10);
@@ -777,6 +807,67 @@
     st.textContent = css;
   };
 
+
+  let paletteAnimationFrame = 0;
+  let paletteAnimationToken = 0;
+  let paletteCurrentBase = null;
+
+  const applyBasePalette = (base) => {
+    const normalized = cloneHSL(base);
+    paletteCurrentBase = normalized;
+    applyVars({
+      dark: buildVars(normalized, 'dark'),
+      light: buildVars(normalized, 'light')
+    });
+  };
+
+  const animateBasePalette = (targetBase, { immediate = false } = {}) => {
+    const target = cloneHSL(targetBase);
+
+    if (paletteAnimationFrame) {
+      cancelAnimationFrame(paletteAnimationFrame);
+      paletteAnimationFrame = 0;
+    }
+
+    if (immediate || !paletteCurrentBase) {
+      applyBasePalette(target);
+      return;
+    }
+
+    const from = cloneHSL(paletteCurrentBase);
+    if (isSameBase(from, target)) {
+      applyBasePalette(target);
+      return;
+    }
+
+    const startedAt = performance.now();
+    let lastPaint = startedAt;
+    const token = ++paletteAnimationToken;
+
+    const step = (now) => {
+      if (token !== paletteAnimationToken) return;
+
+      const elapsed = now - startedAt;
+      const progress = Math.min(1, elapsed / PALETTE_ANIMATION_MS);
+      const eased = easePalette(progress);
+
+      if (progress >= 1 || now - lastPaint >= PALETTE_FRAME_MS) {
+        lastPaint = now;
+        applyBasePalette(mixBase(from, target, eased));
+      }
+
+      if (progress < 1) {
+        paletteAnimationFrame = requestAnimationFrame(step);
+        return;
+      }
+
+      paletteAnimationFrame = 0;
+      applyBasePalette(target);
+    };
+
+    paletteAnimationFrame = requestAnimationFrame(step);
+  };
+
   function ensureGradientOverlay() {
     if (document.getElementById('sc-grad-overlay')) return;
     const st = document.createElement('style');
@@ -961,10 +1052,7 @@
       lastSrc = src;
     }
 
-    applyVars({
-      dark: buildVars(base, 'dark'),
-      light: buildVars(base, 'light')
-    });
+    animateBasePalette(base, { immediate: force && !paletteCurrentBase });
 
     ensureGradientOverlay();
 
