@@ -1,11 +1,15 @@
-/* ========================== PulseColor: Online BPM + TapTempo fallback ========================== */
+/* ========================== PulseColor: AI-only BPM gate + RAW fallback ========================== */
 (() => {
-  const CACHE_KEY = 'PulseColor.bpmCache.v6';
-  const CACHE_LIMIT = 450;
-  const REQUEST_COOLDOWN_MS = 15000;
-  const MISS_COOLDOWN_MS = 45000;
-  const ERROR_COOLDOWN_MS = 60000;
+  const AI_WAIT_MS = 5000;
+  const MODE_POLL_MS = 250;
+  const META_POLL_MS = 180;
   const RATE_LIMIT_COOLDOWN_MS = 180000;
+  const DRIVE_MODE_RAW = 'raw';
+  const DRIVE_MODE_BPM = 'bpm';
+
+  const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
+  const AI_MODEL = 'gemini-2.0-flash-lite';
+  const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const normBpm = (b) => {
@@ -15,42 +19,229 @@
     while (b > 210) b = Math.round(b / 2);
     return clamp(b, 50, 210);
   };
+  const normalizeSig = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+  const normalizeDriveMode = (value) => {
+    const mode = String(value || '').trim().toLowerCase();
+    return mode === DRIVE_MODE_BPM ? DRIVE_MODE_BPM : DRIVE_MODE_RAW;
+  };
+  const getConfiguredDriveMode = () => normalizeDriveMode(window.BeatDriverConfig?.WAVE_DRIVE_MODE);
 
-  const loadCache = () => {
-    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') || {}; }
-    catch { return {}; }
+  const requestCooldowns = new Map();
+  let seq = 0;
+  let curTrackKey = '';
+  let curTrackSig = '';
+  let waitTimer = 0;
+  let metaPollTimer = 0;
+  let modePollTimer = 0;
+  let activeRequest = null;
+  let nativeAudioPlay = null;
+
+  const AI_LOG_LIMIT = 250;
+  const AI_LOG_PREFIX = '[PulseColor AI]';
+  const aiLogs = [];
+  const safeJson = (value) => {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      try {
+        return String(value);
+      } catch {
+        return null;
+      }
+    }
+  };
+  const pushAiLog = (event, payload = {}, level = 'info') => {
+    const entry = {
+      ts: new Date().toISOString(),
+      time: Date.now(),
+      level,
+      event,
+      payload: safeJson(payload)
+    };
+    aiLogs.push(entry);
+    if (aiLogs.length > AI_LOG_LIMIT) aiLogs.splice(0, aiLogs.length - AI_LOG_LIMIT);
+    try {
+      window.__PulseColorAILogs = aiLogs;
+      const api = (window.PulseColorAILogger = window.PulseColorAILogger || {});
+      api.getLogs = () => aiLogs.slice();
+      api.clear = () => { aiLogs.length = 0; };
+      api.dump = () => aiLogs.slice();
+      api.last = () => aiLogs[aiLogs.length - 1] || null;
+      api.print = () => {
+        try {
+          console.table(aiLogs.map(({ ts, level, event, payload }) => ({ ts, level, event, payload: JSON.stringify(payload) })));
+        } catch {}
+        return aiLogs.slice();
+      };
+      window.dispatchEvent(new CustomEvent('pulsecolor:ai-log', { detail: entry }));
+    } catch {}
+
+    try {
+      const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+      console[method](AI_LOG_PREFIX, event, entry.payload || {});
+    } catch {}
+    return entry;
   };
 
-  const saveCache = (obj) => {
+  const gate = {
+    selectedMode: getConfiguredDriveMode(),
+    effectiveMode: DRIVE_MODE_RAW,
+    status: 'raw',
+    trackKey: '',
+    pendingResume: false,
+    pendingResumeEl: null,
+    pendingResumeAt: 0,
+  };
+
+  let lastNet = { status: 'idle', src: '', bpm: 0 };
+  const publishNet = () => { try { window.__PulseColorNet = { ...lastNet }; } catch {} };
+  const publishMode = () => {
     try {
-      const keys = Object.keys(obj);
-      if (keys.length > CACHE_LIMIT) {
-        keys
-          .sort((a, b) => (obj[a]?.ts || 0) - (obj[b]?.ts || 0))
-          .slice(0, keys.length - CACHE_LIMIT)
-          .forEach(k => { delete obj[k]; });
-      }
-      localStorage.setItem(CACHE_KEY, JSON.stringify(obj));
+      const snapshot = {
+        selectedMode: gate.selectedMode,
+        effectiveMode: gate.effectiveMode,
+        status: gate.status,
+        trackKey: gate.trackKey,
+        blocked: gate.selectedMode === DRIVE_MODE_BPM && gate.status === 'waiting'
+      };
+      window.__PulseColorWaveDrive = snapshot;
+      const api = (window.PulseColorWaveMode = window.PulseColorWaveMode || {});
+      api.getSelectedMode = () => snapshot.selectedMode;
+      api.getEffectiveMode = () => snapshot.effectiveMode;
+      api.isPlaybackBlocked = () => snapshot.blocked;
+      api.canUseAI = () => snapshot.selectedMode === DRIVE_MODE_BPM && snapshot.status === 'waiting';
+      api.canUseTapTempo = () => false;
+      api.canUseLocalBpm = () => false;
     } catch {}
   };
+  const setGate = (patch = {}) => {
+    const before = { ...gate };
+    Object.assign(gate, patch);
+    publishMode();
+    const changed = ['selectedMode', 'effectiveMode', 'status', 'trackKey', 'pendingResume'].some((k) => before[k] !== gate[k]);
+    if (changed) {
+      pushAiLog('gate-state', {
+        before: {
+          selectedMode: before.selectedMode,
+          effectiveMode: before.effectiveMode,
+          status: before.status,
+          trackKey: before.trackKey,
+          pendingResume: before.pendingResume
+        },
+        after: {
+          selectedMode: gate.selectedMode,
+          effectiveMode: gate.effectiveMode,
+          status: gate.status,
+          trackKey: gate.trackKey,
+          pendingResume: gate.pendingResume
+        }
+      });
+    }
+  };
+  publishNet();
+  publishMode();
+  pushAiLog('init', {
+    endpoint: AI_ENDPOINT,
+    model: AI_MODEL,
+    selectedMode: gate.selectedMode,
+    effectiveMode: gate.effectiveMode,
+    status: gate.status,
+    waitMs: AI_WAIT_MS
+  });
 
-  const normalizeSig = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+  const qText = (selectors, root = document) => {
+    for (const selector of selectors) {
+      const el = root.querySelector(selector);
+      const txt = el?.textContent?.trim();
+      if (txt) return txt;
+    }
+    return '';
+  };
+
+  const parseTitleLike = (raw) => {
+    const txt = String(raw || '').replace(/\s*[-–—|•]\s*Яндекс\s*Музыка.*$/i, '').trim();
+    if (!txt) return { title: '', artist: '' };
+    const parts = txt.split(/\s+[—–-]\s+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) return { artist: parts[0], title: parts.slice(1).join(' — ') };
+    return { artist: '', title: txt };
+  };
+
+  const getCoverSig = () => {
+    const img = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
+      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]')
+      || document.querySelector('[class*="PlayerBar"] img[src], [class*="playerBar"] img[src]');
+    const src = img?.src || '';
+    return src.replace(/\/(?:100x100|200x200|400x400|1000x1000)(?=[/?]|$)/g, '');
+  };
 
   const getTrackMeta = () => {
     const md = navigator.mediaSession?.metadata;
-    const title = md?.title || '';
-    const artist = md?.artist || md?.albumArtist || '';
+    let title = (md?.title || '').trim();
+    let artist = (md?.artist || md?.albumArtist || '').trim();
+
+    if (!title) {
+      title = qText([
+        '[data-test-id="PLAYERBAR_DESKTOP_TRACK_TITLE"]',
+        '[data-test-id="PLAYERBAR_DESKTOP_TITLE"]',
+        '[data-test-id="PLAYERBAR_TRACK_TITLE"]',
+        '[data-test-id="PLAYERBAR_TITLE"]',
+        '[class*="PlayerBarDesktop"] a[href*="/track/"]',
+        '[class*="PlayerBar"] a[href*="/track/"]',
+        '[class*="PlayerBarDesktop"] [title]',
+        '[class*="PlayerBar"] [title]'
+      ]);
+    }
+
+    if (!artist) {
+      artist = qText([
+        '[data-test-id="PLAYERBAR_DESKTOP_TRACK_ARTIST"]',
+        '[data-test-id="PLAYERBAR_DESKTOP_ARTIST"]',
+        '[data-test-id="PLAYERBAR_TRACK_ARTIST"]',
+        '[data-test-id="PLAYERBAR_ARTIST"]',
+        '[class*="PlayerBarDesktop"] a[href*="/artist/"]',
+        '[class*="PlayerBar"] a[href*="/artist/"]'
+      ]);
+    }
+
+    if ((!title || !artist) && document.title) {
+      const parsed = parseTitleLike(document.title);
+      if (!artist && parsed.artist) artist = parsed.artist;
+      if (!title && parsed.title) title = parsed.title;
+    }
+
+    const coverSig = getCoverSig();
     const sig = normalizeSig(`${artist} - ${title}`);
-    return { title: title.trim(), artist: artist.trim(), sig };
+    const key = sig || coverSig || normalizeSig(document.title);
+
+    return {
+      title: title.trim(),
+      artist: artist.trim(),
+      sig,
+      key,
+      coverSig
+    };
   };
 
-  const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
-  const AI_MODEL = 'gemini-2.0-flash-lite';
-  const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
+  const buildBpmPrompt = (artist, track) => {
+    const artSafe = artist || '—';
+    const trackSafe = track || '—';
+
+    return [
+      'Ты определяешь BPM музыкального трека.',
+      'Используй только открытые интернет-источники. Ничего не придумывай.',
+      'Если точного BPM нет — верни только 0.',
+      'Ответ должен быть только одним числом без слов, пояснений и markdown.',
+      '',
+      '=== Артист ===',
+      artSafe,
+      '',
+      '=== Трек ===',
+      `${artSafe} — ${trackSafe}`
+    ].join('\n');
+  };
 
   const parseBpmValue = (raw) => {
     if (raw == null) return 0;
-
     if (typeof raw === 'number') return normBpm(raw);
 
     const txt = String(raw).trim();
@@ -65,36 +256,6 @@
     return m ? normBpm(m[1]) : 0;
   };
 
-  const buildBpmPrompt = (artist, track) => {
-    const artSafe = artist || '—';
-    const trackSafe = track || '—';
-
-    return [
-      'Ты всегда должен писать на русском.',
-      'Ты определяешь BPM музыкального трека.',
-      'Используй только информацию из открытых интернет-источников; не придумывай факты.',
-      'Имя артиста и название трека используй строго буквально, без правок и сокращений.',
-      'Если по данной записи не найдено точное надёжное значение BPM — верни только 0.',
-      'Никаких пояснений, слов, markdown, единиц измерения, JSON и лишнего текста.',
-      'Ответ должен быть только одним числом, например: 120',
-      '',
-      '=== Артист ===',
-      artSafe,
-      '',
-      '=== Трек ===',
-      `${artSafe} — ${trackSafe}`
-    ].join('\n');
-  };
-
-  let activeLookupSig = '';
-  let activeLookupPromise = null;
-  const requestCooldowns = new Map();
-
-  const setCooldown = (sig, ms) => {
-    if (!sig || !ms) return;
-    requestCooldowns.set(sig, Date.now() + ms);
-  };
-
   const getRetryAfterMs = (res) => {
     const raw = res?.headers?.get?.('retry-after');
     if (!raw) return RATE_LIMIT_COOLDOWN_MS;
@@ -105,419 +266,611 @@
     return RATE_LIMIT_COOLDOWN_MS;
   };
 
-  const fetchAIBpm = async ({ artist, title, sig }) => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 9000);
+  const abortActiveRequest = (reason = 'cancel') => {
+    if (activeRequest) {
+      pushAiLog('ai-request-abort', {
+        reason,
+        key: activeRequest.key || '',
+        seq: activeRequest.seq || 0
+      }, 'warn');
+    }
+    try { activeRequest?.ctrl?.abort?.(reason); } catch {}
+    activeRequest = null;
+  };
 
-    try {
-      const res = await fetch(AI_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${AI_KEY}`
-        },
-        signal: ctrl.signal,
-        body: JSON.stringify({
-          model: AI_MODEL,
-          request: {
-            messages: [
-              {
-                role: 'user',
-                content: buildBpmPrompt(artist, title)
-              }
-            ]
-          }
-        })
+  const fetchAiBpm = async (meta, mySeq) => {
+    if (!meta?.title || !meta?.artist || !meta?.key) {
+      pushAiLog('ai-request-skip-no-meta', {
+        seq: mySeq,
+        title: meta?.title || '',
+        artist: meta?.artist || '',
+        key: meta?.key || ''
+      }, 'warn');
+      return;
+    }
+    pushAiLog('ai-request-prepare', {
+      seq: mySeq,
+      title: meta.title,
+      artist: meta.artist,
+      key: meta.key
+    });
+    const cooldownUntil = requestCooldowns.get(meta.key) || 0;
+    if (cooldownUntil > Date.now()) {
+      lastNet = { status: 'cooldown', src: 'ai', bpm: 0 };
+      publishNet();
+      pushAiLog('ai-request-cooldown', {
+        seq: mySeq,
+        key: meta.key,
+        cooldownUntil
+      }, 'warn');
+      return;
+    }
+
+    if (activeRequest && activeRequest.key === meta.key && activeRequest.seq === mySeq) {
+      pushAiLog('ai-request-reuse', {
+        seq: mySeq,
+        key: meta.key
       });
+      return activeRequest.promise;
+    }
 
+    const ctrl = new AbortController();
+    pushAiLog('ai-request-start', {
+      seq: mySeq,
+      key: meta.key,
+      artist: meta.artist,
+      title: meta.title,
+      endpoint: AI_ENDPOINT,
+      model: AI_MODEL
+    });
+    const promise = fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AI_KEY}`
+      },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        model: AI_MODEL,
+        request: {
+          messages: [
+            {
+              role: 'user',
+              content: buildBpmPrompt(meta.artist, meta.title)
+            }
+          ]
+        }
+      })
+    }).then(async (res) => {
+      pushAiLog('ai-response-http', {
+        seq: mySeq,
+        key: meta.key,
+        status: res.status,
+        ok: res.ok
+      }, res.ok ? 'info' : 'warn');
       if (!res.ok) {
         if (res.status === 429) {
-          setCooldown(sig, getRetryAfterMs(res));
+          const retryAfterMs = getRetryAfterMs(res);
+          requestCooldowns.set(meta.key, Date.now() + retryAfterMs);
+          pushAiLog('ai-response-rate-limit', {
+            seq: mySeq,
+            key: meta.key,
+            retryAfterMs
+          }, 'warn');
           return { bpm: 0, src: 'ai-rate-limit' };
         }
-
-        setCooldown(sig, ERROR_COOLDOWN_MS);
-        return { bpm: 0, src: 'ai-http-' + res.status };
+        pushAiLog('ai-response-http-error', {
+          seq: mySeq,
+          key: meta.key,
+          status: res.status
+        }, 'error');
+        return { bpm: 0, src: `ai-http-${res.status}` };
       }
-
       const j = await res.json();
       const content =
         j?.choices?.[0]?.message?.content ??
         j?.message?.content ??
         j?.content ??
         '';
-
       const bpm = parseBpmValue(content);
-
-      if (bpm) {
-        setCooldown(sig, REQUEST_COOLDOWN_MS);
-        return { bpm, src: 'ai' };
+      pushAiLog('ai-response-parse', {
+        seq: mySeq,
+        key: meta.key,
+        raw: String(content || '').slice(0, 200),
+        bpm
+      }, bpm ? 'info' : 'warn');
+      return bpm ? { bpm, src: 'ai' } : { bpm: 0, src: 'ai-miss' };
+    }).catch((err) => {
+      if (err?.name === 'AbortError') {
+        pushAiLog('ai-response-abort', {
+          seq: mySeq,
+          key: meta.key
+        }, 'warn');
+        return { bpm: 0, src: 'ai-abort' };
       }
-
-      setCooldown(sig, MISS_COOLDOWN_MS);
-      return { bpm: 0, src: 'ai-miss' };
-    } catch {
-      setCooldown(sig, ERROR_COOLDOWN_MS);
+      pushAiLog('ai-response-error', {
+        seq: mySeq,
+        key: meta.key,
+        error: err?.message || String(err || 'unknown-error')
+      }, 'error');
       return { bpm: 0, src: 'ai-error' };
-    } finally {
-      clearTimeout(t);
-    }
-  };
-
-  const lookupOnline = async ({ title, artist, sig } = {}) => {
-    const t = (title || '').trim();
-    const a = (artist || '').trim();
-    const s = (sig || '').trim();
-    if (!t || !a || !s) return { bpm: 0, src: 'ai-miss' };
-
-    const cooldownUntil = requestCooldowns.get(s) || 0;
-    if (cooldownUntil > Date.now()) {
-      return { bpm: 0, src: 'ai-cooldown' };
-    }
-
-    if (activeLookupPromise && activeLookupSig === s) {
-      return await activeLookupPromise;
-    }
-
-    activeLookupSig = s;
-    activeLookupPromise = fetchAIBpm({ artist: a, title: t, sig: s })
-      .finally(() => {
-        if (activeLookupSig === s) {
-          activeLookupSig = '';
-          activeLookupPromise = null;
-        }
+    }).finally(() => {
+      pushAiLog('ai-request-finish', {
+        seq: mySeq,
+        key: meta.key,
+        activeMatch: activeRequest?.ctrl === ctrl
       });
+      if (activeRequest?.ctrl === ctrl) activeRequest = null;
+    });
 
-    return await activeLookupPromise;
+    activeRequest = { key: meta.key, seq: mySeq, ctrl, promise };
+    return promise;
   };
 
-  const TapTempo = (() => {
-    const state = {
-      lastT: 0,
-      prevIoi: 0,
-      iois: [],
-      beats: [],
-      bpm: 0,
-      stableHits: 0,
-      resetAt: 0
-    };
-
-    const reset = () => {
-      state.lastT = 0;
-      state.prevIoi = 0;
-      state.iois = [];
-      state.beats = [];
-      state.bpm = 0;
-      state.stableHits = 0;
-      state.resetAt = performance.now();
-    };
-
-    const median = (arr) => {
-      const xs = arr.slice().sort((a, b) => a - b);
-      const n = xs.length;
-      if (!n) return 0;
-      const mid = Math.floor(n / 2);
-      return (n % 2) ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
-    };
-
-    const isNear = (x, y, rel = 0.12) => {
-      if (!x || !y) return false;
-      return Math.abs(x - y) <= Math.max(18, y * rel);
-    };
-
-    const pushBeat = (t, strength) => {
-      if (strength < 0.16) return 0;
-
-      if (!state.lastT) {
-        state.lastT = t;
-        state.beats = [t];
-        return 0;
-      }
-
-      const ioi = t - state.lastT;
-
-      if (ioi < 220 || ioi > 1200) {
-        state.lastT = t;
-        state.beats = [t];
-        state.iois = [];
-        state.stableHits = 0;
-        return 0;
-      }
-
-      state.beats.push(t);
-      state.lastT = t;
-
-      state.iois.push(ioi);
-      if (state.iois.length > 10) state.iois.shift();
-
-      const bpmCand = normBpm(60000 / ioi);
-      if (!bpmCand) return 0;
-
-      if (state.beats.length >= 3) {
-        const t3 = state.beats[state.beats.length - 1];
-        const t2 = state.beats[state.beats.length - 2];
-        const t1 = state.beats[state.beats.length - 3];
-        const pred = t2 + (t2 - t1);
-        if (!isNear(t3, pred, 0.14)) state.stableHits = 0;
-      }
-
-      if (state.iois.length >= 3) {
-        const med = median(state.iois);
-        const bpmMed = normBpm(60000 / med);
-        if (bpmMed) {
-          const relDev = median(state.iois.map(v => Math.abs(v - med) / med));
-          if (relDev < 0.08) {
-            if (state.bpm && Math.abs(state.bpm - bpmMed) <= 2) state.stableHits++;
-            else state.stableHits = 1;
-            state.bpm = bpmMed;
-            if (state.stableHits >= 2) return state.bpm;
-          } else {
-            state.stableHits = 0;
-          }
-        }
-      }
-
-      return 0;
-    };
-
-    return { reset, pushBeat };
-  })();
-
-  let curSig = '';
-  let curTrackKey = '';
-  let seq = 0;
-  let lastNet = { status: 'idle', src: '', bpm: 0 };
-  let lastApplied = { sig: '', src: '', bpm: 0 };
-  let resolveTrackRaf = 0;
-  let queuedSig = '';
-  let coverObserver = null;
-  let treeObserver = null;
-  const mediaLifecycleBound = new WeakSet();
-
-  const publishNet = () => { try { window.__PulseColorNet = { ...lastNet }; } catch {} };
-  publishNet();
-
-  const isProtectedSrc = (src) => src === 'ai' || src === 'cache';
-
-  const applyFromCacheSoft = (sig, cache) => {
-    const row = cache[sig];
-    if (!row?.bpm) return 0;
-    const b = normBpm(row.bpm);
-    if (!b) return 0;
-    window.OsuBeat?.retune?.({ presetBpm: b, source: row.src || 'cache' });
-    lastApplied = { sig, src: row.src || 'cache', bpm: b };
-    return b;
+  const clearWaitTimer = () => {
+    if (!waitTimer) return;
+    clearTimeout(waitTimer);
+    waitTimer = 0;
+  };
+  const clearMetaPoll = () => {
+    if (!metaPollTimer) return;
+    clearInterval(metaPollTimer);
+    metaPollTimer = 0;
   };
 
-  const resolveTrack = async (meta, mySeq) => {
-    if (!meta?.sig) return;
-    const cache = loadCache();
+  const shouldBlockPlayback = (el = null) => {
+    if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) return false;
+    if (gate.selectedMode !== DRIVE_MODE_BPM) return false;
+    if (gate.status !== 'waiting') return false;
+    if (el && el.tagName !== 'AUDIO') return false;
+    return true;
+  };
 
-    if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) {
-      return;
+  const rememberResumeIntent = (el = null) => {
+    gate.pendingResume = true;
+    gate.pendingResumeEl = el || gate.pendingResumeEl || null;
+    gate.pendingResumeAt = Date.now();
+    pushAiLog('playback-resume-remembered', {
+      hasElement: !!gate.pendingResumeEl,
+      status: gate.status,
+      trackKey: gate.trackKey
+    });
+  };
+
+  const pauseAndRewind = (el, { remember = false } = {}) => {
+    if (!el) return;
+    if (remember) rememberResumeIntent(el);
+    pushAiLog('playback-paused-and-rewind', {
+      remember,
+      currentTime: Number(el.currentTime || 0),
+      status: gate.status,
+      trackKey: gate.trackKey
+    }, 'warn');
+    try { el.pause?.(); } catch {}
+    try { el.currentTime = 0; } catch {}
+  };
+
+  const stopAllAudioForGate = () => {
+    document.querySelectorAll('audio').forEach((el) => {
+      if (!el.paused) pauseAndRewind(el, { remember: true });
+    });
+  };
+
+  const pickResumeAudio = () => {
+    const all = Array.from(document.querySelectorAll('audio'));
+    if (gate.pendingResumeEl && gate.pendingResumeEl.isConnected) return gate.pendingResumeEl;
+    return all.find(el => el.isConnected) || null;
+  };
+
+  const releasePendingPlayback = () => {
+    if (!gate.pendingResume) return;
+    const el = pickResumeAudio();
+    gate.pendingResume = false;
+    gate.pendingResumeEl = null;
+    gate.pendingResumeAt = 0;
+    pushAiLog('playback-release-attempt', {
+      hasElement: !!el,
+      status: gate.status,
+      trackKey: gate.trackKey
+    });
+    if (!el) return;
+    try {
+      const ret = nativeAudioPlay ? nativeAudioPlay.call(el) : el.play?.();
+      if (ret && typeof ret.catch === 'function') ret.catch((err) => {
+        pushAiLog('playback-release-catch', {
+          error: err?.message || String(err || 'play-catch')
+        }, 'warn');
+      });
+    } catch (err) {
+      pushAiLog('playback-release-error', {
+        error: err?.message || String(err || 'play-error')
+      }, 'error');
     }
+  };
 
-    const cached = applyFromCacheSoft(meta.sig, cache);
-    if (cached) {
-      lastNet = { status: 'hit', src: 'cache', bpm: cached };
-      publishNet();
-      return;
-    }
-
-    const cooldownUntil = requestCooldowns.get(meta.sig) || 0;
-    if (cooldownUntil > Date.now()) {
-      lastNet = { status: 'cooldown', src: 'ai', bpm: 0 };
-      publishNet();
-      return;
-    }
-
-    lastNet = { status: 'pending', src: '', bpm: 0 };
+  const enterRawMode = ({ reason = 'raw', resume = false, trackKey = '' } = {}) => {
+    pushAiLog('enter-raw-mode', {
+      reason,
+      resume,
+      trackKey: trackKey || gate.trackKey || curTrackKey
+    }, reason === 'raw' ? 'info' : 'warn');
+    clearWaitTimer();
+    clearMetaPoll();
+    abortActiveRequest(reason);
+    setGate({
+      selectedMode: getConfiguredDriveMode(),
+      effectiveMode: DRIVE_MODE_RAW,
+      status: reason,
+      trackKey: trackKey || gate.trackKey || curTrackKey
+    });
+    lastNet = { status: reason === 'raw' ? 'raw' : 'miss', src: reason === 'raw' ? 'raw' : reason, bpm: 0 };
     publishNet();
+    if (resume) releasePendingPlayback();
+  };
 
-    const out = await lookupOnline(meta);
-    if (mySeq !== seq) return;
+  const applyAiBpm = (meta, out) => {
+    pushAiLog('ai-bpm-apply', {
+      key: meta?.key || '',
+      title: meta?.title || '',
+      artist: meta?.artist || '',
+      bpm: out?.bpm || 0,
+      src: out?.src || 'ai'
+    });
+    clearWaitTimer();
+    clearMetaPoll();
+    setGate({
+      selectedMode: DRIVE_MODE_BPM,
+      effectiveMode: DRIVE_MODE_BPM,
+      status: 'bpm-active',
+      trackKey: meta?.key || gate.trackKey || curTrackKey
+    });
+    curTrackSig = meta?.sig || curTrackSig;
+    lastNet = { status: 'hit', src: out.src || 'ai', bpm: out.bpm };
+    publishNet();
+    try { window.OsuBeat?.retune?.({ presetBpm: out.bpm, source: 'ai' }); } catch {}
+    releasePendingPlayback();
+  };
+
+  const resolveWithAi = async (meta, mySeq) => {
+    if (!meta?.title || !meta?.artist || !meta?.key) {
+      pushAiLog('ai-resolve-skip-no-meta', {
+        seq: mySeq,
+        key: meta?.key || ''
+      }, 'warn');
+      return;
+    }
+    pushAiLog('ai-resolve-start', {
+      seq: mySeq,
+      key: meta.key,
+      title: meta.title,
+      artist: meta.artist
+    });
+    const out = await fetchAiBpm(meta, mySeq);
+    if (!out) {
+      pushAiLog('ai-resolve-empty', {
+        seq: mySeq,
+        key: meta.key
+      }, 'warn');
+      return;
+    }
+    if (mySeq !== seq) {
+      pushAiLog('ai-resolve-stale-seq', {
+        requestSeq: mySeq,
+        currentSeq: seq,
+        key: meta.key,
+        src: out.src || ''
+      }, 'warn');
+      return;
+    }
+    if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) {
+      pushAiLog('ai-resolve-skip-mode-changed', {
+        seq: mySeq,
+        key: meta.key,
+        mode: getConfiguredDriveMode(),
+        src: out.src || ''
+      }, 'warn');
+      return;
+    }
+    if (gate.status !== 'waiting') {
+      pushAiLog('ai-resolve-skip-status', {
+        seq: mySeq,
+        key: meta.key,
+        status: gate.status,
+        src: out.src || ''
+      }, 'warn');
+      return;
+    }
+    if ((meta.key || '') !== (gate.trackKey || '')) {
+      pushAiLog('ai-resolve-skip-track-mismatch', {
+        seq: mySeq,
+        key: meta.key,
+        gateTrackKey: gate.trackKey,
+        src: out.src || ''
+      }, 'warn');
+      return;
+    }
 
     if (out.bpm) {
-      lastNet = { status: 'hit', src: out.src, bpm: out.bpm };
-      publishNet();
+      pushAiLog('ai-resolve-hit', {
+        seq: mySeq,
+        key: meta.key,
+        bpm: out.bpm,
+        src: out.src || 'ai'
+      });
+      applyAiBpm(meta, out);
+      return;
+    }
 
-      window.OsuBeat?.retune?.({ presetBpm: out.bpm, source: out.src });
-      lastApplied = { sig: meta.sig, src: out.src, bpm: out.bpm };
-
-      cache[meta.sig] = { bpm: out.bpm, src: out.src, ts: Date.now() };
-      saveCache(cache);
+    if (out.src === 'ai-abort') {
+      pushAiLog('ai-resolve-aborted', {
+        seq: mySeq,
+        key: meta.key
+      }, 'warn');
       return;
     }
 
     lastNet = {
-      status: out.src === 'ai-rate-limit' ? 'rate-limit' : (out.src === 'ai-cooldown' ? 'cooldown' : 'miss'),
-      src: out.src || '',
+      status: out.src === 'ai-rate-limit' ? 'rate-limit' : 'miss',
+      src: out.src || 'ai-miss',
       bpm: 0
     };
     publishNet();
+    pushAiLog('ai-resolve-fallback-raw', {
+      seq: mySeq,
+      key: meta.key,
+      src: out.src || 'ai-miss'
+    }, 'warn');
+    enterRawMode({ reason: 'raw-fallback', resume: true, trackKey: meta.key });
   };
 
-  const getCoverSig = () => {
-    const img = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
-      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
-    const src = img?.src || '';
-    return src.replace(/\/(?:100x100|200x200|400x400|1000x1000)(?=[/?]|$)/g, '');
-  };
-
-  function queueTrackResolve() {
-    const meta = getTrackMeta();
-    if (!meta?.sig || !meta.title || !meta.artist) return;
-
-    if (activeLookupPromise && activeLookupSig === meta.sig) return;
-    if (resolveTrackRaf && queuedSig === meta.sig) return;
-    if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) return;
-
-    queuedSig = meta.sig;
-
-    if (resolveTrackRaf) cancelAnimationFrame(resolveTrackRaf);
-    resolveTrackRaf = requestAnimationFrame(() => {
-      requestAnimationFrame(async () => {
-        resolveTrackRaf = 0;
-        queuedSig = '';
-        const fresh = getTrackMeta();
-        if (!fresh?.sig || !fresh.title || !fresh.artist) return;
-        if (activeLookupPromise && activeLookupSig === fresh.sig) return;
-        const mySeq = seq;
-        await resolveTrack(fresh, mySeq);
-      });
+  const beginWaitingForTrack = (meta = null) => {
+    const fresh = meta || getTrackMeta();
+    const trackKey = fresh?.key || getCoverSig() || curTrackKey || `pending-${Date.now()}`;
+    pushAiLog('waiting-begin', {
+      title: fresh?.title || '',
+      artist: fresh?.artist || '',
+      key: trackKey,
+      sig: fresh?.sig || '',
+      coverSig: fresh?.coverSig || ''
     });
-  }
 
-  function resetForTrack(meta = null) {
-    seq++;
-    TapTempo.reset();
-    window.OsuBeat?.reset?.();
-    curSig = meta?.sig || '';
-    lastApplied = { sig: '', src: '', bpm: 0 };
-    lastNet = { status: 'idle', src: '', bpm: 0 };
+    seq += 1;
+    curTrackKey = trackKey;
+    curTrackSig = fresh?.sig || '';
+    clearWaitTimer();
+    clearMetaPoll();
+    abortActiveRequest();
+    try { window.OsuBeat?.reset?.(); } catch {}
+
+    setGate({
+      selectedMode: DRIVE_MODE_BPM,
+      effectiveMode: DRIVE_MODE_BPM,
+      status: 'waiting',
+      trackKey
+    });
+    lastNet = { status: 'pending', src: 'ai', bpm: 0 };
     publishNet();
-  }
+    stopAllAudioForGate();
 
-  function checkTrackChange(forceResolve = false) {
-    const meta = getTrackMeta();
-    const coverSig = getCoverSig();
-    const key = coverSig || meta?.sig || '';
-
-    if (key && key !== curTrackKey) {
-      curTrackKey = key;
-      resetForTrack(meta);
-      queueTrackResolve();
-      return;
-    }
-
-    if (meta?.sig && meta.sig !== curSig) {
-      curSig = meta.sig;
-      queueTrackResolve();
-      return;
-    }
-
-    if (forceResolve && meta?.sig) {
-      if (lastApplied.sig === meta.sig && isProtectedSrc(lastApplied.src) && lastApplied.bpm) return;
-      if (activeLookupPromise && activeLookupSig === meta.sig) return;
-      queueTrackResolve();
-    }
-  }
-
-  function bindCoverObserver() {
-    const node = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
-      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
-
-    if (coverObserver?.__node === node) return;
-    if (coverObserver) coverObserver.disconnect();
-    coverObserver = null;
-    if (!node) return;
-
-    coverObserver = new MutationObserver((muts) => {
-      for (const m of muts) {
-        if (m.type === 'attributes' && m.attributeName === 'src') {
-          checkTrackChange(true);
-          break;
-        }
+    const mySeq = seq;
+    waitTimer = setTimeout(() => {
+      if (mySeq !== seq) {
+        pushAiLog('waiting-timeout-stale', { requestSeq: mySeq, currentSeq: seq, key: trackKey }, 'warn');
+        return;
       }
+      if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) {
+        pushAiLog('waiting-timeout-skip-mode', { seq: mySeq, key: trackKey, mode: getConfiguredDriveMode() }, 'warn');
+        return;
+      }
+      if (gate.status !== 'waiting') {
+        pushAiLog('waiting-timeout-skip-status', { seq: mySeq, key: trackKey, status: gate.status }, 'warn');
+        return;
+      }
+      pushAiLog('waiting-timeout-fallback', {
+        seq: mySeq,
+        key: trackKey,
+        waitMs: AI_WAIT_MS
+      }, 'warn');
+      enterRawMode({ reason: 'raw-fallback', resume: true, trackKey });
+    }, AI_WAIT_MS);
+
+    metaPollTimer = setInterval(() => {
+      if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) {
+        clearMetaPoll();
+        return;
+      }
+      if (gate.status !== 'waiting') {
+        clearMetaPoll();
+        return;
+      }
+
+      const latest = getTrackMeta();
+      const latestKey = latest?.key || getCoverSig() || '';
+      if (latestKey && latestKey !== gate.trackKey) {
+        pushAiLog('meta-poll-track-changed', {
+          seq: mySeq,
+          from: gate.trackKey,
+          to: latestKey
+        }, 'warn');
+        beginWaitingForTrack(latest);
+        return;
+      }
+
+      if (latest?.title && latest?.artist && latest?.key === gate.trackKey && (!activeRequest || activeRequest.key !== latest.key || activeRequest.seq !== mySeq)) {
+        pushAiLog('meta-poll-ready-for-ai', {
+          seq: mySeq,
+          key: latest.key,
+          title: latest.title,
+          artist: latest.artist
+        });
+        resolveWithAi(latest, mySeq);
+      }
+    }, META_POLL_MS);
+
+    if (fresh?.title && fresh?.artist) resolveWithAi(fresh, mySeq);
+  };
+
+  const attachAudioLifecycle = (el) => {
+    if (!el || el.__pulseColorGateBound) return;
+    el.__pulseColorGateBound = true;
+    pushAiLog('audio-bound', {
+      hasSrc: !!el.currentSrc,
+      readyState: el.readyState,
+      paused: el.paused
     });
-    coverObserver.__node = node;
-    coverObserver.observe(node, { attributes: true, attributeFilter: ['src'] });
-  }
 
-  function attachAudioLifecycle(el) {
-    if (!el || mediaLifecycleBound.has(el)) return;
-    mediaLifecycleBound.add(el);
+    const guard = () => {
+      if (!shouldBlockPlayback(el)) return;
+      pushAiLog('playback-guard-block', {
+        status: gate.status,
+        selectedMode: gate.selectedMode,
+        effectiveMode: gate.effectiveMode,
+        trackKey: gate.trackKey
+      }, 'warn');
+      pauseAndRewind(el, { remember: true });
+      if (gate.selectedMode === DRIVE_MODE_BPM && gate.status !== 'waiting') beginWaitingForTrack();
+    };
 
-    const ping = () => checkTrackChange(true);
-    [
-      'play',
-      'playing',
-      'loadedmetadata',
-      'loadeddata',
-      'durationchange',
-      'seeked',
-      'emptied',
-      'canplay',
-      'canplaythrough'
-    ].forEach(evt => el.addEventListener(evt, ping, { passive: true }));
-  }
-
-  function isRelevantNode(node) {
-    if (!node || node.nodeType !== 1) return false;
-    if (node.matches?.('audio, div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], img[data-test-id="ENTITY_COVER_IMAGE"]')) return true;
-    return !!node.querySelector?.('audio, div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], img[data-test-id="ENTITY_COVER_IMAGE"]');
-  }
-
-  function bindTreeObserver() {
-    if (treeObserver) return;
-
-    treeObserver = new MutationObserver((muts) => {
-      let relevant = false;
-
-      for (const m of muts) {
-        if (m.type !== 'childList') continue;
-        for (const n of m.addedNodes) {
-          if (isRelevantNode(n)) { relevant = true; break; }
+    ['play', 'playing', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'seeked', 'durationchange'].forEach((evt) => {
+      el.addEventListener(evt, () => {
+        pushAiLog('audio-event', {
+          event: evt,
+          paused: el.paused,
+          currentTime: Number(el.currentTime || 0),
+          readyState: el.readyState,
+          currentSrc: el.currentSrc || ''
+        });
+        const meta = getTrackMeta();
+        const key = meta?.key || getCoverSig() || '';
+        if (key && key !== curTrackKey && gate.selectedMode === DRIVE_MODE_BPM) {
+          beginWaitingForTrack(meta);
+          return;
         }
-        if (relevant) break;
-        for (const n of m.removedNodes) {
-          if (isRelevantNode(n)) { relevant = true; break; }
-        }
-        if (relevant) break;
+        guard();
+      }, { capture: true });
+    });
+  };
+
+  const installPlayPatch = () => {
+    const proto = window.HTMLMediaElement?.prototype;
+    if (!proto || proto.__pulseColorAiOnlyGatePatched) return;
+    if (typeof proto.play !== 'function') return;
+
+    nativeAudioPlay = proto.play;
+    proto.play = function pulseColorGatePlay(...args) {
+      pushAiLog('media-play-call', {
+        tagName: this?.tagName || '',
+        blocked: this?.tagName === 'AUDIO' ? shouldBlockPlayback(this) : false,
+        status: gate.status,
+        selectedMode: gate.selectedMode,
+        trackKey: gate.trackKey
+      });
+      const ret = nativeAudioPlay.apply(this, args);
+      if (this?.tagName === 'AUDIO' && shouldBlockPlayback(this)) {
+        rememberResumeIntent(this);
+        queueMicrotask(() => {
+          if (shouldBlockPlayback(this)) pauseAndRewind(this);
+        });
       }
+      return ret;
+    };
 
+    Object.defineProperty(proto, '__pulseColorAiOnlyGatePatched', {
+      value: true,
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
+  };
+
+  const bindObservers = () => {
+    document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+
+    const mo = new MutationObserver(() => {
       document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-      bindCoverObserver();
-      if (relevant) checkTrackChange(true);
+      const meta = getTrackMeta();
+      const key = meta?.key || getCoverSig() || '';
+      if (gate.selectedMode === DRIVE_MODE_BPM && key && key !== curTrackKey) beginWaitingForTrack(meta);
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'content'] });
+  };
+
+  const handleModeChange = (force = false) => {
+    const nextMode = getConfiguredDriveMode();
+    if (!force && nextMode === gate.selectedMode) return;
+
+    pushAiLog('mode-change', {
+      force,
+      previousMode: gate.selectedMode,
+      nextMode,
+      status: gate.status,
+      trackKey: gate.trackKey
     });
 
-    treeObserver.observe(document.documentElement, { childList: true, subtree: true });
-  }
+    clearWaitTimer();
+    clearMetaPoll();
+    abortActiveRequest('mode-change');
+    seq += 1;
+    try { window.OsuBeat?.reset?.(); } catch {}
 
-  window.addEventListener('osu-kick', (e) => {
-    const bpmLocked = window.OsuBeat?.isLocked?.();
-    const externalLocked = window.OsuBeat?.isExternalLocked?.();
-    if (bpmLocked && (externalLocked || isProtectedSrc(lastApplied?.src))) return;
+    if (nextMode === DRIVE_MODE_RAW) {
+      enterRawMode({ reason: 'raw', resume: true, trackKey: getTrackMeta().key || curTrackKey });
+      return;
+    }
 
-    const strength = +e.detail?.strength || 0;
-    const t = performance.now();
-    const b = TapTempo.pushBeat(t, strength);
-    if (!b) return;
+    beginWaitingForTrack(getTrackMeta());
+  };
 
-    const cur = window.OsuBeat?.bpm?.();
-    if (cur && Math.abs(cur - b) <= 1 && (window.OsuBeat?.confidence?.() ?? 0) >= 0.55) return;
+  installPlayPatch();
+  bindObservers();
 
-    window.OsuBeat?.retune?.({ presetBpm: b });
-    lastApplied = { sig: curSig, src: 'tap', bpm: b };
-  });
-
-  document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-  bindCoverObserver();
-  bindTreeObserver();
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) checkTrackChange(true);
+    if (!document.hidden && getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+      const meta = getTrackMeta();
+      pushAiLog('visibility-resync', {
+        hidden: document.hidden,
+        key: meta?.key || '',
+        gateTrackKey: gate.trackKey
+      });
+      if ((meta?.key || '') !== (gate.trackKey || '')) beginWaitingForTrack(meta);
+    }
   });
-  window.addEventListener('focus', () => checkTrackChange(true));
-  window.addEventListener('pageshow', () => checkTrackChange(true));
-  checkTrackChange(true);
+  window.addEventListener('focus', () => {
+    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+      const meta = getTrackMeta();
+      pushAiLog('focus-resync', {
+        key: meta?.key || '',
+        gateTrackKey: gate.trackKey
+      });
+      if ((meta?.key || '') !== (gate.trackKey || '')) beginWaitingForTrack(meta);
+    }
+  });
+  window.addEventListener('pageshow', () => {
+    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+      const meta = getTrackMeta();
+      pushAiLog('pageshow-resync', {
+        key: meta?.key || '',
+        gateTrackKey: gate.trackKey
+      });
+      if ((meta?.key || '') !== (gate.trackKey || '')) beginWaitingForTrack(meta);
+    }
+  });
+  window.addEventListener('pulsecolor:beatDriverConfigChanged', () => {
+    pushAiLog('config-changed', {
+      waveDriveMode: getConfiguredDriveMode()
+    });
+    handleModeChange();
+  });
+
+  modePollTimer = setInterval(() => {
+    if (getConfiguredDriveMode() !== gate.selectedMode) {
+      pushAiLog('mode-poll-detected-change', {
+        selectedMode: gate.selectedMode,
+        configuredMode: getConfiguredDriveMode()
+      });
+      handleModeChange();
+    }
+  }, MODE_POLL_MS);
+
+  setTimeout(() => handleModeChange(true), 0);
 })();

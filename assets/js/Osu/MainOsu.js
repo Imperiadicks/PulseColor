@@ -268,6 +268,20 @@ function __audioOn() {
   const now = () => performance.now();
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 
+
+  const getWaveDriveMode = () => {
+    const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
+    if (apiMode === 'bpm' || apiMode === 'raw') return apiMode;
+    const cfgMode = String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase();
+    return cfgMode === 'bpm' ? 'bpm' : 'raw';
+  };
+  const isBpmWaveDrive = () => getWaveDriveMode() === 'bpm';
+  const canUseLocalBpm = () => {
+    const api = window.PulseColorWaveMode;
+    if (api?.canUseLocalBpm) return api.canUseLocalBpm() !== false;
+    return !window.BeatDriverConfig?.WAVE_DRIVE_MODE;
+  };
+
   function bindAnalyser() {
     if (OSU.analyser && OSU.analyser !== analyser) {
       analyser = OSU.analyser;
@@ -367,11 +381,12 @@ function __audioOn() {
     if (isPeak && (t - lastOnsetT) >= CFG.gateHoldMs) {
       lastOnsetT = t;
 
-      if (lastBeatT > 0) {
+      const bpmDrive = isBpmWaveDrive();
+      if (!bpmDrive && lastBeatT > 0) {
         const ibi = t - lastBeatT;
         if (ibi >= 180 && ibi <= 1200) { ibIs.push(ibi); if (ibIs.length > 32) ibIs.shift(); }
       }
-      if (!isExternalSource() && t - lastRetempo >= CFG.retempoEveryMs) {
+      if (!bpmDrive && canUseLocalBpm() && !isExternalSource() && t - lastRetempo >= CFG.retempoEveryMs) {
         lastRetempo = t;
         const est = estimateTempoByIOI();
         if (est) {
@@ -384,11 +399,13 @@ function __audioOn() {
         }
       }
 
-      lastBeatT = t;
-      if (locked && !isExternalSource()) { nextBeat = t + periodMs; }
-      const payload = { time: t, bpm: bpm || null, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
-      dispatch('osu-beat', payload);
-      dispatch('osu-beat-visual', payload);
+      if (!bpmDrive) {
+        lastBeatT = t;
+        if (locked && !isExternalSource()) { nextBeat = t + periodMs; }
+        const payload = { time: t, bpm: bpm || null, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+        dispatch('osu-beat', payload);
+        dispatch('osu-beat-visual', payload);
+      }
     }
 
     if (locked && periodMs > 0 && (__audioOn?.() ?? true)) {

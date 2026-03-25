@@ -50,7 +50,8 @@
 
     BEAT_LEAD_MS: 20,
 
-    ENABLE_CUSTOM_WAVE: true
+    ENABLE_CUSTOM_WAVE: true,
+    WAVE_DRIVE_MODE: "raw"
   };
 
 
@@ -181,6 +182,16 @@
       group: "Общее",
       items: [
         { type: "toggle", key: "ENABLE_CUSTOM_WAVE", label: "Кастомная волна", desc: "Главный переключатель. Если выключен — остальные настройки недоступны." },
+        {
+          type: "choice",
+          key: "WAVE_DRIVE_MODE",
+          label: "Источник движения",
+          desc: "BPM — ждём новый BPM от ИИ и блокируем запуск до ответа или 5 сек. RAW — сразу слушаем аудио и не отправляем AI-запросы.",
+          options: [
+            { value: "raw", label: "RAW" },
+            { value: "bpm", label: "BPM" }
+          ]
+        },
 
         { type: "toggle", key: "__LOG_ENABLED__", label: "Показывать логи", desc: "Включает всплывающие сообщения (если логгер подключён)." },
         { type: "toggle", key: "__BPM_HUD__", label: "Показывать BPM", desc: "HUD в правом верхнем углу (если HUD подключён)." },
@@ -719,6 +730,61 @@
       return li;
     }
 
+    function makeChoiceLi(title, desc, value, options, onChange, opts = {}) {
+      const li = document.createElement("li");
+      li.className = "Settings_item__Ksa9h";
+      if (opts.gated) li.setAttribute("data-pcw-gated", "1");
+
+      const root = document.createElement("div");
+      root.className = "SettingsListToggleItem_root__yEEYT";
+      root.style.alignItems = "center";
+      root.style.gap = "14px";
+
+      const titleId = makeId(title);
+      const text = makeTextContainer(titleId, title, desc);
+      text.style.flex = "1 1 auto";
+      text.style.minWidth = "0";
+      root.appendChild(text);
+
+      const wrap = document.createElement("div");
+      wrap.className = "pcw-choice-wrap";
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-describedby", titleId);
+
+      const apply = (nextValue) => {
+        wrap.dataset.value = nextValue;
+        wrap.querySelectorAll("button[data-choice-value]").forEach((btn) => {
+          const active = btn.getAttribute("data-choice-value") === nextValue;
+          btn.dataset.active = active ? "1" : "0";
+          btn.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+      };
+
+      const currentValue = String(value ?? options?.[0]?.value ?? "");
+      options.forEach((opt) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "pcw-choice-btn";
+        btn.setAttribute("data-choice-value", String(opt.value));
+        btn.textContent = opt.label;
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (li.getAttribute(DISABLED_ATTR) === "1") return;
+          const next = String(opt.value);
+          if (wrap.dataset.value === next) return;
+          apply(next);
+          try { onChange(next); } catch { }
+        });
+        wrap.appendChild(btn);
+      });
+
+      apply(currentValue);
+      root.appendChild(wrap);
+      li.appendChild(root);
+      return li;
+    }
+
     function makeRangeLi(title, desc, value, step, min, max, onChange, disabled = false, opts = {}) {
       const li = document.createElement("li");
       li.className = "Settings_item__Ksa9h";
@@ -899,6 +965,10 @@
             ul.appendChild(makeToggleLi(it.label, it.desc, getCfgBool(it.key), (v) => setCfgValue(it.key, !!v), { gated: true }));
             continue;
           }
+          if (it.type === "choice") {
+            ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
+            continue;
+          }
 
           const hasRange = it.min != null && it.max != null;
           if (hasRange) {
@@ -926,6 +996,10 @@
       for (const it of g.items) {
         if (it.type === "toggle") {
           ul.appendChild(makeToggleLi(it.label, it.desc, getCfgBool(it.key), (v) => setCfgValue(it.key, !!v), { gated: true }));
+          continue;
+        }
+        if (it.type === "choice") {
+          ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
           continue;
         }
 
@@ -968,6 +1042,34 @@
 }
 #${PORTAL_ID} li.pcw-disabled button[role="switch"] {
   pointer-events: none !important;
+}
+#${PORTAL_ID} .pcw-choice-wrap {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  flex:0 0 auto;
+}
+#${PORTAL_ID} .pcw-choice-btn {
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:rgba(255,255,255,.78);
+  padding:8px 14px;
+  font:inherit;
+  font-weight:600;
+  line-height:1;
+  transition:background-color .18s ease,color .18s ease,opacity .18s ease,transform .18s ease;
+}
+#${PORTAL_ID} .pcw-choice-btn[data-active="1"] {
+  background:rgba(255,255,255,.16);
+  color:rgba(255,255,255,.96);
+}
+#${PORTAL_ID} li.pcw-disabled .pcw-choice-btn {
+  pointer-events:none !important;
 }
     `.trim();
     portal.appendChild(style);
