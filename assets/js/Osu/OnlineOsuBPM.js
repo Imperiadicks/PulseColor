@@ -35,8 +35,15 @@
   let modePollTimer = 0;
   let activeRequest = null;
   let nativeAudioPlay = null;
+  const releaseState = {
+    lastAttemptAt: 0,
+    lastDeferredLogAt: 0,
+    lastUiClickAt: 0,
+    lastUiClickKey: ''
+  };
 
   const AI_LOG_LIMIT = 250;
+  const AI_ABORT_REASONS = new Set(['cancel', 'mode-change', 'track-change', 'raw-fallback', 'raw', 'timeout']);
   const AI_LOG_PREFIX = '[PulseColor AI]';
   const aiLogs = [];
   const safeJson = (value) => {
@@ -381,10 +388,15 @@
       }, bpm ? 'info' : 'warn');
       return bpm ? { bpm, src: 'ai' } : { bpm: 0, src: 'ai-miss' };
     }).catch((err) => {
-      if (err?.name === 'AbortError') {
+      const abortReason = ctrl?.signal?.aborted
+        ? (ctrl.signal.reason ?? err?.message ?? String(err || 'abort'))
+        : (err?.name === 'AbortError' ? (ctrl?.signal?.reason ?? 'AbortError') : '');
+      const abortText = String(abortReason || '').trim();
+      if (ctrl?.signal?.aborted || err?.name === 'AbortError' || AI_ABORT_REASONS.has(abortText)) {
         pushAiLog('ai-response-abort', {
           seq: mySeq,
-          key: meta.key
+          key: meta.key,
+          reason: abortText || 'abort'
         }, 'warn');
         return { bpm: 0, src: 'ai-abort' };
       }
@@ -426,6 +438,52 @@
     return true;
   };
 
+  const canRetryReleaseNow = () => (Date.now() - releaseState.lastAttemptAt) >= 350;
+  const shouldLogDeferredNow = () => (Date.now() - releaseState.lastDeferredLogAt) >= 1200;
+
+  const pickPlayButton = () => {
+    const selectors = [
+      '[data-test-id="PLAYERBAR_DESKTOP_PLAY_BUTTON"]',
+      '[data-test-id="PLAYERBAR_PLAY_BUTTON"]',
+      '[data-test-id="PLAYERBAR_DESKTOP_PLAY_PAUSE_BUTTON"]',
+      '[data-test-id="PLAYERBAR_PLAY_PAUSE_BUTTON"]',
+      'button[aria-label*="Играть"]',
+      'button[aria-label*="Воспроизвести"]',
+      'button[aria-label*="Play"]',
+      'button[title*="Играть"]',
+      'button[title*="Play"]'
+    ];
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    }
+    return null;
+  };
+
+  const tryUiPlayFallback = (reason = 'ui-fallback') => {
+    const now = Date.now();
+    if ((now - releaseState.lastUiClickAt) < 900 && releaseState.lastUiClickKey === (gate.trackKey || '')) return false;
+    const btn = pickPlayButton();
+    if (!btn) return false;
+    releaseState.lastUiClickAt = now;
+    releaseState.lastUiClickKey = gate.trackKey || '';
+    pushAiLog('playback-release-ui-click', {
+      reason,
+      status: gate.status,
+      trackKey: gate.trackKey
+    }, 'warn');
+    try {
+      btn.click();
+      return true;
+    } catch (err) {
+      pushAiLog('playback-release-ui-click-error', {
+        reason,
+        error: err?.message || String(err || 'ui-click-error')
+      }, 'error');
+      return false;
+    }
+  };
+
   const rememberResumeIntent = (el = null) => {
     gate.pendingResume = true;
     gate.pendingResumeEl = el || gate.pendingResumeEl || null;
@@ -462,30 +520,66 @@
     return all.find(el => el.isConnected) || null;
   };
 
-  const releasePendingPlayback = () => {
-    if (!gate.pendingResume) return;
+  const releasePendingPlayback = (reason = 'deferred') => {
+    if (!gate.pendingResume) return false;
+    releaseState.lastAttemptAt = Date.now();
     const el = pickResumeAudio();
-    gate.pendingResume = false;
-    gate.pendingResumeEl = null;
-    gate.pendingResumeAt = 0;
     pushAiLog('playback-release-attempt', {
+      reason,
       hasElement: !!el,
       status: gate.status,
       trackKey: gate.trackKey
     });
-    if (!el) return;
+
+    if (!el) {
+      const uiTriggered = tryUiPlayFallback(reason);
+      if (uiTriggered) return true;
+      return false;
+    }
+
+    gate.pendingResumeEl = el;
     try {
       const ret = nativeAudioPlay ? nativeAudioPlay.call(el) : el.play?.();
+      gate.pendingResume = false;
+      gate.pendingResumeEl = null;
+      gate.pendingResumeAt = 0;
       if (ret && typeof ret.catch === 'function') ret.catch((err) => {
+        gate.pendingResume = true;
+        gate.pendingResumeEl = el;
+        gate.pendingResumeAt = Date.now();
         pushAiLog('playback-release-catch', {
+          reason,
           error: err?.message || String(err || 'play-catch')
         }, 'warn');
+        tryUiPlayFallback(`${reason}:catch`);
       });
+      return true;
     } catch (err) {
+      gate.pendingResume = true;
+      gate.pendingResumeEl = el;
+      gate.pendingResumeAt = Date.now();
       pushAiLog('playback-release-error', {
+        reason,
         error: err?.message || String(err || 'play-error')
       }, 'error');
+      return tryUiPlayFallback(`${reason}:error`);
     }
+  };
+
+  const tryReleasePendingPlayback = (reason = 'deferred') => {
+    if (!gate.pendingResume) return false;
+    if (gate.status === 'waiting') return false;
+    if (!canRetryReleaseNow()) return false;
+    const ok = releasePendingPlayback(reason);
+    if (ok) {
+      pushAiLog('playback-release-success', { reason, status: gate.status, trackKey: gate.trackKey });
+      return true;
+    }
+    if (shouldLogDeferredNow()) {
+      releaseState.lastDeferredLogAt = Date.now();
+      pushAiLog('playback-release-deferred', { reason, status: gate.status, trackKey: gate.trackKey }, 'warn');
+    }
+    return false;
   };
 
   const enterRawMode = ({ reason = 'raw', resume = false, trackKey = '' } = {}) => {
@@ -497,6 +591,8 @@
     clearWaitTimer();
     clearMetaPoll();
     abortActiveRequest(reason);
+    releaseState.lastAttemptAt = 0;
+    releaseState.lastDeferredLogAt = 0;
     setGate({
       selectedMode: getConfiguredDriveMode(),
       effectiveMode: DRIVE_MODE_RAW,
@@ -505,7 +601,7 @@
     });
     lastNet = { status: reason === 'raw' ? 'raw' : 'miss', src: reason === 'raw' ? 'raw' : reason, bpm: 0 };
     publishNet();
-    if (resume) releasePendingPlayback();
+    if (resume) tryReleasePendingPlayback('enter-raw-mode');
   };
 
   const applyAiBpm = (meta, out) => {
@@ -518,6 +614,8 @@
     });
     clearWaitTimer();
     clearMetaPoll();
+    releaseState.lastAttemptAt = 0;
+    releaseState.lastDeferredLogAt = 0;
     setGate({
       selectedMode: DRIVE_MODE_BPM,
       effectiveMode: DRIVE_MODE_BPM,
@@ -528,7 +626,7 @@
     lastNet = { status: 'hit', src: out.src || 'ai', bpm: out.bpm };
     publishNet();
     try { window.OsuBeat?.retune?.({ presetBpm: out.bpm, source: 'ai' }); } catch {}
-    releasePendingPlayback();
+    tryReleasePendingPlayback('ai-bpm-apply');
   };
 
   const resolveWithAi = async (meta, mySeq) => {
@@ -641,6 +739,8 @@
     clearMetaPoll();
     abortActiveRequest();
     try { window.OsuBeat?.reset?.(); } catch {}
+    releaseState.lastAttemptAt = 0;
+    releaseState.lastDeferredLogAt = 0;
 
     setGate({
       selectedMode: DRIVE_MODE_BPM,
@@ -747,6 +847,7 @@
           return;
         }
         guard();
+        if (!shouldBlockPlayback(el)) tryReleasePendingPlayback(`audio:${evt}`);
       }, { capture: true });
     });
   };
@@ -770,6 +871,7 @@
         rememberResumeIntent(this);
         queueMicrotask(() => {
           if (shouldBlockPlayback(this)) pauseAndRewind(this);
+          else tryReleasePendingPlayback('play-patch-microtask');
         });
       }
       return ret;
@@ -788,6 +890,7 @@
 
     const mo = new MutationObserver(() => {
       document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+      tryReleasePendingPlayback('mutation');
       const meta = getTrackMeta();
       const key = meta?.key || getCoverSig() || '';
       if (gate.selectedMode === DRIVE_MODE_BPM && key && key !== curTrackKey) beginWaitingForTrack(meta);
@@ -811,6 +914,8 @@
     clearMetaPoll();
     abortActiveRequest('mode-change');
     seq += 1;
+    releaseState.lastAttemptAt = 0;
+    releaseState.lastDeferredLogAt = 0;
     try { window.OsuBeat?.reset?.(); } catch {}
 
     if (nextMode === DRIVE_MODE_RAW) {
@@ -825,6 +930,7 @@
   bindObservers();
 
   document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tryReleasePendingPlayback('visibilitychange');
     if (!document.hidden && getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
       const meta = getTrackMeta();
       pushAiLog('visibility-resync', {
@@ -836,6 +942,7 @@
     }
   });
   window.addEventListener('focus', () => {
+    tryReleasePendingPlayback('focus');
     if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
       const meta = getTrackMeta();
       pushAiLog('focus-resync', {
@@ -846,6 +953,7 @@
     }
   });
   window.addEventListener('pageshow', () => {
+    tryReleasePendingPlayback('pageshow');
     if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
       const meta = getTrackMeta();
       pushAiLog('pageshow-resync', {
@@ -863,6 +971,7 @@
   });
 
   modePollTimer = setInterval(() => {
+    tryReleasePendingPlayback('mode-poll');
     if (getConfiguredDriveMode() !== gate.selectedMode) {
       pushAiLog('mode-poll-detected-change', {
         selectedMode: gate.selectedMode,
