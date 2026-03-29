@@ -8,7 +8,7 @@
   const DRIVE_MODE_BPM = 'bpm';
 
   const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
-  const AI_MODEL = 'gemini-2.0-flash-lite';
+  const AI_MODEL = 'llama3.1-8b';
   const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -484,6 +484,18 @@
     }
   };
 
+  const clearPendingResumeIntent = (reason = 'clear') => {
+    if (!gate.pendingResume && !gate.pendingResumeEl) return;
+    gate.pendingResume = false;
+    gate.pendingResumeEl = null;
+    gate.pendingResumeAt = 0;
+    pushAiLog('playback-resume-cleared', {
+      reason,
+      status: gate.status,
+      trackKey: gate.trackKey
+    });
+  };
+
   const rememberResumeIntent = (el = null) => {
     gate.pendingResume = true;
     gate.pendingResumeEl = el || gate.pendingResumeEl || null;
@@ -532,6 +544,17 @@
     });
 
     if (!el) {
+      const pendingAgeMs = gate.pendingResumeAt ? (Date.now() - gate.pendingResumeAt) : 0;
+      if (gate.status === 'bpm-active' && pendingAgeMs >= 2200) {
+        pushAiLog('playback-release-abort-no-element', {
+          reason,
+          pendingAgeMs,
+          status: gate.status,
+          trackKey: gate.trackKey
+        }, 'warn');
+        clearPendingResumeIntent('bpm-active-no-audio-element');
+        return false;
+      }
       const uiTriggered = tryUiPlayFallback(reason);
       if (uiTriggered) return true;
       return false;
@@ -540,9 +563,7 @@
     gate.pendingResumeEl = el;
     try {
       const ret = nativeAudioPlay ? nativeAudioPlay.call(el) : el.play?.();
-      gate.pendingResume = false;
-      gate.pendingResumeEl = null;
-      gate.pendingResumeAt = 0;
+      clearPendingResumeIntent(`${reason}:play-ok`);
       if (ret && typeof ret.catch === 'function') ret.catch((err) => {
         gate.pendingResume = true;
         gate.pendingResumeEl = el;

@@ -5,6 +5,60 @@ function __audioOn() {
   return rms > thr;
 }
 
+function __mediaPlaying() {
+  const nowTs = performance.now();
+
+  const audios = Array.from(document.querySelectorAll('audio'));
+  const audioPlaying = audios.some((el) => {
+    if (!el || !el.isConnected) return false;
+    if (el.paused || el.ended) return false;
+    if ((el.playbackRate || 1) === 0) return false;
+    return (el.readyState >= 2) || (Number(el.currentTime || 0) > 0);
+  });
+
+  const mediaSessionPlaying = (() => {
+    try {
+      return navigator?.mediaSession?.playbackState === 'playing';
+    } catch {
+      return false;
+    }
+  })();
+
+  const uiPlaying = (() => {
+    try {
+      const pauseBtn = document.querySelector(
+        '[data-test-id="player-controls-pause"], [data-test-id="PLAYER_CONTROLS_PAUSE"], button[aria-label*="Пауза"], button[title*="Пауза"]'
+      );
+      if (pauseBtn) return true;
+
+      const playBtn = document.querySelector(
+        '[data-test-id="player-controls-play"], [data-test-id="PLAYER_CONTROLS_PLAY"], button[aria-label*="Слушать"], button[aria-label*="Играть"], button[title*="Слушать"], button[title*="Играть"]'
+      );
+      if (playBtn) return false;
+    } catch { }
+    return null;
+  })();
+
+  const rmsPlaying = (() => {
+    try {
+      return (window.__OSU__?.rms || 0) > ((window.BeatDriverConfig?.TH_RMS || 0.000001) * 1.1);
+    } catch {
+      return false;
+    }
+  })();
+
+  const playing = audioPlaying || mediaSessionPlaying || uiPlaying === true || rmsPlaying;
+
+  if (playing) {
+    __mediaPlaying.__lastOnTs = nowTs;
+    return true;
+  }
+
+  if (uiPlaying === false) return false;
+
+  return (nowTs - (__mediaPlaying.__lastOnTs || 0)) < 420;
+}
+
 /* ========================== AUDIOTAP v2 ========================== */
 (() => {
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -260,6 +314,7 @@ function __audioOn() {
   let bpm = 0, periodMs = 0;
   let locked = false, conf = 0;
   let nextBeat = 0, beatIndex = 0;
+  let bpmClockRunning = false;
   let lastRetempo = 0;
   let bpmSource = 'none';
 
@@ -408,15 +463,38 @@ function __audioOn() {
       }
     }
 
-    if (locked && periodMs > 0 && (__audioOn?.() ?? true)) {
-      while (t >= nextBeat) {
-        const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
-        dispatch('osu-beat', payload);
-        dispatch('osu-beat-visual', payload);
-        nextBeat += periodMs;
+    const bpmDrive = isBpmWaveDrive();
+    const mediaPlaying = (typeof __mediaPlaying === 'function')
+      ? __mediaPlaying()
+      : (__audioOn?.() ?? true);
+
+    if (locked && periodMs > 0) {
+      if (bpmDrive) {
+        if (mediaPlaying) {
+          if (!bpmClockRunning || !nextBeat) nextBeat = t + Math.min(periodMs, 120);
+          bpmClockRunning = true;
+          while (t >= nextBeat) {
+            const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+            dispatch('osu-beat', payload);
+            dispatch('osu-beat-visual', payload);
+            nextBeat += periodMs;
+          }
+        } else {
+          bpmClockRunning = false;
+        }
+      } else if (isExternalSource() || (__audioOn?.() ?? true)) {
+        while (t >= nextBeat) {
+          const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+          dispatch('osu-beat', payload);
+          dispatch('osu-beat-visual', payload);
+          nextBeat += periodMs;
+        }
+      } else {
+        nextBeat = t + periodMs;
       }
     } else if (locked) {
       nextBeat = t + periodMs;
+      bpmClockRunning = false;
     }
 
     let phase = 0;
@@ -452,7 +530,7 @@ function __audioOn() {
   OsuBeat.retune = ({ presetBpm, source = 'external' } = {}) => {
     if (!presetBpm) return;
     const b = clamp(Math.round(presetBpm), CFG.bpmMin, CFG.bpmMax);
-    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs; bpmSource = source || 'external';
+    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs; bpmClockRunning = false; bpmSource = source || 'external';
   };
 
   OsuBeat.preset = (presetBpm, options = {}) => {
@@ -462,7 +540,7 @@ function __audioOn() {
     const source = opts.source || 'external';
     const lock = opts.lock !== false;
     bpm = b; periodMs = 60000 / b; locked = !!lock; conf = Math.max(conf, lock ? 0.50 : 0.20);
-    nextBeat = now() + periodMs; beatIndex = 0; bpmSource = source;
+    nextBeat = now() + periodMs; beatIndex = 0; bpmClockRunning = false; bpmSource = source;
   };
   OsuBeat.reset = () => {
     fluxBuf = []; timeBuf = [];
@@ -471,6 +549,7 @@ function __audioOn() {
     bpm = 0; periodMs = 0;
     locked = false; conf = 0;
     nextBeat = 0; beatIndex = 0;
+    bpmClockRunning = false;
     lastRetempo = 0; bpmSource = 'none';
   };
 
@@ -484,9 +563,25 @@ function __audioOn() {
 
   const getConf = () => (window.OsuBeat?.confidence?.() ?? 0);
   const audioActive = () => (__audioOn?.() ?? true);
+  const getWaveDriveModeForVisuals = () => {
+    const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
+    if (apiMode === 'bpm' || apiMode === 'raw') return apiMode;
+    const cfgMode = String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase();
+    return cfgMode === 'bpm' ? 'bpm' : 'raw';
+  };
+  const isBpmWaveDriveForVisuals = () => getWaveDriveModeForVisuals() === 'bpm';
+  const beatVisualActive = () => {
+    if (!isBpmWaveDriveForVisuals()) return audioActive();
+    const bpm = +(window.OsuBeat?.bpm?.() || 0);
+    const minConf = +(window.BeatDriverConfig?.MIN_CONF ?? 0.35);
+    const mediaPlaying = (typeof __mediaPlaying === 'function')
+      ? __mediaPlaying()
+      : audioActive();
+    return mediaPlaying && !!bpm && getConf() >= minConf;
+  };
 
   const onBeat = (e) => {
-    if (!audioActive()) return;
+    if (!beatVisualActive()) return;
     const c = getConf();
     const weight = 0.6 + 0.4 * clamp(c, 0, 1);
     const down = !!e.detail?.downbeat;
@@ -507,6 +602,7 @@ function __audioOn() {
   window.addEventListener('osu-beat', onBeat);
 
   window.addEventListener('osu-kick', (e) => {
+    if (isBpmWaveDriveForVisuals()) return;
     if (!audioActive()) return;
     const s = +e.detail?.strength || 0;
     if (s < 0.0045) return;
@@ -515,6 +611,7 @@ function __audioOn() {
   });
 
   window.addEventListener('osu-voice', (e) => {
+    if (isBpmWaveDriveForVisuals()) return;
     if (!audioActive()) return;
     const s = +e.detail?.strength || 0;
     const cfg = window.BeatDriverConfig || {};
@@ -526,7 +623,8 @@ function __audioOn() {
   window.BeatDriver = {
     scales(dtMs) {
       const cfg = window.BeatDriverConfig || {};
-      const active = audioActive();
+      const bpmDrive = isBpmWaveDriveForVisuals();
+      const active = bpmDrive ? beatVisualActive() : audioActive();
 
       const dKick = Math.exp(-dtMs / (cfg.DECAY_MS || 150));
       const dVoice = Math.exp(-dtMs / (cfg.DECAY_MS_VOICE || 190));
@@ -539,10 +637,10 @@ function __audioOn() {
 
       const ph = window.OsuBeat?.phase?.() ?? 0;
       const breath = Math.sin(ph * 2 * Math.PI) * 0.008;
-      const rms = Math.min(1, Math.max(0, (window.__OSU__?.rms || 0) * 3.0));
+      const rms = bpmDrive ? 0 : Math.min(1, Math.max(0, (window.__OSU__?.rms || 0) * 3.0));
       const micro = rms * 0.006;
 
-      const voiceEnv = Math.max(0, Math.min(1, (window.__OSU__?.voiceEnv || 0)));
+      const voiceEnv = bpmDrive ? 0 : Math.max(0, Math.min(1, (window.__OSU__?.voiceEnv || 0)));
       const envGain = (cfg.VOICE_ENVELOPE_GAIN ?? 1.40);
 
       if (cfg.UNIFIED_MODE) {
@@ -561,7 +659,7 @@ function __audioOn() {
 
       return { outer, inner, active: true };
     },
-    isActive() { return audioActive(); }
+    isActive() { return beatVisualActive(); }
   };
 })();
 
@@ -646,6 +744,7 @@ function __audioOn() {
 
   // лёгкий «тычок» цели от вокала
   window.addEventListener('osu-voice', (e) => {
+    if ((window.PulseColorWaveMode?.getEffectiveMode?.() || String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase()) === 'bpm') return;
     const s = +e.detail?.strength || 0;
     const kick = (window.BeatDriverConfig?.MOTION_STRENGTH || 100) * 0.18 * Math.min(1, Math.max(0, s * 160));
     const ang = Math.random() * Math.PI * 2;
@@ -667,10 +766,22 @@ function __audioOn() {
     const cfg = window.BeatDriverConfig || {};
     const bpm = window.OsuBeat?.bpm?.();
     const conf = +(window.OsuBeat?.confidence?.() ?? 0);
+    const waveMode = (() => {
+      const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
+      if (apiMode === 'bpm' || apiMode === 'raw') return apiMode;
+      const cfgMode = String(cfg.WAVE_DRIVE_MODE || '').trim().toLowerCase();
+      return cfgMode === 'bpm' ? 'bpm' : 'raw';
+    })();
+    const bpmDrive = waveMode === 'bpm';
     const audioOn = (typeof __audioOn === 'function')
       ? __audioOn()
       : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
-    const moving = !!cfg.MOTION_ENABLED && (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35)));
+    const mediaPlaying = (typeof __mediaPlaying === 'function')
+      ? __mediaPlaying()
+      : audioOn;
+    const moving = !!cfg.MOTION_ENABLED && (bpmDrive
+      ? (mediaPlaying && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
+      : (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35))));
 
     // масштабы из драйвера (и одновременно тайминг распадов)
     const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
@@ -679,7 +790,9 @@ function __audioOn() {
     const baseBright = moving ? (1 + (Math.max(scales.outer, scales.inner) - 1) * 0.9) : 1;
     const brightRaw = baseBright * (cfg.BRIGHTNESS_BASE || 1);
     const bright = Math.min(brightRaw, 8);
-    const rmsUi = clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
+    const rmsUi = bpmDrive
+      ? clamp(((Math.max(scales.outer, scales.inner) - 1) * 4.2) + conf * 0.15, 0, 1)
+      : clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
     const alpha = moving ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
     const offsetVW = (cfg.OFFSET_X_VW || 1);
 
