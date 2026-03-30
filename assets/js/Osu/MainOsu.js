@@ -663,15 +663,23 @@ function __mediaPlaying() {
   };
 })();
 
-/* ========================== VISUAL (segment spectrum wave) ========================== */
+/* ========================== VISUAL (classic + segmented spectrum) ========================== */
 (() => {
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const lerp = (a, b, t) => a + (b - a) * t;
+  const now = () => performance.now();
 
-  const BAR_COUNT = 28;
-  const SEGMENT_COUNT = 14;
+  const BAR_COUNT = 34;
+  const SEGMENT_COUNT = 18;
   const LOW_BIN = 2;
   const BAND_CURVE = 1.85;
+  const MAX_VISUAL_HEIGHT = 0.58;
+  const MAX_SEGMENT_USAGE = 0.54;
+
+  const getRendererMode = () => {
+    const raw = String(window.BeatDriverConfig?.WAVE_RENDER_STYLE || '').trim().toLowerCase();
+    return raw === 'classic' ? 'classic' : 'blocks';
+  };
 
   let root = document.getElementById('osu-pulse');
   if (!root) {
@@ -708,34 +716,60 @@ function __mediaPlaying() {
     root.appendChild(glow);
   }
 
-  [outer, inner, ringHost, glow].forEach((el) => {
-    el.replaceChildren();
-    el.removeAttribute('style');
-    el.className = '';
-  });
+  let currentMode = '';
+  const barsState = {
+    topBars: [],
+    reflectionBars: [],
+    levels: new Array(BAR_COUNT).fill(0),
+    peaks: new Array(BAR_COUNT).fill(0),
+    peakHold: new Array(BAR_COUNT).fill(0),
+    activeCache: new Array(BAR_COUNT).fill(-1),
+    peakCache: new Array(BAR_COUNT).fill(-1),
+    loudnessRef: 0.22,
+    beatLift: 0,
+  };
 
-  outer.classList.add('osu-bars', 'osu-bars--top');
-  inner.classList.add('osu-bars', 'osu-bars--reflection');
-  ringHost.classList.add('osu-bars-floor');
-  glow.classList.add('osu-bars-mist');
+  if (!window.__pmState) {
+    window.__pmState = {
+      dx: 0, dy: 0, vx: 0, vy: 0,
+      tx: 0, ty: 0,
+      lastBeatIdx: -1,
+      breath: 0,
+      vxLP: 0, vyLP: 0,
+      __ts: performance.now(),
+    };
+  }
+  const S = window.__pmState;
+  const rings = [];
+  const MAX_RINGS = 6;
+  const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
+  const SEED_X = 11.37;
+  const SEED_Y = 29.51;
+  const fract = x => x - Math.floor(x);
+  const hash = n => fract(Math.sin(n * 12.9898 + 78.233) * 43758.5453);
+  const vnoise = (tt, seed) => {
+    const i = Math.floor(tt);
+    const f = tt - i;
+    const a = hash(i + seed);
+    const b = hash(i + 1 + seed);
+    const u = f * f * (3 - 2 * f);
+    return (a * (1 - u) + b * u) * 2 - 1;
+  };
 
-  const topBars = [];
-  const reflectionBars = [];
-  const levels = new Array(BAR_COUNT).fill(0);
-  const peaks = new Array(BAR_COUNT).fill(0);
-  const peakHold = new Array(BAR_COUNT).fill(0);
-  const activeCache = new Array(BAR_COUNT).fill(-1);
-  const peakCache = new Array(BAR_COUNT).fill(-1);
-
-  function barHue(index) {
-    return (280 + (index / Math.max(1, BAR_COUNT - 1)) * 320) % 360;
+  function barColor(index) {
+    const t = index / Math.max(1, BAR_COUNT - 1);
+    const hue = lerp(292, 198, t);
+    const sat = lerp(44, 56, t);
+    const light = lerp(66, 72, t);
+    return `hsl(${hue.toFixed(1)}deg ${sat.toFixed(1)}% ${light.toFixed(1)}%)`;
   }
 
   function buildBars(layer, store) {
+    store.length = 0;
     for (let i = 0; i < BAR_COUNT; i++) {
       const bar = document.createElement('div');
       bar.className = 'osu-bar';
-      bar.style.setProperty('--osu-bar-color', `hsl(${barHue(i)}deg 100% 56%)`);
+      bar.style.setProperty('--osu-bar-color', barColor(i));
       bar.style.setProperty('--osu-bar-index', String(i));
 
       const segments = [];
@@ -745,17 +779,21 @@ function __mediaPlaying() {
         bar.appendChild(seg);
         segments.push(seg);
       }
-
       layer.appendChild(bar);
-      store.push({ bar, segments, active: 0, peak: 0 });
+      store.push({ bar, segments, active: 0, peak: -1 });
     }
   }
 
-  buildBars(outer, topBars);
-  buildBars(inner, reflectionBars);
+  function clearRings() {
+    while (rings.length) {
+      const ring = rings.pop();
+      ring?.el?.remove();
+    }
+    ringHost.replaceChildren();
+  }
 
   function setBarState(item, activeCount, peakIndex) {
-    if (item.active === activeCount && item.peak === peakIndex) return;
+    if (!item || (item.active === activeCount && item.peak === peakIndex)) return;
     item.active = activeCount;
     item.peak = peakIndex;
 
@@ -779,7 +817,10 @@ function __mediaPlaying() {
     const spec = window.__OSU__?.spec;
     if (!spec || !spec.length) return null;
 
-    const out = new Array(BAR_COUNT).fill(0);
+    const raw = new Array(BAR_COUNT).fill(0);
+    let master = 0;
+    let hottest = 0;
+
     for (let i = 0; i < BAR_COUNT; i++) {
       const [start, end] = bandRange(i, BAR_COUNT, spec.length);
       let sum = 0;
@@ -792,91 +833,312 @@ function __mediaPlaying() {
         weightSum += weight;
       }
       const energy = Math.sqrt(sum / Math.max(1e-6, weightSum));
-      const shaped = Math.pow(energy, 0.78);
       const tilt = 1.08 - (i / Math.max(1, BAR_COUNT - 1)) * 0.14;
-      out[i] = clamp(shaped * 1.38 * tilt, 0, 1);
+      const value = energy * tilt;
+      raw[i] = value;
+      master += value;
+      if (value > hottest) hottest = value;
+    }
+
+    const avg = master / Math.max(1, BAR_COUNT);
+    const targetRef = Math.max(0.10, hottest * 0.92, avg * 1.95);
+    const refAttack = 0.18;
+    const refRelease = 0.045;
+    const refLerp = targetRef > barsState.loudnessRef ? refAttack : refRelease;
+    barsState.loudnessRef = lerp(barsState.loudnessRef, targetRef, refLerp);
+
+    const out = new Array(BAR_COUNT).fill(0);
+    const denom = Math.max(0.08, barsState.loudnessRef);
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const normalized = clamp(raw[i] / denom, 0, 1.25);
+      const shaped = Math.pow(normalized, 0.88);
+      out[i] = clamp(shaped * MAX_VISUAL_HEIGHT, 0, MAX_VISUAL_HEIGHT);
     }
     return out;
   }
 
+  function applyVisualMode(nextMode) {
+    if (nextMode === currentMode) return;
+    currentMode = nextMode;
+    root.dataset.waveRenderer = nextMode;
+    root.classList.remove('is-active');
+    root.style.removeProperty('--osu-alpha');
+    root.style.removeProperty('--osu-bright');
+    root.style.removeProperty('--osu-offset-xvw');
+    root.style.removeProperty('--osu-beat-lift');
+    root.style.removeProperty('--osu-floor-alpha');
+    root.style.removeProperty('filter');
+    root.style.removeProperty('opacity');
+    root.style.removeProperty('transform');
+
+    [outer, inner, ringHost, glow].forEach((el) => {
+      el.replaceChildren();
+      el.removeAttribute('style');
+      el.className = '';
+    });
+
+    if (nextMode === 'blocks') {
+      outer.classList.add('osu-bars', 'osu-bars--top');
+      inner.classList.add('osu-bars', 'osu-bars--reflection');
+      ringHost.classList.add('osu-bars-floor');
+      glow.classList.add('osu-bars-mist');
+
+      barsState.levels.fill(0);
+      barsState.peaks.fill(0);
+      barsState.peakHold.fill(0);
+      barsState.activeCache.fill(-1);
+      barsState.peakCache.fill(-1);
+      buildBars(outer, barsState.topBars);
+      buildBars(inner, barsState.reflectionBars);
+    } else {
+      ringHost.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+      glow.style.cssText = `
+        position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen;
+        opacity:0; filter:blur(0px);
+        background:
+          radial-gradient(circle at 50% 55%,
+            rgba(255,255,255,.55) 0%,
+            rgba(255,255,255,.18) 28%,
+            transparent 70%);
+        will-change: opacity, filter;`;
+      clearRings();
+    }
+  }
+
+  function spawnRing(detail) {
+    if (currentMode !== 'classic') return;
+    const bpm = window.OsuBeat?.bpm?.();
+    if (!bpm) return;
+
+    while (rings.length >= MAX_RINGS) {
+      const r = rings.shift();
+      r?.el?.remove();
+    }
+    const conf = +(window.OsuBeat?.confidence?.() ?? 0);
+    const period = clamp(60000 / Math.max(50, Math.min(210, bpm)), 285, 900);
+    const dur = clamp(period * (0.95 + (1 - conf) * 0.25), 260, 1000);
+
+    const down = !!detail?.downbeat;
+    const baseScale = down ? 1.05 : 1.02;
+    const endScale = down ? 1.38 : 1.26;
+    const startAlpha = 0.10 + conf * 0.10;
+
+    const el = document.createElement('div');
+    el.className = 'osu-ring';
+    el.style.cssText = `
+      position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;border-radius:50%;
+      transform:scale(${baseScale});opacity:${startAlpha};transition:none;filter:blur(${down ? 0.6 : 0.4}px);
+      background:
+        radial-gradient(circle at 50% 55%,
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.24)) 52%, transparent) 0%,
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.24)) 26%, transparent) 28%,
+          transparent 70%);
+      will-change:transform,opacity,filter;`;
+    ringHost.appendChild(el);
+    rings.push({ el, t0: now(), dur, start: { s: baseScale, a: startAlpha }, end: { s: endScale, a: 0 } });
+  }
+
+  window.addEventListener('osu-beat', e => spawnRing(e.detail));
+  window.addEventListener('osu-beat-visual', e => spawnRing(e.detail));
+
+  window.addEventListener('osu-voice', (e) => {
+    if (currentMode !== 'classic') return;
+    const s = +e.detail?.strength || 0;
+    const kick = (window.BeatDriverConfig?.MOTION_STRENGTH || 100) * 0.18 * Math.min(1, Math.max(0, s * 160));
+    const ang = Math.random() * Math.PI * 2;
+    S.tx += Math.cos(ang) * kick;
+    S.ty += Math.sin(ang) * kick;
+  });
+
   let lastTs = performance.now();
   (function frame() {
-    const nowTs = performance.now();
-    const dt = Math.min(0.060, (nowTs - lastTs) / 1000);
-    lastTs = nowTs;
+    const tNow = performance.now();
+    const dtSec = Math.min(0.060, (tNow - lastTs) / 1000);
+    lastTs = tNow;
+    S.__ts = tNow;
 
     const cfg = window.BeatDriverConfig || {};
-    const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
-    const waveMode = (apiMode === 'bpm' || apiMode === 'raw')
-      ? apiMode
-      : (String(cfg.WAVE_DRIVE_MODE || '').trim().toLowerCase() === 'bpm' ? 'bpm' : 'raw');
-    const bpmDrive = waveMode === 'bpm';
+    const mode = getRendererMode();
+    applyVisualMode(mode);
 
-    const audioOn = (typeof __audioOn === 'function')
-      ? __audioOn()
-      : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
-    const mediaPlaying = (typeof __mediaPlaying === 'function')
-      ? __mediaPlaying()
-      : audioOn;
-    const scales = window.BeatDriver?.scales?.(dt * 1000) || { outer: 1, inner: 1, active: false };
+    if (mode === 'blocks') {
+      const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
+      const waveMode = (apiMode === 'bpm' || apiMode === 'raw')
+        ? apiMode
+        : (String(cfg.WAVE_DRIVE_MODE || '').trim().toLowerCase() === 'bpm' ? 'bpm' : 'raw');
+      const bpmDrive = waveMode === 'bpm';
 
-    const pulse = clamp((Math.max(scales.outer || 1, scales.inner || 1) - 1) * 1.85, 0, 0.55);
-    const rms = clamp((window.__OSU__?.rms || 0) * 3.2, 0, 1);
-    const voiceEnv = clamp(window.__OSU__?.voiceEnv || 0, 0, 1);
-    const bands = readBands();
+      const audioOn = (typeof __audioOn === 'function')
+        ? __audioOn()
+        : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
+      const mediaPlaying = (typeof __mediaPlaying === 'function')
+        ? __mediaPlaying()
+        : audioOn;
+      const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
 
-    for (let i = 0; i < BAR_COUNT; i++) {
-      let target = 0;
-      if (bands) {
-        target = bands[i];
-        if (bpmDrive) target = target * 0.92 + pulse * 0.48;
-        else target = target + pulse * 0.18;
+      const pulse = clamp((Math.max(scales.outer || 1, scales.inner || 1) - 1) * 1.85, 0, 0.55);
+      const bands = readBands();
+      const beatPulseTarget = bpmDrive
+        ? clamp(pulse * 0.08, 0, 0.035)
+        : 0;
+      const beatPulseLerp = beatPulseTarget > barsState.beatLift ? 0.20 : 0.08;
+      barsState.beatLift = lerp(barsState.beatLift, beatPulseTarget, beatPulseLerp);
 
-        const edgeBias = 1 - Math.abs((i / Math.max(1, BAR_COUNT - 1)) * 2 - 1);
-        target += voiceEnv * (0.04 + edgeBias * 0.03);
-      } else {
-        target = pulse * 0.65 + rms * 0.15;
+      for (let i = 0; i < BAR_COUNT; i++) {
+        let target = 0;
+        if (bands) {
+          target = bands[i] + barsState.beatLift;
+        } else {
+          target = barsState.beatLift;
+        }
+        target = clamp(target, 0, MAX_VISUAL_HEIGHT);
+
+        const attack = 1 - Math.exp(-dtSec / 0.045);
+        const release = 1 - Math.exp(-dtSec / 0.18);
+        const smoothing = target > barsState.levels[i] ? attack : release;
+        barsState.levels[i] = lerp(barsState.levels[i], target, smoothing);
+
+        const fall = 1 - Math.exp(-dtSec / 0.24);
+        barsState.peaks[i] = Math.max(barsState.levels[i], lerp(barsState.peaks[i], barsState.levels[i], fall));
+        if (barsState.levels[i] >= barsState.peaks[i] - 0.015) barsState.peakHold[i] = 0.10;
+        else barsState.peakHold[i] = Math.max(0, barsState.peakHold[i] - dtSec);
+        if (barsState.peakHold[i] <= 0) barsState.peaks[i] = Math.max(barsState.levels[i], barsState.peaks[i] - dtSec * 0.75);
+
+        const visibleSegments = Math.max(2, Math.round((SEGMENT_COUNT - 2) * MAX_SEGMENT_USAGE));
+        const activeCount = clamp(
+          Math.round((barsState.levels[i] / Math.max(0.001, MAX_VISUAL_HEIGHT)) * visibleSegments),
+          0,
+          visibleSegments
+        );
+        const peakIndex = barsState.peaks[i] > 0.05
+          ? clamp(
+            Math.round((barsState.peaks[i] / Math.max(0.001, MAX_VISUAL_HEIGHT)) * visibleSegments) - 1,
+            0,
+            visibleSegments
+          )
+          : -1;
+
+        if (barsState.activeCache[i] !== activeCount || barsState.peakCache[i] !== peakIndex) {
+          barsState.activeCache[i] = activeCount;
+          barsState.peakCache[i] = peakIndex;
+          setBarState(barsState.topBars[i], activeCount, peakIndex);
+          setBarState(barsState.reflectionBars[i], activeCount, peakIndex);
+        }
       }
-      target = clamp(target, 0, 1);
 
-      const attack = 1 - Math.exp(-dt / 0.045);
-      const release = 1 - Math.exp(-dt / 0.18);
-      const smoothing = target > levels[i] ? attack : release;
-      levels[i] = lerp(levels[i], target, smoothing);
+      const visible = mediaPlaying || audioOn || pulse > 0.02 || barsState.levels.some(v => v > 0.02);
+      const avgLevel = barsState.levels.reduce((acc, v) => acc + v, 0) / Math.max(1, BAR_COUNT);
+      const offsetVW = Number(cfg.OFFSET_X_VW || 0);
+      const alpha = visible ? clamp(0.11 + (avgLevel / MAX_VISUAL_HEIGHT) * 0.56 + pulse * 0.18, 0.12, 0.92) : 0.06;
+      const bright = clamp((cfg.BRIGHTNESS_BASE || 1) * (1 + (avgLevel / MAX_VISUAL_HEIGHT) * 0.76 + pulse * 0.38), 1, 4.2);
+      const beatLift = clamp((barsState.beatLift / Math.max(0.001, MAX_VISUAL_HEIGHT)) * 12, 0, 10);
 
-      const fall = 1 - Math.exp(-dt / 0.24);
-      peaks[i] = Math.max(levels[i], lerp(peaks[i], levels[i], fall));
-      if (levels[i] >= peaks[i] - 0.015) peakHold[i] = 0.10;
-      else peakHold[i] = Math.max(0, peakHold[i] - dt);
-      if (peakHold[i] <= 0) peaks[i] = Math.max(levels[i], peaks[i] - dt * 0.75);
+      root.style.setProperty('--osu-alpha', alpha.toFixed(3));
+      root.style.setProperty('--osu-bright', bright.toFixed(3));
+      root.style.setProperty('--osu-offset-xvw', `${offsetVW}vw`);
+      root.style.setProperty('--osu-beat-lift', `${beatLift.toFixed(2)}px`);
+      root.style.setProperty('--osu-floor-alpha', clamp(0.08 + (avgLevel / MAX_VISUAL_HEIGHT) * 0.20 + pulse * 0.12, 0.08, 0.32).toFixed(3));
+      root.classList.toggle('is-active', visible);
+      outer.classList.toggle('pulse', pulse > 0.16);
+    } else {
+      const bpm = window.OsuBeat?.bpm?.();
+      const conf = +(window.OsuBeat?.confidence?.() ?? 0);
+      const audioOn = (typeof __audioOn === 'function')
+        ? __audioOn()
+        : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
+      const moving = !!cfg.MOTION_ENABLED && (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35)));
+      const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
 
-      const activeCount = clamp(Math.round(levels[i] * SEGMENT_COUNT), 0, SEGMENT_COUNT);
-      const peakIndex = peaks[i] > 0.06
-        ? clamp(Math.round(peaks[i] * SEGMENT_COUNT) - 1, 0, SEGMENT_COUNT - 1)
-        : -1;
+      const baseBright = moving ? (1 + (Math.max(scales.outer, scales.inner) - 1) * 0.9) : 1;
+      const brightRaw = baseBright * (cfg.BRIGHTNESS_BASE || 1);
+      const bright = Math.min(brightRaw, 8);
+      const rmsUi = clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
+      const alpha = moving ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
+      const offsetVW = (cfg.OFFSET_X_VW || 1);
 
-      if (activeCache[i] !== activeCount || peakCache[i] !== peakIndex) {
-        activeCache[i] = activeCount;
-        peakCache[i] = peakIndex;
-        setBarState(topBars[i], activeCount, peakIndex);
-        setBarState(reflectionBars[i], activeCount, peakIndex);
+      root.style.filter = `brightness(${bright.toFixed(3)})`;
+      root.style.opacity = alpha.toFixed(3);
+      root.style.transform = `translateX(${offsetVW}vw)`;
+
+      const over = Math.max(0, bright - 2);
+      const glowAlpha = Math.min(0.65, 0.18 + over * 0.12);
+      const glowBlur = Math.min(90, 14 + over * 24);
+      glow.style.opacity = glowAlpha.toFixed(3);
+      glow.style.filter = `blur(${glowBlur.toFixed(1)}px)`;
+
+      const R = (cfg.MOTION_STRENGTH || 100);
+      const speed = Math.max(0.05, Math.min(1, cfg.MOTION_SPEED ?? 0.30));
+
+      if (!moving) {
+        S.vx *= 0.80; S.vy *= 0.80;
+        S.tx *= 0.85; S.ty *= 0.85;
+        S.breath += (-S.breath) * (1 - Math.exp(-dtSec / 0.45));
+      } else {
+        const t = tNow * 0.001;
+        const F = 0.05 * (0.35 + speed);
+        const aimX = vnoise(t * F, SEED_X) * R * 0.90;
+        const aimY = vnoise(t * F * 1.123, SEED_Y) * R * 0.90;
+
+        const aimL = 1 - Math.exp(-dtSec / 0.70);
+        S.tx += (aimX - S.tx) * aimL;
+        S.ty += (aimY - S.ty) * aimL;
+
+        const rT = Math.hypot(S.tx, S.ty);
+        if (rT > R) {
+          const s = R / rT;
+          S.tx *= s; S.ty *= s;
+        }
+
+        const wn = 3.2 * (0.35 + speed);
+        const zeta = 1.15;
+        const k = wn * wn;
+        const c = 2 * zeta * wn;
+
+        let ax = k * (S.tx - S.dx) - c * S.vx;
+        let ay = k * (S.ty - S.dy) - c * S.vy;
+
+        const vL = 1 - Math.exp(-dtSec / 0.25);
+        S.vx += ax * dtSec; S.vy += ay * dtSec;
+        S.vx = S.vxLP + (S.vx - S.vxLP) * vL; S.vxLP = S.vx;
+        S.vy = S.vyLP + (S.vy - S.vyLP) * vL; S.vyLP = S.vy;
+
+        S.dx += S.vx * dtSec;
+        S.dy += S.vy * dtSec;
+
+        const rO = Math.hypot(S.dx, S.dy);
+        if (rO > R) {
+          const s = R / rO;
+          S.dx *= s; S.dy *= s;
+        }
+
+        if (bpm) {
+          const omega = (Math.PI * 2) * (bpm / 60) * (0.22 + 0.4 * speed);
+          const aimB = Math.sin(t * omega) * R * 0.22;
+          const bL = 1 - Math.exp(-dtSec / 0.50);
+          S.breath += (aimB - S.breath) * bL;
+        }
+      }
+
+      outer.style.transform = `scale(${(scales.outer || 1).toFixed(4)})`;
+      inner.style.transform = `translate(${S.dx.toFixed(2)}px, ${(S.dy + (S.breath || 0)).toFixed(2)}px) scale(${(scales.inner || 1).toFixed(4)})`;
+
+      if (rings.length) {
+        const tt = now();
+        const toRemove = [];
+        for (let i = 0; i < rings.length; i++) {
+          const r = rings[i];
+          const p = clamp((tt - r.t0) / r.dur, 0, 1);
+          const k = easeOutCubic(p);
+          r.el.style.transform = `scale(${(r.start.s + (r.end.s - r.start.s) * k).toFixed(4)})`;
+          r.el.style.opacity = (r.start.a + (r.end.a - r.start.a) * k).toFixed(3);
+          if (p >= 1) toRemove.push(i);
+        }
+        for (let i = toRemove.length - 1; i >= 0; i--) {
+          const r = rings.splice(toRemove[i], 1)[0];
+          r?.el?.remove();
+        }
       }
     }
-
-    const visible = mediaPlaying || audioOn || pulse > 0.02 || levels.some(v => v > 0.025);
-    const avgLevel = levels.reduce((acc, v) => acc + v, 0) / Math.max(1, BAR_COUNT);
-    const offsetVW = Number(cfg.OFFSET_X_VW || 1);
-    const alpha = visible ? clamp(0.11 + avgLevel * 0.9 + pulse * 0.25, 0.12, 0.98) : 0.06;
-    const bright = clamp((cfg.BRIGHTNESS_BASE || 1) * (1 + avgLevel * 0.9 + pulse * 0.55), 1, 4.5);
-    const beatLift = clamp(pulse * 22, 0, 18);
-
-    root.style.setProperty('--osu-alpha', alpha.toFixed(3));
-    root.style.setProperty('--osu-bright', bright.toFixed(3));
-    root.style.setProperty('--osu-offset-xvw', `${offsetVW}vw`);
-    root.style.setProperty('--osu-beat-lift', `${beatLift.toFixed(2)}px`);
-    root.style.setProperty('--osu-floor-alpha', clamp(0.08 + avgLevel * 0.30 + pulse * 0.18, 0.08, 0.38).toFixed(3));
-    root.classList.toggle('is-active', visible);
-    outer.classList.toggle('pulse', pulse > 0.16);
 
     requestAnimationFrame(frame);
   })();
