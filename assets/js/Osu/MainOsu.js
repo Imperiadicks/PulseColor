@@ -663,225 +663,220 @@ function __mediaPlaying() {
   };
 })();
 
-/* ========================== VISUAL (сверхплавное движение, кольца, свечение) ========================== */
+/* ========================== VISUAL (segment spectrum wave) ========================== */
 (() => {
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
-  const now = () => performance.now();
+  const lerp = (a, b, t) => a + (b - a) * t;
 
-  // ── DOM ──────────────────────────────────────────────────────────────
+  const BAR_COUNT = 28;
+  const SEGMENT_COUNT = 14;
+  const LOW_BIN = 2;
+  const BAND_CURVE = 1.85;
+
   let root = document.getElementById('osu-pulse');
-  if (!root) { root = document.createElement('div'); root.id = 'osu-pulse'; document.body.appendChild(root); }
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'osu-pulse';
+    document.body.appendChild(root);
+  }
 
   let outer = document.getElementById('osu-pulse-outer');
-  if (!outer) { outer = document.createElement('div'); outer.id = 'osu-pulse-outer'; root.appendChild(outer); }
+  if (!outer) {
+    outer = document.createElement('div');
+    outer.id = 'osu-pulse-outer';
+    root.appendChild(outer);
+  }
 
   let inner = document.getElementById('osu-pulse-inner');
-  if (!inner) { inner = document.createElement('div'); inner.id = 'osu-pulse-inner'; root.appendChild(inner); }
+  if (!inner) {
+    inner = document.createElement('div');
+    inner.id = 'osu-pulse-inner';
+    root.appendChild(inner);
+  }
 
   let ringHost = document.getElementById('osu-pulse-rings');
   if (!ringHost) {
     ringHost = document.createElement('div');
     ringHost.id = 'osu-pulse-rings';
-    ringHost.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
     root.appendChild(ringHost);
   }
 
-  // Glow-слой (яркость > 2 усиливает свечение)
   let glow = document.getElementById('osu-pulse-glow');
   if (!glow) {
     glow = document.createElement('div');
     glow.id = 'osu-pulse-glow';
-    glow.style.cssText = `
-      position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen;
-      opacity:0; filter:blur(0px);
-      background:
-        radial-gradient(circle at 50% 55%,
-          rgba(255,255,255,.55) 0%,
-          rgba(255,255,255,.18) 28%,
-          transparent 70%);
-      will-change: opacity, filter;`;
     root.appendChild(glow);
   }
 
-  // ──────────────────────────────── Состояние движения ────────────────────────────────────────────
-  if (!window.__pmState)
-    window.__pmState = { dx: 0, dy: 0, vx: 0, vy: 0, tx: 0, ty: 0, last: now(), lastBeatIdx: -1, breath: 0, vxLP: 0, vyLP: 0, __ts: performance.now() };
-  const S = window.__pmState;
-
-  // ────────────────────────────────── Кольца ────────────────────────────────────────────────
-  const rings = []; const MAX_RINGS = 6;
-  const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
-
-  function spawnRing(detail) {
-    const bpm = window.OsuBeat?.bpm?.();
-    if (!bpm) return;
-
-    while (rings.length >= MAX_RINGS) { const r = rings.shift(); r?.el?.remove(); }
-    const conf = +(window.OsuBeat?.confidence?.() ?? 0);
-    const period = clamp(60000 / Math.max(50, Math.min(210, bpm)), 285, 900);
-    const dur = clamp(period * (0.95 + (1 - conf) * 0.25), 260, 1000);
-
-    const down = !!detail?.downbeat;
-    const baseScale = down ? 1.05 : 1.02, endScale = down ? 1.38 : 1.26;
-    const startAlpha = 0.10 + conf * 0.10;
-
-    const el = document.createElement('div');
-    el.className = 'osu-ring';
-    el.style.cssText = `
-      position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;border-radius:50%;
-      transform:scale(${baseScale});opacity:${startAlpha};transition:none;filter:blur(${down ? 0.6 : 0.4}px);
-      background:
-        radial-gradient(circle at 50% 55%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.24)) 52%, transparent) 0%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.24)) 26%, transparent) 28%,
-          transparent 70%);
-      will-change:transform,opacity,filter;`;
-    ringHost.appendChild(el);
-    rings.push({ el, t0: now(), dur, start: { s: baseScale, a: startAlpha }, end: { s: endScale, a: 0 } });
-  }
-  window.addEventListener('osu-beat', e => spawnRing(e.detail));
-  window.addEventListener('osu-beat-visual', e => spawnRing(e.detail));
-
-  // лёгкий «тычок» цели от вокала
-  window.addEventListener('osu-voice', (e) => {
-    if ((window.PulseColorWaveMode?.getEffectiveMode?.() || String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase()) === 'bpm') return;
-    const s = +e.detail?.strength || 0;
-    const kick = (window.BeatDriverConfig?.MOTION_STRENGTH || 100) * 0.18 * Math.min(1, Math.max(0, s * 160));
-    const ang = Math.random() * Math.PI * 2;
-    S.tx += Math.cos(ang) * kick;
-    S.ty += Math.sin(ang) * kick;
+  [outer, inner, ringHost, glow].forEach((el) => {
+    el.replaceChildren();
+    el.removeAttribute('style');
+    el.className = '';
   });
 
-  // ────────────────── helpers для гладкого шумового движения ──────────────────
-  const SEED_X = 11.37, SEED_Y = 29.51;
-  const fract = x => x - Math.floor(x);
-  const hash = n => fract(Math.sin(n * 12.9898 + 78.233) * 43758.5453);
-  const vnoise = (tt, seed) => { const i = Math.floor(tt), f = tt - i; const a = hash(i + seed), b = hash(i + 1 + seed); const u = f * f * (3 - 2 * f); return (a * (1 - u) + b * u) * 2 - 1; };
+  outer.classList.add('osu-bars', 'osu-bars--top');
+  inner.classList.add('osu-bars', 'osu-bars--reflection');
+  ringHost.classList.add('osu-bars-floor');
+  glow.classList.add('osu-bars-mist');
 
-  // ────────────────── Главный кадр ────────────────────────────────────────────────────
+  const topBars = [];
+  const reflectionBars = [];
+  const levels = new Array(BAR_COUNT).fill(0);
+  const peaks = new Array(BAR_COUNT).fill(0);
+  const peakHold = new Array(BAR_COUNT).fill(0);
+  const activeCache = new Array(BAR_COUNT).fill(-1);
+  const peakCache = new Array(BAR_COUNT).fill(-1);
+
+  function barHue(index) {
+    return (280 + (index / Math.max(1, BAR_COUNT - 1)) * 320) % 360;
+  }
+
+  function buildBars(layer, store) {
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'osu-bar';
+      bar.style.setProperty('--osu-bar-color', `hsl(${barHue(i)}deg 100% 56%)`);
+      bar.style.setProperty('--osu-bar-index', String(i));
+
+      const segments = [];
+      for (let j = 0; j < SEGMENT_COUNT; j++) {
+        const seg = document.createElement('span');
+        seg.className = 'osu-bar__segment';
+        bar.appendChild(seg);
+        segments.push(seg);
+      }
+
+      layer.appendChild(bar);
+      store.push({ bar, segments, active: 0, peak: 0 });
+    }
+  }
+
+  buildBars(outer, topBars);
+  buildBars(inner, reflectionBars);
+
+  function setBarState(item, activeCount, peakIndex) {
+    if (item.active === activeCount && item.peak === peakIndex) return;
+    item.active = activeCount;
+    item.peak = peakIndex;
+
+    for (let i = 0; i < item.segments.length; i++) {
+      const seg = item.segments[i];
+      const on = i < activeCount;
+      seg.classList.toggle('is-active', on);
+      seg.classList.toggle('is-cap', on && i === Math.max(0, activeCount - 1));
+      seg.classList.toggle('is-peak', peakIndex >= 0 && i === peakIndex);
+    }
+  }
+
+  function bandRange(index, total, specLength) {
+    const hi = Math.max(LOW_BIN + 2, specLength - 1);
+    const a = Math.floor(LOW_BIN + Math.pow(index / total, BAND_CURVE) * (hi - LOW_BIN));
+    const b = Math.floor(LOW_BIN + Math.pow((index + 1) / total, BAND_CURVE) * (hi - LOW_BIN));
+    return [Math.max(LOW_BIN, a), Math.max(a + 1, b)];
+  }
+
+  function readBands() {
+    const spec = window.__OSU__?.spec;
+    if (!spec || !spec.length) return null;
+
+    const out = new Array(BAR_COUNT).fill(0);
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const [start, end] = bandRange(i, BAR_COUNT, spec.length);
+      let sum = 0;
+      let weightSum = 0;
+      for (let j = start; j < end; j++) {
+        const n = spec[j] / 255;
+        const ratio = j / Math.max(1, spec.length - 1);
+        const weight = 1.35 - ratio * 0.55;
+        sum += n * n * weight;
+        weightSum += weight;
+      }
+      const energy = Math.sqrt(sum / Math.max(1e-6, weightSum));
+      const shaped = Math.pow(energy, 0.78);
+      const tilt = 1.08 - (i / Math.max(1, BAR_COUNT - 1)) * 0.14;
+      out[i] = clamp(shaped * 1.38 * tilt, 0, 1);
+    }
+    return out;
+  }
+
+  let lastTs = performance.now();
   (function frame() {
-    const tNow = performance.now();
-    const dtSec = Math.min(0.060, (tNow - (S.__ts || tNow)) / 1000); S.__ts = tNow;
+    const nowTs = performance.now();
+    const dt = Math.min(0.060, (nowTs - lastTs) / 1000);
+    lastTs = nowTs;
 
     const cfg = window.BeatDriverConfig || {};
-    const bpm = window.OsuBeat?.bpm?.();
-    const conf = +(window.OsuBeat?.confidence?.() ?? 0);
-    const waveMode = (() => {
-      const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
-      if (apiMode === 'bpm' || apiMode === 'raw') return apiMode;
-      const cfgMode = String(cfg.WAVE_DRIVE_MODE || '').trim().toLowerCase();
-      return cfgMode === 'bpm' ? 'bpm' : 'raw';
-    })();
+    const apiMode = window.PulseColorWaveMode?.getEffectiveMode?.();
+    const waveMode = (apiMode === 'bpm' || apiMode === 'raw')
+      ? apiMode
+      : (String(cfg.WAVE_DRIVE_MODE || '').trim().toLowerCase() === 'bpm' ? 'bpm' : 'raw');
     const bpmDrive = waveMode === 'bpm';
+
     const audioOn = (typeof __audioOn === 'function')
       ? __audioOn()
       : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
     const mediaPlaying = (typeof __mediaPlaying === 'function')
       ? __mediaPlaying()
       : audioOn;
-    const moving = !!cfg.MOTION_ENABLED && (bpmDrive
-      ? (mediaPlaying && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
-      : (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35))));
+    const scales = window.BeatDriver?.scales?.(dt * 1000) || { outer: 1, inner: 1, active: false };
 
-    // масштабы из драйвера (и одновременно тайминг распадов)
-    const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
+    const pulse = clamp((Math.max(scales.outer || 1, scales.inner || 1) - 1) * 1.85, 0, 0.55);
+    const rms = clamp((window.__OSU__?.rms || 0) * 3.2, 0, 1);
+    const voiceEnv = clamp(window.__OSU__?.voiceEnv || 0, 0, 1);
+    const bands = readBands();
 
-    // ── яркость/свечение (яркость >2 усиливает glow) ──
-    const baseBright = moving ? (1 + (Math.max(scales.outer, scales.inner) - 1) * 0.9) : 1;
-    const brightRaw = baseBright * (cfg.BRIGHTNESS_BASE || 1);
-    const bright = Math.min(brightRaw, 8);
-    const rmsUi = bpmDrive
-      ? clamp(((Math.max(scales.outer, scales.inner) - 1) * 4.2) + conf * 0.15, 0, 1)
-      : clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
-    const alpha = moving ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
-    const offsetVW = (cfg.OFFSET_X_VW || 1);
+    for (let i = 0; i < BAR_COUNT; i++) {
+      let target = 0;
+      if (bands) {
+        target = bands[i];
+        if (bpmDrive) target = target * 0.92 + pulse * 0.48;
+        else target = target + pulse * 0.18;
 
-    root.style.filter = `brightness(${bright.toFixed(3)})`;
-    root.style.opacity = alpha.toFixed(3);
-    root.style.transform = `translateX(${offsetVW}vw)`;
+        const edgeBias = 1 - Math.abs((i / Math.max(1, BAR_COUNT - 1)) * 2 - 1);
+        target += voiceEnv * (0.04 + edgeBias * 0.03);
+      } else {
+        target = pulse * 0.65 + rms * 0.15;
+      }
+      target = clamp(target, 0, 1);
 
-    const over = Math.max(0, bright - 2);
-    const glowAlpha = Math.min(0.65, 0.18 + over * 0.12);
-    const glowBlur = Math.min(90, 14 + over * 24);
-    glow.style.opacity = glowAlpha.toFixed(3);
-    glow.style.filter = `blur(${glowBlur.toFixed(1)}px)`;
+      const attack = 1 - Math.exp(-dt / 0.045);
+      const release = 1 - Math.exp(-dt / 0.18);
+      const smoothing = target > levels[i] ? attack : release;
+      levels[i] = lerp(levels[i], target, smoothing);
 
-    // ── сверхплавное движение (value-noise цель + пере-демпфированная пружина) ──
-    const R = (cfg.MOTION_STRENGTH || 100);                // радиус области, px
-    const speed = Math.max(0.05, Math.min(1, cfg.MOTION_SPEED ?? 0.30));
+      const fall = 1 - Math.exp(-dt / 0.24);
+      peaks[i] = Math.max(levels[i], lerp(peaks[i], levels[i], fall));
+      if (levels[i] >= peaks[i] - 0.015) peakHold[i] = 0.10;
+      else peakHold[i] = Math.max(0, peakHold[i] - dt);
+      if (peakHold[i] <= 0) peaks[i] = Math.max(levels[i], peaks[i] - dt * 0.75);
 
-    if (!moving) {
-      S.vx *= 0.80; S.vy *= 0.80;
-      S.tx *= 0.85; S.ty *= 0.85;
-      S.breath += (-S.breath) * (1 - Math.exp(-dtSec / 0.45));
-    } else {
-      // 1) цель из гладкого шума
-      const t = tNow * 0.001;
-      const F = 0.05 * (0.35 + speed);   // ~0.017..0.085 Гц
-      const aimX = vnoise(t * F, SEED_X) * R * 0.90;
-      const aimY = vnoise(t * F * 1.123, SEED_Y) * R * 0.90;
+      const activeCount = clamp(Math.round(levels[i] * SEGMENT_COUNT), 0, SEGMENT_COUNT);
+      const peakIndex = peaks[i] > 0.06
+        ? clamp(Math.round(peaks[i] * SEGMENT_COUNT) - 1, 0, SEGMENT_COUNT - 1)
+        : -1;
 
-      // сглаживаем цель (LPF ~0.7s)
-      const aimL = 1 - Math.exp(-dtSec / 0.70);
-      S.tx += (aimX - S.tx) * aimL;
-      S.ty += (aimY - S.ty) * aimL;
-
-      // граница круга
-      const rT = Math.hypot(S.tx, S.ty);
-      if (rT > R) { const s = R / rT; S.tx *= s; S.ty *= s; }
-
-      // 2) пере-демпфированная пружина (ζ=1.15)
-      const wn = 3.2 * (0.35 + speed);
-      const zeta = 1.15;
-      const k = wn * wn;
-      const c = 2 * zeta * wn;
-
-      let ax = k * (S.tx - S.dx) - c * S.vx;
-      let ay = k * (S.ty - S.dy) - c * S.vy;
-
-      // сглаживаем скорость (LPF ~0.25s)
-      const vL = 1 - Math.exp(-dtSec / 0.25);
-      S.vx += ax * dtSec; S.vy += ay * dtSec;
-      S.vx = S.vxLP + (S.vx - S.vxLP) * vL; S.vxLP = S.vx;
-      S.vy = S.vyLP + (S.vy - S.vyLP) * vL; S.vyLP = S.vy;
-
-      S.dx += S.vx * dtSec;
-      S.dy += S.vy * dtSec;
-
-      // итоговая позиция тоже в круге
-      const rO = Math.hypot(S.dx, S.dy);
-      if (rO > R) { const s = R / rO; S.dx *= s; S.dy *= s; }
-
-      // 3) «дыхание» по BPM (медленно и плавно)
-      if (bpm) {
-        const omega = (Math.PI * 2) * (bpm / 60) * (0.22 + 0.4 * speed);
-        const aimB = Math.sin(t * omega) * R * 0.22;
-        const bL = 1 - Math.exp(-dtSec / 0.50);
-        S.breath += (aimB - S.breath) * bL;
+      if (activeCache[i] !== activeCount || peakCache[i] !== peakIndex) {
+        activeCache[i] = activeCount;
+        peakCache[i] = peakIndex;
+        setBarState(topBars[i], activeCount, peakIndex);
+        setBarState(reflectionBars[i], activeCount, peakIndex);
       }
     }
 
-    // ── применяем трансформы ──
-    outer && (outer.style.transform = `scale(${(scales.outer || 1).toFixed(4)})`);
-    if (inner) {
-      const dx = S.dx;
-      const dy = S.dy + (S.breath || 0);
-      inner.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${(scales.inner || 1).toFixed(4)})`;
-    }
+    const visible = mediaPlaying || audioOn || pulse > 0.02 || levels.some(v => v > 0.025);
+    const avgLevel = levels.reduce((acc, v) => acc + v, 0) / Math.max(1, BAR_COUNT);
+    const offsetVW = Number(cfg.OFFSET_X_VW || 1);
+    const alpha = visible ? clamp(0.11 + avgLevel * 0.9 + pulse * 0.25, 0.12, 0.98) : 0.06;
+    const bright = clamp((cfg.BRIGHTNESS_BASE || 1) * (1 + avgLevel * 0.9 + pulse * 0.55), 1, 4.5);
+    const beatLift = clamp(pulse * 22, 0, 18);
 
-    // ── апдейт колец ──
-    if (rings.length) {
-      const tt = now(); const toRemove = [];
-      for (let i = 0; i < rings.length; i++) {
-        const r = rings[i];
-        const p = clamp((tt - r.t0) / r.dur, 0, 1);
-        const k = easeOutCubic(p);
-        r.el.style.transform = `scale(${(r.start.s + (r.end.s - r.start.s) * k).toFixed(4)})`;
-        r.el.style.opacity = (r.start.a + (r.end.a - r.start.a) * k).toFixed(3);
-        if (p >= 1) toRemove.push(i);
-      }
-      for (let i = toRemove.length - 1; i >= 0; i--) { const r = rings.splice(toRemove[i], 1)[0]; r?.el?.remove(); }
-    }
+    root.style.setProperty('--osu-alpha', alpha.toFixed(3));
+    root.style.setProperty('--osu-bright', bright.toFixed(3));
+    root.style.setProperty('--osu-offset-xvw', `${offsetVW}vw`);
+    root.style.setProperty('--osu-beat-lift', `${beatLift.toFixed(2)}px`);
+    root.style.setProperty('--osu-floor-alpha', clamp(0.08 + avgLevel * 0.30 + pulse * 0.18, 0.08, 0.38).toFixed(3));
+    root.classList.toggle('is-active', visible);
+    outer.classList.toggle('pulse', pulse > 0.16);
 
     requestAnimationFrame(frame);
   })();
