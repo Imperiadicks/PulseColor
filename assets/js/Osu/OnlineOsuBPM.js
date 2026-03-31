@@ -229,38 +229,178 @@
     };
   };
 
+  const normalizeLoose = (value) => String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ё/g, 'е')
+    .replace(/Ё/g, 'Е')
+    .replace(/[’']/g, "'")
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/&/g, ' and ')
+    .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  const normalizeArtistsList = (value) => String(value || '')
+    .replace(/\s+(?:feat\.?|ft\.?|featuring)\s+/gi, ', ')
+    .replace(/\s*[;&/]\s*/g, ', ')
+    .replace(/\s+(?:and|x|×)\s+/gi, ', ');
+  const splitArtistVariants = (artist) => {
+    const raw = String(artist || '').trim();
+    if (!raw) return [];
+    const normalizedList = normalizeArtistsList(raw);
+    const out = new Set([raw, normalizedList]);
+    normalizedList.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean).forEach((part) => out.add(part));
+    return Array.from(out).filter(Boolean);
+  };
+  const buildTrackTitleVariants = (title) => {
+    const raw = String(title || '').trim();
+    if (!raw) return [];
+    const out = new Set([raw]);
+    const noFeat = raw
+      .replace(/\s*[\[(]?(?:feat\.?|ft\.?|featuring)\s+[^\])]+[\])]?/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (noFeat) out.add(noFeat);
+    const bracketRemix = raw
+      .replace(/\(([^)]*?\b(?:remix|mix|edit|version|vip|flip|rework)\b[^)]*?)\)/ig, ' - $1')
+      .replace(/\[([^\]]*?\b(?:remix|mix|edit|version|vip|flip|rework)\b[^\]]*?)\]/ig, ' - $1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (bracketRemix) out.add(bracketRemix);
+    const remixMatch = bracketRemix.match(/^(.+?)\s+((?:[^-–—]{1,80}?)\b(?:remix|mix|edit|version|vip|flip|rework)\b.*)$/i);
+    if (remixMatch) {
+      const left = remixMatch[1].trim();
+      const right = remixMatch[2].trim();
+      if (left && right && !/[—–-]\s*$/.test(left)) out.add(`${left} - ${right}`);
+    }
+    return Array.from(out).filter(Boolean);
+  };
+  const looseEqOrContains = (a, b) => {
+    const na = normalizeLoose(a);
+    const nb = normalizeLoose(b);
+    return !!na && !!nb && (na === nb || na.includes(nb) || nb.includes(na));
+  };
+  const isArtistMatch = (sourceArtist, targetArtist) => {
+    const sourceVariants = splitArtistVariants(sourceArtist);
+    const targetVariants = splitArtistVariants(targetArtist);
+    if (!sourceVariants.length || !targetVariants.length) return false;
+    return sourceVariants.some((src) => targetVariants.some((target) => looseEqOrContains(src, target)));
+  };
+  const isTitleMatch = (sourceTitle, targetTitle) => {
+    const sourceNorm = normalizeLoose(sourceTitle);
+    if (!sourceNorm) return false;
+    const variants = buildTrackTitleVariants(targetTitle);
+    if (!variants.length) return false;
+    return variants.some((variant) => looseEqOrContains(sourceNorm, variant));
+  };
+  const buildSongBpmSearchHints = (artist, track) => {
+    const artistVariants = splitArtistVariants(artist);
+    const titleVariants = buildTrackTitleVariants(track);
+    const primaryArtist = artistVariants[0] || String(artist || '').trim();
+    const hints = new Set();
+
+    for (const titleVariant of titleVariants) {
+      if (primaryArtist) hints.add(`${primaryArtist} - ${titleVariant}`);
+      if (artist) hints.add(`${artist} - ${titleVariant}`);
+      hints.add(titleVariant);
+    }
+
+    return Array.from(hints).filter(Boolean).slice(0, 8);
+  };
   const buildBpmPrompt = (artist, track) => {
-    const artSafe = artist || '—';
-    const trackSafe = track || '—';
+    const artSafe = String(artist || '').trim() || '—';
+    const trackSafe = String(track || '').trim() || '—';
+    const titleVariants = buildTrackTitleVariants(trackSafe);
+    const artistVariants = splitArtistVariants(artSafe);
+    const primaryArtist = artistVariants[0] || artSafe;
+    const searchHints = buildSongBpmSearchHints(artSafe, trackSafe);
 
     return [
-      'Ты определяешь BPM музыкального трека.',
-      'Используй только открытые интернет-источники. Ничего не придумывай.',
-      'Если точного BPM нет — верни только 0.',
-      'Ответ должен быть только одним числом без слов, пояснений и markdown.',
+      'Ты определяешь BPM трека строго по songbpm.com и больше ни по каким сайтам.',
+      'Нельзя использовать другие источники, память модели, догадки, YouTube, Tunebat, Shazam, Spotify, Apple Music и любые другие сайты.',
+      'Нужно найти точную страницу трека на songbpm.com или точный результат поиска на songbpm.com.',
+      'Если на songbpm.com нет точного совпадения по треку — верни JSON с bpm 0.',
+      'Учитывай, что в songbpm.com может быть указан только главный артист, а в приложении артисты перечислены списком.',
+      'Для ремиксов проверяй именно ремиксную версию, а не оригинал.',
+      'Возвращай только JSON в одну строку без markdown и без пояснений.',
+      'Формат ответа строго такой:',
+      '{"bpm":170,"source_url":"https://songbpm.com/...","source_artist":"Tommee Profitt","source_title":"There\'s A Hero In You - Serhat Durmus Remix","match":"exact"}',
+      'Если точного совпадения нет, ответ строго такой:',
+      '{"bpm":0,"source_url":"","source_artist":"","source_title":"","match":"none"}',
       '',
-      '=== Артист ===',
+      '=== Артист из плеера ===',
       artSafe,
       '',
-      '=== Трек ===',
-      `${artSafe} — ${trackSafe}`
+      '=== Главный артист для проверки ===',
+      primaryArtist,
+      '',
+      '=== Трек из плеера ===',
+      trackSafe,
+      '',
+      '=== Допустимые варианты названия ===',
+      ...(titleVariants.length ? titleVariants : [trackSafe]),
+      '',
+      '=== Допустимые варианты артиста ===',
+      ...(artistVariants.length ? artistVariants : [artSafe]),
+      '',
+      '=== Поисковые подсказки для songbpm.com ===',
+      ...(searchHints.length ? searchHints : [`${primaryArtist} - ${trackSafe}`]),
+      '',
+      'Проверь, что BPM взят именно из поля Tempo (BPM) / BPM на songbpm.com, а не из длительности, года или других чисел.'
     ].join('\n');
   };
 
-  const parseBpmValue = (raw) => {
-    if (raw == null) return 0;
-    if (typeof raw === 'number') return normBpm(raw);
+  const extractJsonObject = (raw) => {
+    if (raw == null) return null;
+    if (typeof raw === 'object') return raw;
+    const txt = String(raw).trim();
+    if (!txt) return null;
+    try { return JSON.parse(txt); } catch {}
+    const start = txt.indexOf('{');
+    const end = txt.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) return null;
+    try { return JSON.parse(txt.slice(start, end + 1)); } catch {}
+    return null;
+  };
+  const parseSongBpmValue = (raw, meta = {}) => {
+    if (raw == null) return { bpm: 0, reject: 'empty' };
+    if (typeof raw === 'number') return { bpm: normBpm(raw), reject: raw ? '' : 'empty-number' };
 
     const txt = String(raw).trim();
-    if (!txt) return 0;
+    if (!txt) return { bpm: 0, reject: 'empty-text' };
 
-    try {
-      const j = JSON.parse(txt);
-      if (typeof j?.bpm !== 'undefined') return normBpm(j.bpm);
-    } catch {}
+    const data = extractJsonObject(txt);
+    const rawSongBpmMention = /songbpm\.com/i.test(txt);
 
-    const m = txt.match(/\b(\d{2,3})\b/);
-    return m ? normBpm(m[1]) : 0;
+    if (data) {
+      const bpm = normBpm(data?.source_bpm ?? data?.bpm ?? 0);
+      const sourceUrl = String(data?.source_url ?? data?.url ?? '').trim();
+      const sourceArtist = String(data?.source_artist ?? data?.artist ?? '').trim();
+      const sourceTitle = String(data?.source_title ?? data?.title ?? '').trim();
+      const songbpmOk = /^https?:\/\/(?:www\.)?songbpm\.com\//i.test(sourceUrl) || rawSongBpmMention;
+      const titleOk = sourceTitle ? isTitleMatch(sourceTitle, meta?.title || '') : rawSongBpmMention;
+      const artistOk = sourceArtist ? isArtistMatch(sourceArtist, meta?.artist || '') : true;
+
+      if (!songbpmOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'non-songbpm-source' };
+      if (!titleOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'title-mismatch' };
+      if (!artistOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'artist-mismatch' };
+      if (!bpm) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'bpm-empty' };
+
+      return { bpm, sourceUrl, sourceArtist, sourceTitle, match: String(data?.match || '').trim() };
+    }
+
+    if (!rawSongBpmMention) return { bpm: 0, reject: 'no-songbpm-mention' };
+
+    const labeled = txt.match(/\b(?:tempo\s*\(bpm\)|bpm)\D{0,12}(\d{2,3})\b/i);
+    const bpm = labeled ? normBpm(labeled[1]) : 0;
+    const titleOk = isTitleMatch(txt, meta?.title || '');
+    const artistOk = isArtistMatch(txt, meta?.artist || '');
+
+    if (!bpm) return { bpm: 0, reject: 'bpm-label-miss' };
+    if (!titleOk) return { bpm: 0, reject: 'raw-title-mismatch' };
+    if (!artistOk) return { bpm: 0, reject: 'raw-artist-mismatch' };
+    return { bpm, sourceUrl: '', sourceArtist: '', sourceTitle: '', match: 'text' };
   };
 
   const getRetryAfterMs = (res) => {
@@ -379,14 +519,18 @@
         j?.message?.content ??
         j?.content ??
         '';
-      const bpm = parseBpmValue(content);
+      const parsed = parseSongBpmValue(content, meta);
       pushAiLog('ai-response-parse', {
         seq: mySeq,
         key: meta.key,
-        raw: String(content || '').slice(0, 200),
-        bpm
-      }, bpm ? 'info' : 'warn');
-      return bpm ? { bpm, src: 'ai' } : { bpm: 0, src: 'ai-miss' };
+        raw: String(content || '').slice(0, 320),
+        bpm: parsed?.bpm || 0,
+        reject: parsed?.reject || '',
+        sourceUrl: parsed?.sourceUrl || '',
+        sourceArtist: parsed?.sourceArtist || '',
+        sourceTitle: parsed?.sourceTitle || ''
+      }, parsed?.bpm ? 'info' : 'warn');
+      return parsed?.bpm ? { bpm: parsed.bpm, src: 'songbpm-ai' } : { bpm: 0, src: parsed?.reject || 'ai-miss' };
     }).catch((err) => {
       const abortReason = ctrl?.signal?.aborted
         ? (ctrl.signal.reason ?? err?.message ?? String(err || 'abort'))
