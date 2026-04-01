@@ -8,7 +8,7 @@
   const DRIVE_MODE_BPM = 'bpm';
 
   const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
-  const AI_MODEL = 'llama3.1-8b';
+  const AI_MODEL = 'gpt-4';
   const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -39,12 +39,35 @@
     lastAttemptAt: 0,
     lastDeferredLogAt: 0,
     lastUiClickAt: 0,
-    lastUiClickKey: ''
+    lastUiClickKey: '',
+    lastObserverReleaseAt: 0,
+    lastObservedAudioSignature: ''
   };
 
   const AI_LOG_LIMIT = 250;
   const AI_ABORT_REASONS = new Set(['cancel', 'mode-change', 'track-change', 'raw-fallback', 'raw', 'timeout']);
   const AI_LOG_PREFIX = '[PulseColor AI]';
+  const AI_VERBOSE_LOGS = (() => {
+    try {
+      return !!window.PulseColorDebug?.verboseAiLogs || !!window.__PULSECOLOR_VERBOSE_AI_LOGS__;
+    } catch {
+      return false;
+    }
+  })();
+  const AI_CONSOLE_SILENT_EVENTS = new Set([
+    'audio-bound',
+    'audio-event',
+    'gate-state',
+    'media-play-call',
+    'playback-guard-block',
+    'playback-paused-and-rewind',
+    'playback-release-attempt',
+    'playback-release-deferred',
+    'playback-release-abort-no-element',
+    'playback-release-success',
+    'playback-resume-cleared',
+    'playback-resume-remembered'
+  ]);
   const aiLogs = [];
   const safeJson = (value) => {
     try {
@@ -57,6 +80,13 @@
       }
     }
   };
+  const shouldPrintAiLog = (entry) => {
+    if (!entry) return false;
+    if (entry.level === 'error') return true;
+    if (AI_VERBOSE_LOGS) return true;
+    return !AI_CONSOLE_SILENT_EVENTS.has(entry.event);
+  };
+
   const pushAiLog = (event, payload = {}, level = 'info') => {
     const entry = {
       ts: new Date().toISOString(),
@@ -84,8 +114,10 @@
     } catch {}
 
     try {
-      const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
-      console[method](AI_LOG_PREFIX, event, entry.payload || {});
+      if (shouldPrintAiLog(entry)) {
+        const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+        console[method](AI_LOG_PREFIX, event, entry.payload || {});
+      }
     } catch {}
     return entry;
   };
@@ -489,6 +521,8 @@
     gate.pendingResume = false;
     gate.pendingResumeEl = null;
     gate.pendingResumeAt = 0;
+    releaseState.lastObserverReleaseAt = 0;
+    releaseState.lastObservedAudioSignature = '';
     pushAiLog('playback-resume-cleared', {
       reason,
       status: gate.status,
@@ -500,6 +534,8 @@
     gate.pendingResume = true;
     gate.pendingResumeEl = el || gate.pendingResumeEl || null;
     gate.pendingResumeAt = Date.now();
+    releaseState.lastObserverReleaseAt = 0;
+    releaseState.lastObservedAudioSignature = '';
     pushAiLog('playback-resume-remembered', {
       hasElement: !!gate.pendingResumeEl,
       status: gate.status,
@@ -531,6 +567,13 @@
     if (gate.pendingResumeEl && gate.pendingResumeEl.isConnected) return gate.pendingResumeEl;
     return all.find(el => el.isConnected) || null;
   };
+
+  const getAudioObserverSignature = () => Array.from(document.querySelectorAll('audio'))
+    .map((el, index) => {
+      const src = el.currentSrc || el.src || '';
+      return `${index}:${src}:${el.readyState}:${el.paused ? 'p' : 'r'}`;
+    })
+    .join('|');
 
   const releasePendingPlayback = (reason = 'deferred') => {
     if (!gate.pendingResume) return false;
@@ -601,6 +644,26 @@
       pushAiLog('playback-release-deferred', { reason, status: gate.status, trackKey: gate.trackKey }, 'warn');
     }
     return false;
+  };
+
+  const tryReleasePendingPlaybackOnAudioMutation = (reason = 'audio-dom-change') => {
+    if (!gate.pendingResume) return false;
+    if (gate.status === 'waiting') return false;
+
+    const signature = getAudioObserverSignature();
+    if (!signature) return false;
+
+    const now = Date.now();
+    if (
+      releaseState.lastObservedAudioSignature === signature
+      && (now - releaseState.lastObserverReleaseAt) < 900
+    ) {
+      return false;
+    }
+
+    releaseState.lastObservedAudioSignature = signature;
+    releaseState.lastObserverReleaseAt = now;
+    return tryReleasePendingPlayback(reason);
   };
 
   const enterRawMode = ({ reason = 'raw', resume = false, trackKey = '' } = {}) => {
@@ -908,10 +971,17 @@
 
   const bindObservers = () => {
     document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+    releaseState.lastObservedAudioSignature = getAudioObserverSignature();
 
     const mo = new MutationObserver(() => {
       document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-      tryReleasePendingPlayback('mutation');
+
+      const nextAudioSignature = getAudioObserverSignature();
+      if (nextAudioSignature && nextAudioSignature !== releaseState.lastObservedAudioSignature) {
+        releaseState.lastObservedAudioSignature = nextAudioSignature;
+        tryReleasePendingPlaybackOnAudioMutation('audio-dom-change');
+      }
+
       const meta = getTrackMeta();
       const key = meta?.key || getCoverSig() || '';
       if (gate.selectedMode === DRIVE_MODE_BPM && key && key !== curTrackKey) beginWaitingForTrack(meta);
