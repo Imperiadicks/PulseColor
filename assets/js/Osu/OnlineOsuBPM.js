@@ -10,6 +10,84 @@
   const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
   const AI_MODEL = 'llama3.1-8b';
   const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
+  const BPM_SOURCE_SITE = 'songbpm.com';
+
+  const AI_UNAVAILABLE_MODELS = Object.freeze([
+    'claude-opus-4-6',
+    'claude-sonnet-4-6',
+    'flux-2-dev',
+    'gemini-3.1-pro',
+    'gpt-5.4',
+    'grok-2-image',
+    'grok-2-vision',
+    'grok-3',
+    'grok-4-1-fast',
+    'lucid-origin',
+    'phoenix-1.0',
+    'pplx-gemini-3.1-pro'
+  ]);
+  const AI_UNAVAILABLE_MODELS_SET = new Set(AI_UNAVAILABLE_MODELS);
+  const AI_MODEL_PRIORITY_DRAFT = Object.freeze([
+    'gpt-5',
+    'gpt-5-2025-08-07',
+    'gpt-5-chat',
+    'gpt-5-search',
+    'gpt-5-search-api-2025-10-14',
+    'gpt-5.1',
+    'gpt-5.1-chat',
+    'o3',
+    'o3-2025-04-16',
+    'o3-mini',
+    'o3-mini-2025-01-31',
+    'o4-mini',
+    'o4-mini-2025-04-16',
+    'gpt-4.1',
+    'gpt-4.1-mini',
+    'gpt-4o-search-preview',
+    'gpt-4o-search-preview-2025-03-11',
+    'gpt-4o-mini-search-preview',
+    'gpt-4o-mini-search-preview-2025-03-11',
+    'searchgpt',
+    'chatgpt-4o',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gemini-2.5-pro',
+    'pplx-gpt-5.1',
+    'pplx-gpt-5-mini',
+    'pplx-gpt-5.2',
+    'pplx-grok-4-1-fast',
+    'sonar-reasoning-pro',
+    'sonar-reasoning',
+    'sonar-deep-research',
+    'sonar-pro',
+    'sonar',
+    'qwen-max-latest',
+    'qwen3-max',
+    'qwen3-omni-flash',
+    'qwen3-235b-a22b-2507',
+    'qwen3-next-80b-a3b',
+    'deepseek-r1',
+    'deepseek-v3',
+    'command-a-reasoning-08-2025',
+    'command-r-plus-08-2024',
+    'command-a-03-2025',
+    'glm-4.7-flash',
+    'zai-glm-4.6',
+    'gpt-5-mini',
+    'gpt-5-nano',
+    'gpt-oss-120b',
+    'gpt-oss-20b',
+    'qwen-3-32b',
+    'qwen2.5-72b-instruct',
+    'qwen2.5-14b-instruct-1m',
+    'qvq-72b-preview-0310',
+    'llama-3.3-70b',
+    'llama3.1-8b',
+    'mistral-small-3.1'
+  ]);
+  const AI_ACTIVE_MODEL_POOL = Object.freeze(
+    AI_MODEL_PRIORITY_DRAFT.filter((model, index, arr) => arr.indexOf(model) === index && !AI_UNAVAILABLE_MODELS_SET.has(model))
+  );
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const normBpm = (b) => {
@@ -26,6 +104,27 @@
   };
   const getConfiguredDriveMode = () => normalizeDriveMode(window.BeatDriverConfig?.WAVE_DRIVE_MODE);
 
+  const publishModelRegistry = () => {
+    try {
+      const snapshot = {
+        endpoint: AI_ENDPOINT,
+        sourceSite: BPM_SOURCE_SITE,
+        currentModel: AI_MODEL,
+        activeModels: AI_ACTIVE_MODEL_POOL.slice(),
+        unavailableModels: AI_UNAVAILABLE_MODELS.slice(),
+        priorityDraft: AI_MODEL_PRIORITY_DRAFT.slice()
+      };
+      window.__PulseColorAiModelRegistry = snapshot;
+      const api = (window.PulseColorAiModels = window.PulseColorAiModels || {});
+      api.getCurrentModel = () => snapshot.currentModel;
+      api.getActiveModels = () => snapshot.activeModels.slice();
+      api.getUnavailableModels = () => snapshot.unavailableModels.slice();
+      api.getPriorityDraft = () => snapshot.priorityDraft.slice();
+      api.isUnavailable = (model) => AI_UNAVAILABLE_MODELS_SET.has(String(model || '').trim());
+      api.hasModel = (model) => snapshot.activeModels.includes(String(model || '').trim());
+    } catch {}
+  };
+
   const requestCooldowns = new Map();
   let seq = 0;
   let curTrackKey = '';
@@ -39,12 +138,35 @@
     lastAttemptAt: 0,
     lastDeferredLogAt: 0,
     lastUiClickAt: 0,
-    lastUiClickKey: ''
+    lastUiClickKey: '',
+    lastObserverReleaseAt: 0,
+    lastObservedAudioSignature: ''
   };
 
   const AI_LOG_LIMIT = 250;
   const AI_ABORT_REASONS = new Set(['cancel', 'mode-change', 'track-change', 'raw-fallback', 'raw', 'timeout']);
   const AI_LOG_PREFIX = '[PulseColor AI]';
+  const AI_VERBOSE_LOGS = (() => {
+    try {
+      return !!window.PulseColorDebug?.verboseAiLogs || !!window.__PULSECOLOR_VERBOSE_AI_LOGS__;
+    } catch {
+      return false;
+    }
+  })();
+  const AI_CONSOLE_SILENT_EVENTS = new Set([
+    'audio-bound',
+    'audio-event',
+    'gate-state',
+    'media-play-call',
+    'playback-guard-block',
+    'playback-paused-and-rewind',
+    'playback-release-attempt',
+    'playback-release-deferred',
+    'playback-release-abort-no-element',
+    'playback-release-success',
+    'playback-resume-cleared',
+    'playback-resume-remembered'
+  ]);
   const aiLogs = [];
   const safeJson = (value) => {
     try {
@@ -57,6 +179,13 @@
       }
     }
   };
+  const shouldPrintAiLog = (entry) => {
+    if (!entry) return false;
+    if (entry.level === 'error') return true;
+    if (AI_VERBOSE_LOGS) return true;
+    return !AI_CONSOLE_SILENT_EVENTS.has(entry.event);
+  };
+
   const pushAiLog = (event, payload = {}, level = 'info') => {
     const entry = {
       ts: new Date().toISOString(),
@@ -84,8 +213,10 @@
     } catch {}
 
     try {
-      const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
-      console[method](AI_LOG_PREFIX, event, entry.payload || {});
+      if (shouldPrintAiLog(entry)) {
+        const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+        console[method](AI_LOG_PREFIX, event, entry.payload || {});
+      }
     } catch {}
     return entry;
   };
@@ -147,9 +278,17 @@
   };
   publishNet();
   publishMode();
+  publishModelRegistry();
+  pushAiLog('ai-model-registry', {
+    currentModel: AI_MODEL,
+    activeCount: AI_ACTIVE_MODEL_POOL.length,
+    unavailableCount: AI_UNAVAILABLE_MODELS.length,
+    unavailableModels: AI_UNAVAILABLE_MODELS.slice()
+  });
   pushAiLog('init', {
     endpoint: AI_ENDPOINT,
     model: AI_MODEL,
+    sourceSite: BPM_SOURCE_SITE,
     selectedMode: gate.selectedMode,
     effectiveMode: gate.effectiveMode,
     status: gate.status,
@@ -229,178 +368,89 @@
     };
   };
 
-  const normalizeLoose = (value) => String(value || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ё/g, 'е')
-    .replace(/Ё/g, 'Е')
-    .replace(/[’']/g, "'")
-    .replace(/[\u2010-\u2015]/g, '-')
-    .replace(/&/g, ' and ')
-    .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
+  const simplifyTrackTitle = (value) => String(value || '')
+    .replace(/\s*\((?:feat\.?|ft\.?|featuring|with|prod\.? by|from|remaster(?:ed)?(?: \d{4})?|live|version|edit|mix|sped up|slowed(?: and reverb)?)[^)]*\)/gi, ' ')
+    .replace(/\s*-\s*(?:feat\.?|ft\.?|featuring|with|from|remaster(?:ed)?(?: \d{4})?|live|version|edit|mix|sped up|slowed(?: and reverb)?).*$/gi, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-  const normalizeArtistsList = (value) => String(value || '')
-    .replace(/\s+(?:feat\.?|ft\.?|featuring)\s+/gi, ', ')
-    .replace(/\s*[;&/]\s*/g, ', ')
-    .replace(/\s+(?:and|x|×)\s+/gi, ', ');
-  const splitArtistVariants = (artist) => {
-    const raw = String(artist || '').trim();
-    if (!raw) return [];
-    const normalizedList = normalizeArtistsList(raw);
-    const out = new Set([raw, normalizedList]);
-    normalizedList.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean).forEach((part) => out.add(part));
-    return Array.from(out).filter(Boolean);
-  };
-  const buildTrackTitleVariants = (title) => {
-    const raw = String(title || '').trim();
-    if (!raw) return [];
-    const out = new Set([raw]);
-    const noFeat = raw
-      .replace(/\s*[\[(]?(?:feat\.?|ft\.?|featuring)\s+[^\])]+[\])]?/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (noFeat) out.add(noFeat);
-    const bracketRemix = raw
-      .replace(/\(([^)]*?\b(?:remix|mix|edit|version|vip|flip|rework)\b[^)]*?)\)/ig, ' - $1')
-      .replace(/\[([^\]]*?\b(?:remix|mix|edit|version|vip|flip|rework)\b[^\]]*?)\]/ig, ' - $1')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (bracketRemix) out.add(bracketRemix);
-    const remixMatch = bracketRemix.match(/^(.+?)\s+((?:[^-–—]{1,80}?)\b(?:remix|mix|edit|version|vip|flip|rework)\b.*)$/i);
-    if (remixMatch) {
-      const left = remixMatch[1].trim();
-      const right = remixMatch[2].trim();
-      if (left && right && !/[—–-]\s*$/.test(left)) out.add(`${left} - ${right}`);
-    }
-    return Array.from(out).filter(Boolean);
-  };
-  const looseEqOrContains = (a, b) => {
-    const na = normalizeLoose(a);
-    const nb = normalizeLoose(b);
-    return !!na && !!nb && (na === nb || na.includes(nb) || nb.includes(na));
-  };
-  const isArtistMatch = (sourceArtist, targetArtist) => {
-    const sourceVariants = splitArtistVariants(sourceArtist);
-    const targetVariants = splitArtistVariants(targetArtist);
-    if (!sourceVariants.length || !targetVariants.length) return false;
-    return sourceVariants.some((src) => targetVariants.some((target) => looseEqOrContains(src, target)));
-  };
-  const isTitleMatch = (sourceTitle, targetTitle) => {
-    const sourceNorm = normalizeLoose(sourceTitle);
-    if (!sourceNorm) return false;
-    const variants = buildTrackTitleVariants(targetTitle);
-    if (!variants.length) return false;
-    return variants.some((variant) => looseEqOrContains(sourceNorm, variant));
-  };
-  const buildSongBpmSearchHints = (artist, track) => {
-    const artistVariants = splitArtistVariants(artist);
-    const titleVariants = buildTrackTitleVariants(track);
-    const primaryArtist = artistVariants[0] || String(artist || '').trim();
-    const hints = new Set();
+    .trim();
 
-    for (const titleVariant of titleVariants) {
-      if (primaryArtist) hints.add(`${primaryArtist} - ${titleVariant}`);
-      if (artist) hints.add(`${artist} - ${titleVariant}`);
-      hints.add(titleVariant);
-    }
+  const buildSongBpmQueries = (artist, track) => {
+    const artSafe = String(artist || '').trim();
+    const trackSafe = String(track || '').trim();
+    const simpleTrack = simplifyTrackTitle(trackSafe);
+    const unique = new Set();
 
-    return Array.from(hints).filter(Boolean).slice(0, 8);
+    [
+      `${artSafe} ${trackSafe}`.trim(),
+      `${artSafe} - ${trackSafe}`.trim(),
+      simpleTrack && simpleTrack !== trackSafe ? `${artSafe} ${simpleTrack}`.trim() : '',
+      simpleTrack && simpleTrack !== trackSafe ? `${artSafe} - ${simpleTrack}`.trim() : ''
+    ].filter(Boolean).forEach((q) => unique.add(q));
+
+    return [...unique];
   };
+
   const buildBpmPrompt = (artist, track) => {
-    const artSafe = String(artist || '').trim() || '—';
-    const trackSafe = String(track || '').trim() || '—';
-    const titleVariants = buildTrackTitleVariants(trackSafe);
-    const artistVariants = splitArtistVariants(artSafe);
-    const primaryArtist = artistVariants[0] || artSafe;
-    const searchHints = buildSongBpmSearchHints(artSafe, trackSafe);
+    const artSafe = artist || '—';
+    const trackSafe = track || '—';
+    const queryHints = buildSongBpmQueries(artist, track);
 
     return [
-      'Ты определяешь BPM трека строго по songbpm.com и больше ни по каким сайтам.',
-      'Нельзя использовать другие источники, память модели, догадки, YouTube, Tunebat, Shazam, Spotify, Apple Music и любые другие сайты.',
-      'Нужно найти точную страницу трека на songbpm.com или точный результат поиска на songbpm.com.',
-      'Если на songbpm.com нет точного совпадения по треку — верни JSON с bpm 0.',
-      'Учитывай, что в songbpm.com может быть указан только главный артист, а в приложении артисты перечислены списком.',
-      'Для ремиксов проверяй именно ремиксную версию, а не оригинал.',
-      'Возвращай только JSON в одну строку без markdown и без пояснений.',
-      'Формат ответа строго такой:',
-      '{"bpm":170,"source_url":"https://songbpm.com/...","source_artist":"Tommee Profitt","source_title":"There\'s A Hero In You - Serhat Durmus Remix","match":"exact"}',
-      'Если точного совпадения нет, ответ строго такой:',
-      '{"bpm":0,"source_url":"","source_artist":"","source_title":"","match":"none"}',
+      'Ты определяешь BPM музыкального трека.',
+      `Используй только сайт ${BPM_SOURCE_SITE}. Другие сайты, базы и догадки запрещены.`,
+      `Нужно искать только страницы результатов вида https://${BPM_SOURCE_SITE}/searches/...`,
+      'Сначала ищи точное совпадение артист + трек.',
+      'Затем проверь, что в найденной строке SongBPM совпадает артист и название трека.',
+      'Разрешено считать совпадением только вариант того же трека после очистки служебных хвостов вроде feat, remaster, live, edit, mix, version.',
+      'Игнорируй другие песни с похожим названием, ремиксы, каверы и других артистов.',
+      'Если точного совпадения на SongBPM нет — верни только 0.',
+      'Ответ должен быть только одним целым числом BPM без слов, пояснений и markdown.',
       '',
-      '=== Артист из плеера ===',
+      '=== Артист ===',
       artSafe,
       '',
-      '=== Главный артист для проверки ===',
-      primaryArtist,
+      '=== Трек ===',
+      `${artSafe} — ${trackSafe}`,
       '',
-      '=== Трек из плеера ===',
-      trackSafe,
-      '',
-      '=== Допустимые варианты названия ===',
-      ...(titleVariants.length ? titleVariants : [trackSafe]),
-      '',
-      '=== Допустимые варианты артиста ===',
-      ...(artistVariants.length ? artistVariants : [artSafe]),
-      '',
-      '=== Поисковые подсказки для songbpm.com ===',
-      ...(searchHints.length ? searchHints : [`${primaryArtist} - ${trackSafe}`]),
-      '',
-      'Проверь, что BPM взят именно из поля Tempo (BPM) / BPM на songbpm.com, а не из длительности, года или других чисел.'
+      '=== Поисковые запросы для SongBPM ===',
+      ...queryHints.map((q, i) => `${i + 1}. site:${BPM_SOURCE_SITE}/searches "${q}"`)
     ].join('\n');
   };
 
-  const extractJsonObject = (raw) => {
-    if (raw == null) return null;
-    if (typeof raw === 'object') return raw;
-    const txt = String(raw).trim();
-    if (!txt) return null;
-    try { return JSON.parse(txt); } catch {}
-    const start = txt.indexOf('{');
-    const end = txt.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return null;
-    try { return JSON.parse(txt.slice(start, end + 1)); } catch {}
-    return null;
-  };
-  const parseSongBpmValue = (raw, meta = {}) => {
-    if (raw == null) return { bpm: 0, reject: 'empty' };
-    if (typeof raw === 'number') return { bpm: normBpm(raw), reject: raw ? '' : 'empty-number' };
+  const parseBpmValue = (raw) => {
+    if (raw == null) return 0;
+    if (typeof raw === 'number') return normBpm(raw);
 
     const txt = String(raw).trim();
-    if (!txt) return { bpm: 0, reject: 'empty-text' };
+    if (!txt) return 0;
 
-    const data = extractJsonObject(txt);
-    const rawSongBpmMention = /songbpm\.com/i.test(txt);
+    try {
+      const j = JSON.parse(txt);
+      const jsonCandidate = j?.bpm ?? j?.tempo ?? j?.data?.bpm ?? j?.result?.bpm ?? j?.response?.bpm;
+      if (typeof jsonCandidate !== 'undefined') return normBpm(jsonCandidate);
+    } catch {}
 
-    if (data) {
-      const bpm = normBpm(data?.source_bpm ?? data?.bpm ?? 0);
-      const sourceUrl = String(data?.source_url ?? data?.url ?? '').trim();
-      const sourceArtist = String(data?.source_artist ?? data?.artist ?? '').trim();
-      const sourceTitle = String(data?.source_title ?? data?.title ?? '').trim();
-      const songbpmOk = /^https?:\/\/(?:www\.)?songbpm\.com\//i.test(sourceUrl) || rawSongBpmMention;
-      const titleOk = sourceTitle ? isTitleMatch(sourceTitle, meta?.title || '') : rawSongBpmMention;
-      const artistOk = sourceArtist ? isArtistMatch(sourceArtist, meta?.artist || '') : true;
-
-      if (!songbpmOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'non-songbpm-source' };
-      if (!titleOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'title-mismatch' };
-      if (!artistOk) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'artist-mismatch' };
-      if (!bpm) return { bpm: 0, sourceUrl, sourceArtist, sourceTitle, reject: 'bpm-empty' };
-
-      return { bpm, sourceUrl, sourceArtist, sourceTitle, match: String(data?.match || '').trim() };
+    const labelled = [
+      /\b(?:bpm|tempo)\s*[:=~-]?\s*(\d{2,3}(?:[.,]\d+)?)\b/i,
+      /\b(\d{2,3}(?:[.,]\d+)?)\s*bpm\b/i
+    ];
+    for (const rx of labelled) {
+      const m = txt.match(rx);
+      if (m) return normBpm(String(m[1]).replace(',', '.'));
     }
 
-    if (!rawSongBpmMention) return { bpm: 0, reject: 'no-songbpm-mention' };
+    const compact = txt.replace(/^[^\d-]+|[^\d.]+$/g, '').trim();
+    if (/^\d{2,3}(?:[.,]\d+)?$/.test(compact)) return normBpm(compact.replace(',', '.'));
 
-    const labeled = txt.match(/\b(?:tempo\s*\(bpm\)|bpm)\D{0,12}(\d{2,3})\b/i);
-    const bpm = labeled ? normBpm(labeled[1]) : 0;
-    const titleOk = isTitleMatch(txt, meta?.title || '');
-    const artistOk = isArtistMatch(txt, meta?.artist || '');
-
-    if (!bpm) return { bpm: 0, reject: 'bpm-label-miss' };
-    if (!titleOk) return { bpm: 0, reject: 'raw-title-mismatch' };
-    if (!artistOk) return { bpm: 0, reject: 'raw-artist-mismatch' };
-    return { bpm, sourceUrl: '', sourceArtist: '', sourceTitle: '', match: 'text' };
+    const candidates = [];
+    const rx = /(^|[^\d:])(\d{2,3}(?:[.,]\d+)?)(?![:\d])/g;
+    let m;
+    while ((m = rx.exec(txt))) {
+      const num = Number(String(m[2]).replace(',', '.'));
+      if (Number.isFinite(num) && num >= 50 && num <= 210) candidates.push(num);
+    }
+    if (!candidates.length) return 0;
+    return normBpm(candidates[candidates.length - 1]);
   };
 
   const getRetryAfterMs = (res) => {
@@ -468,7 +518,8 @@
       artist: meta.artist,
       title: meta.title,
       endpoint: AI_ENDPOINT,
-      model: AI_MODEL
+      model: AI_MODEL,
+      sourceSite: BPM_SOURCE_SITE
     });
     const promise = fetch(AI_ENDPOINT, {
       method: 'POST',
@@ -519,18 +570,14 @@
         j?.message?.content ??
         j?.content ??
         '';
-      const parsed = parseSongBpmValue(content, meta);
+      const bpm = parseBpmValue(content);
       pushAiLog('ai-response-parse', {
         seq: mySeq,
         key: meta.key,
-        raw: String(content || '').slice(0, 320),
-        bpm: parsed?.bpm || 0,
-        reject: parsed?.reject || '',
-        sourceUrl: parsed?.sourceUrl || '',
-        sourceArtist: parsed?.sourceArtist || '',
-        sourceTitle: parsed?.sourceTitle || ''
-      }, parsed?.bpm ? 'info' : 'warn');
-      return parsed?.bpm ? { bpm: parsed.bpm, src: 'songbpm-ai' } : { bpm: 0, src: parsed?.reject || 'ai-miss' };
+        raw: String(content || '').slice(0, 200),
+        bpm
+      }, bpm ? 'info' : 'warn');
+      return bpm ? { bpm, src: 'ai' } : { bpm: 0, src: 'ai-miss' };
     }).catch((err) => {
       const abortReason = ctrl?.signal?.aborted
         ? (ctrl.signal.reason ?? err?.message ?? String(err || 'abort'))
@@ -633,6 +680,8 @@
     gate.pendingResume = false;
     gate.pendingResumeEl = null;
     gate.pendingResumeAt = 0;
+    releaseState.lastObserverReleaseAt = 0;
+    releaseState.lastObservedAudioSignature = '';
     pushAiLog('playback-resume-cleared', {
       reason,
       status: gate.status,
@@ -644,6 +693,8 @@
     gate.pendingResume = true;
     gate.pendingResumeEl = el || gate.pendingResumeEl || null;
     gate.pendingResumeAt = Date.now();
+    releaseState.lastObserverReleaseAt = 0;
+    releaseState.lastObservedAudioSignature = '';
     pushAiLog('playback-resume-remembered', {
       hasElement: !!gate.pendingResumeEl,
       status: gate.status,
@@ -675,6 +726,13 @@
     if (gate.pendingResumeEl && gate.pendingResumeEl.isConnected) return gate.pendingResumeEl;
     return all.find(el => el.isConnected) || null;
   };
+
+  const getAudioObserverSignature = () => Array.from(document.querySelectorAll('audio'))
+    .map((el, index) => {
+      const src = el.currentSrc || el.src || '';
+      return `${index}:${src}:${el.readyState}:${el.paused ? 'p' : 'r'}`;
+    })
+    .join('|');
 
   const releasePendingPlayback = (reason = 'deferred') => {
     if (!gate.pendingResume) return false;
@@ -745,6 +803,26 @@
       pushAiLog('playback-release-deferred', { reason, status: gate.status, trackKey: gate.trackKey }, 'warn');
     }
     return false;
+  };
+
+  const tryReleasePendingPlaybackOnAudioMutation = (reason = 'audio-dom-change') => {
+    if (!gate.pendingResume) return false;
+    if (gate.status === 'waiting') return false;
+
+    const signature = getAudioObserverSignature();
+    if (!signature) return false;
+
+    const now = Date.now();
+    if (
+      releaseState.lastObservedAudioSignature === signature
+      && (now - releaseState.lastObserverReleaseAt) < 900
+    ) {
+      return false;
+    }
+
+    releaseState.lastObservedAudioSignature = signature;
+    releaseState.lastObserverReleaseAt = now;
+    return tryReleasePendingPlayback(reason);
   };
 
   const enterRawMode = ({ reason = 'raw', resume = false, trackKey = '' } = {}) => {
@@ -1052,10 +1130,17 @@
 
   const bindObservers = () => {
     document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+    releaseState.lastObservedAudioSignature = getAudioObserverSignature();
 
     const mo = new MutationObserver(() => {
       document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-      tryReleasePendingPlayback('mutation');
+
+      const nextAudioSignature = getAudioObserverSignature();
+      if (nextAudioSignature && nextAudioSignature !== releaseState.lastObservedAudioSignature) {
+        releaseState.lastObservedAudioSignature = nextAudioSignature;
+        tryReleasePendingPlaybackOnAudioMutation('audio-dom-change');
+      }
+
       const meta = getTrackMeta();
       const key = meta?.key || getCoverSig() || '';
       if (gate.selectedMode === DRIVE_MODE_BPM && key && key !== curTrackKey) beginWaitingForTrack(meta);
