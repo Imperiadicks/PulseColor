@@ -1,6 +1,9 @@
-/* ========================== PulseColor: AI-only BPM gate + RAW fallback ========================== */
+/* ========================== PulseColor: AI BPM cascade gate + manual unlock ========================== */
 (() => {
   const AI_WAIT_MS = 5000;
+  const AI_RETRY_MS = 2200;
+  const AI_STATUS_WAITING = 'waiting';
+  const AI_STATUS_MANUAL = 'manual-search';
   const MODE_POLL_MS = 250;
   const META_POLL_MS = 180;
   const RATE_LIMIT_COOLDOWN_MS = 180000;
@@ -8,7 +11,7 @@
   const DRIVE_MODE_BPM = 'bpm';
 
   const AI_ENDPOINT = 'https://api.onlysq.ru/ai/v2';
-  const AI_MODEL = 'llama3.1-8b';
+  const AI_MODEL = 'gpt-5';
   const AI_KEY = 'sq-L4uZha9NlowdITyEPc2pFtrpCqbOD52g';
   const BPM_SOURCE_SITE = 'songbpm.com';
 
@@ -27,6 +30,13 @@
     'pplx-gemini-3.1-pro'
   ]);
   const AI_UNAVAILABLE_MODELS_SET = new Set(AI_UNAVAILABLE_MODELS);
+  const AI_BROKEN_MODELS = Object.freeze([
+    'o3-mini',
+    'o3-mini-2025-01-31',
+    'o4-mini',
+    'o4-mini-2025-04-16'
+  ]);
+  const AI_BROKEN_MODELS_SET = new Set(AI_BROKEN_MODELS);
   const AI_MODEL_PRIORITY_DRAFT = Object.freeze([
     'gpt-5',
     'gpt-5-2025-08-07',
@@ -86,8 +96,10 @@
     'mistral-small-3.1'
   ]);
   const AI_ACTIVE_MODEL_POOL = Object.freeze(
-    AI_MODEL_PRIORITY_DRAFT.filter((model, index, arr) => arr.indexOf(model) === index && !AI_UNAVAILABLE_MODELS_SET.has(model))
+    AI_MODEL_PRIORITY_DRAFT.filter((model, index, arr) => arr.indexOf(model) === index && !AI_UNAVAILABLE_MODELS_SET.has(model) && !AI_BROKEN_MODELS_SET.has(model))
   );
+  const AI_MODEL_PROBE_PROMPT = 'Ответь только числом 200.';
+  const AI_MODEL_PROBE_TIMEOUT_MS = 12000;
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const normBpm = (b) => {
@@ -112,6 +124,7 @@
         currentModel: AI_MODEL,
         activeModels: AI_ACTIVE_MODEL_POOL.slice(),
         unavailableModels: AI_UNAVAILABLE_MODELS.slice(),
+        brokenModels: AI_BROKEN_MODELS.slice(),
         priorityDraft: AI_MODEL_PRIORITY_DRAFT.slice()
       };
       window.__PulseColorAiModelRegistry = snapshot;
@@ -119,13 +132,27 @@
       api.getCurrentModel = () => snapshot.currentModel;
       api.getActiveModels = () => snapshot.activeModels.slice();
       api.getUnavailableModels = () => snapshot.unavailableModels.slice();
+      api.getBrokenModels = () => snapshot.brokenModels.slice();
       api.getPriorityDraft = () => snapshot.priorityDraft.slice();
+      api.getProbePrompt = () => AI_MODEL_PROBE_PROMPT;
+      api.getLastProbe = () => safeJson(window.__PulseColorAiModelProbe || null);
+      api.getLastProbeJson = (space = 2) => {
+        try {
+          return JSON.stringify(window.__PulseColorAiModelProbe || null, null, Number(space) || 2);
+        } catch {
+          return 'null';
+        }
+      };
+      api.probeAll = (opts = {}) => probeAiModelsBatch(opts);
+      api.probeActive = (opts = {}) => probeAiModelsBatch({ ...opts, models: AI_ACTIVE_MODEL_POOL.slice() });
+      api.probeModels = (models = [], opts = {}) => probeAiModelsBatch({ ...opts, models });
       api.isUnavailable = (model) => AI_UNAVAILABLE_MODELS_SET.has(String(model || '').trim());
       api.hasModel = (model) => snapshot.activeModels.includes(String(model || '').trim());
     } catch {}
   };
 
   const requestCooldowns = new Map();
+  const modelCooldowns = new Map();
   let seq = 0;
   let curTrackKey = '';
   let curTrackSig = '';
@@ -133,6 +160,7 @@
   let metaPollTimer = 0;
   let modePollTimer = 0;
   let activeRequest = null;
+  let nextAiRetryAt = 0;
   let nativeAudioPlay = null;
   const releaseState = {
     lastAttemptAt: 0,
@@ -240,14 +268,14 @@
         effectiveMode: gate.effectiveMode,
         status: gate.status,
         trackKey: gate.trackKey,
-        blocked: gate.selectedMode === DRIVE_MODE_BPM && gate.status === 'waiting'
+        blocked: gate.selectedMode === DRIVE_MODE_BPM && gate.status === AI_STATUS_WAITING
       };
       window.__PulseColorWaveDrive = snapshot;
       const api = (window.PulseColorWaveMode = window.PulseColorWaveMode || {});
       api.getSelectedMode = () => snapshot.selectedMode;
       api.getEffectiveMode = () => snapshot.effectiveMode;
       api.isPlaybackBlocked = () => snapshot.blocked;
-      api.canUseAI = () => snapshot.selectedMode === DRIVE_MODE_BPM && snapshot.status === 'waiting';
+      api.canUseAI = () => snapshot.selectedMode === DRIVE_MODE_BPM && (snapshot.status === AI_STATUS_WAITING || snapshot.status === AI_STATUS_MANUAL);
       api.canUseTapTempo = () => false;
       api.canUseLocalBpm = () => false;
     } catch {}
@@ -283,7 +311,9 @@
     currentModel: AI_MODEL,
     activeCount: AI_ACTIVE_MODEL_POOL.length,
     unavailableCount: AI_UNAVAILABLE_MODELS.length,
-    unavailableModels: AI_UNAVAILABLE_MODELS.slice()
+    unavailableModels: AI_UNAVAILABLE_MODELS.slice(),
+    brokenCount: AI_BROKEN_MODELS.length,
+    brokenModels: AI_BROKEN_MODELS.slice()
   });
   pushAiLog('init', {
     endpoint: AI_ENDPOINT,
@@ -294,6 +324,33 @@
     status: gate.status,
     waitMs: AI_WAIT_MS
   });
+
+  const isAiSearchStatus = (status = gate.status) => status === AI_STATUS_WAITING || status === AI_STATUS_MANUAL;
+  const getModelCooldownUntil = (model) => modelCooldowns.get(String(model || '').trim()) || 0;
+  const getModelCooldownRemainingMs = (model) => Math.max(0, getModelCooldownUntil(model) - Date.now());
+  const setModelCooldown = (model, delayMs) => {
+    const safeModel = String(model || '').trim();
+    if (!safeModel) return 0;
+    const ms = Math.max(RATE_LIMIT_COOLDOWN_MS, Number(delayMs) || RATE_LIMIT_COOLDOWN_MS);
+    const until = Date.now() + ms;
+    modelCooldowns.set(safeModel, until);
+    return until;
+  };
+  const getAiRetryDelayMs = (fallbackMs = AI_RETRY_MS) => {
+    const remaining = AI_ACTIVE_MODEL_POOL
+      .map((model) => getModelCooldownRemainingMs(model))
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b);
+    if (!remaining.length) return Math.max(500, Number(fallbackMs) || AI_RETRY_MS);
+    return Math.max(900, Math.min(Math.max(500, Number(fallbackMs) || AI_RETRY_MS), remaining[0]));
+  };
+  const setNextAiRetry = (delayMs = AI_RETRY_MS) => {
+    nextAiRetryAt = Date.now() + Math.max(500, Number(delayMs) || AI_RETRY_MS);
+    return nextAiRetryAt;
+  };
+  const clearNextAiRetry = () => {
+    nextAiRetryAt = 0;
+  };
 
   const qText = (selectors, root = document) => {
     for (const selector of selectors) {
@@ -463,6 +520,206 @@
     return RATE_LIMIT_COOLDOWN_MS;
   };
 
+  const dedupeModelList = (models) => {
+    const list = Array.isArray(models) ? models : [];
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+      const model = String(item || '').trim();
+      if (!model || seen.has(model)) continue;
+      seen.add(model);
+      out.push(model);
+    }
+    return out;
+  };
+
+  const buildAiRequestBody = (model, prompt) => ({
+    model,
+    request: {
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]
+    }
+  });
+
+  const probeAiModel = async (model, { prompt = AI_MODEL_PROBE_PROMPT, timeoutMs = AI_MODEL_PROBE_TIMEOUT_MS } = {}) => {
+    const cleanModel = String(model || '').trim();
+    const cleanPrompt = String(prompt || '').trim() || AI_MODEL_PROBE_PROMPT;
+    const safeTimeoutMs = Math.max(1000, Number(timeoutMs) || AI_MODEL_PROBE_TIMEOUT_MS);
+    const ctrl = new AbortController();
+    const startedAt = Date.now();
+    const timer = setTimeout(() => {
+      try { ctrl.abort('probe-timeout'); } catch {}
+    }, safeTimeoutMs);
+
+    pushAiLog('ai-model-probe-start', {
+      model: cleanModel,
+      timeoutMs: safeTimeoutMs
+    });
+
+    try {
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${AI_KEY}`
+        },
+        signal: ctrl.signal,
+        body: JSON.stringify(buildAiRequestBody(cleanModel, cleanPrompt))
+      });
+
+      let raw = '';
+      try { raw = await res.text(); } catch {}
+
+      let parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch {}
+
+      const content =
+        parsed?.choices?.[0]?.message?.content ??
+        parsed?.message?.content ??
+        parsed?.content ??
+        raw ??
+        '';
+
+      const result = {
+        model: cleanModel,
+        ok: res.ok,
+        status: Number(res.status) || 0,
+        elapsedMs: Date.now() - startedAt,
+        contentSnippet: String(content || '').slice(0, 120)
+      };
+
+      pushAiLog('ai-model-probe-http', {
+        model: result.model,
+        status: result.status,
+        ok: result.ok,
+        elapsedMs: result.elapsedMs,
+        contentSnippet: result.contentSnippet
+      }, res.ok ? 'info' : 'warn');
+
+      return result;
+    } catch (err) {
+      const reason = ctrl?.signal?.aborted
+        ? String(ctrl.signal.reason || err?.message || 'probe-timeout')
+        : String(err?.message || err || 'probe-error');
+      const result = {
+        model: cleanModel,
+        ok: false,
+        status: reason === 'probe-timeout' ? 408 : 0,
+        elapsedMs: Date.now() - startedAt,
+        error: reason
+      };
+      pushAiLog('ai-model-probe-error', {
+        model: result.model,
+        status: result.status,
+        elapsedMs: result.elapsedMs,
+        error: result.error
+      }, 'warn');
+      return result;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const buildAiProbeSummary = (results, {
+    prompt = AI_MODEL_PROBE_PROMPT,
+    timeoutMs = AI_MODEL_PROBE_TIMEOUT_MS,
+    testedModels = [],
+    skippedUnavailable = []
+  } = {}) => {
+    const cleanResults = Array.isArray(results) ? results.map((item) => ({ ...item })) : [];
+    const ok200 = [];
+    const http500 = [];
+    const otherHttp = [];
+    const timeout = [];
+    const networkErrors = [];
+    const byModel = {};
+
+    for (const item of cleanResults) {
+      const model = String(item?.model || '').trim();
+      if (!model) continue;
+      byModel[model] = { ...item };
+      if (item.status === 200) {
+        ok200.push(model);
+      } else if (item.status === 500) {
+        http500.push(model);
+      } else if (item.status === 408) {
+        timeout.push(model);
+      } else if (item.status > 0) {
+        otherHttp.push({ model, status: item.status });
+      } else {
+        networkErrors.push({ model, error: String(item?.error || 'unknown-error') });
+      }
+    }
+
+    return {
+      testedAt: new Date().toISOString(),
+      endpoint: AI_ENDPOINT,
+      prompt: String(prompt || '').trim() || AI_MODEL_PROBE_PROMPT,
+      timeoutMs: Math.max(1000, Number(timeoutMs) || AI_MODEL_PROBE_TIMEOUT_MS),
+      totalTested: cleanResults.length,
+      testedModels: dedupeModelList(testedModels),
+      skippedUnavailable: dedupeModelList(skippedUnavailable),
+      ok200,
+      http500,
+      otherHttp,
+      timeout,
+      networkErrors,
+      byModel
+    };
+  };
+
+  const storeAiProbeSummary = (summary) => {
+    try {
+      window.__PulseColorAiModelProbe = safeJson(summary);
+      window.__PulseColorAiModelProbeJson = JSON.stringify(summary, null, 2);
+    } catch {}
+    return summary;
+  };
+
+  const probeAiModelsBatch = async ({
+    models = AI_ACTIVE_MODEL_POOL,
+    prompt = AI_MODEL_PROBE_PROMPT,
+    timeoutMs = AI_MODEL_PROBE_TIMEOUT_MS,
+    includeUnavailable = false
+  } = {}) => {
+    const uniqueModels = dedupeModelList(Array.isArray(models) ? models : AI_ACTIVE_MODEL_POOL);
+    const skippedUnavailable = includeUnavailable ? [] : uniqueModels.filter((model) => AI_UNAVAILABLE_MODELS_SET.has(model));
+    const testedModels = includeUnavailable ? uniqueModels : uniqueModels.filter((model) => !AI_UNAVAILABLE_MODELS_SET.has(model));
+
+    pushAiLog('ai-model-probe-batch-start', {
+      count: testedModels.length,
+      skippedUnavailable: skippedUnavailable.length,
+      timeoutMs: Math.max(1000, Number(timeoutMs) || AI_MODEL_PROBE_TIMEOUT_MS),
+      includeUnavailable,
+      models: testedModels
+    }, 'warn');
+
+    const results = await Promise.all(testedModels.map((model) => probeAiModel(model, { prompt, timeoutMs })));
+    const summary = buildAiProbeSummary(results, {
+      prompt,
+      timeoutMs,
+      testedModels,
+      skippedUnavailable
+    });
+
+    storeAiProbeSummary(summary);
+
+    pushAiLog('ai-model-probe-batch-finish', {
+      totalTested: summary.totalTested,
+      ok200: summary.ok200.length,
+      http500: summary.http500.length,
+      otherHttp: summary.otherHttp.length,
+      timeout: summary.timeout.length,
+      networkErrors: summary.networkErrors.length
+    }, summary.http500.length || summary.otherHttp.length || summary.timeout.length || summary.networkErrors.length ? 'warn' : 'info');
+
+    return summary;
+  };
+
   const abortActiveRequest = (reason = 'cancel') => {
     if (activeRequest) {
       pushAiLog('ai-request-abort', {
@@ -485,128 +742,182 @@
       }, 'warn');
       return;
     }
+
     pushAiLog('ai-request-prepare', {
       seq: mySeq,
       title: meta.title,
       artist: meta.artist,
       key: meta.key
     });
-    const cooldownUntil = requestCooldowns.get(meta.key) || 0;
-    if (cooldownUntil > Date.now()) {
+
+    const trackCooldownUntil = requestCooldowns.get(meta.key) || 0;
+    if (trackCooldownUntil > Date.now()) {
       lastNet = { status: 'cooldown', src: 'ai', bpm: 0 };
       publishNet();
       pushAiLog('ai-request-cooldown', {
         seq: mySeq,
         key: meta.key,
-        cooldownUntil
+        cooldownUntil: trackCooldownUntil
       }, 'warn');
-      return;
+      return { bpm: 0, src: 'ai-track-cooldown', retryDelayMs: Math.max(900, trackCooldownUntil - Date.now()) };
     }
 
     if (activeRequest && activeRequest.key === meta.key && activeRequest.seq === mySeq) {
       pushAiLog('ai-request-reuse', {
         seq: mySeq,
-        key: meta.key
+        key: meta.key,
+        model: activeRequest.model || ''
       });
       return activeRequest.promise;
     }
 
-    const ctrl = new AbortController();
-    pushAiLog('ai-request-start', {
+    const prompt = buildBpmPrompt(meta.artist, meta.title);
+    const models = AI_ACTIVE_MODEL_POOL.slice();
+
+    pushAiLog('ai-cascade-start', {
       seq: mySeq,
       key: meta.key,
-      artist: meta.artist,
       title: meta.title,
-      endpoint: AI_ENDPOINT,
-      model: AI_MODEL,
-      sourceSite: BPM_SOURCE_SITE
-    });
-    const promise = fetch(AI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AI_KEY}`
-      },
-      signal: ctrl.signal,
-      body: JSON.stringify({
-        model: AI_MODEL,
-        request: {
-          messages: [
-            {
-              role: 'user',
-              content: buildBpmPrompt(meta.artist, meta.title)
-            }
-          ]
-        }
-      })
-    }).then(async (res) => {
-      pushAiLog('ai-response-http', {
-        seq: mySeq,
-        key: meta.key,
-        status: res.status,
-        ok: res.ok
-      }, res.ok ? 'info' : 'warn');
-      if (!res.ok) {
-        if (res.status === 429) {
-          const retryAfterMs = getRetryAfterMs(res);
-          requestCooldowns.set(meta.key, Date.now() + retryAfterMs);
-          pushAiLog('ai-response-rate-limit', {
-            seq: mySeq,
-            key: meta.key,
-            retryAfterMs
-          }, 'warn');
-          return { bpm: 0, src: 'ai-rate-limit' };
-        }
-        pushAiLog('ai-response-http-error', {
-          seq: mySeq,
-          key: meta.key,
-          status: res.status
-        }, 'error');
-        return { bpm: 0, src: `ai-http-${res.status}` };
-      }
-      const j = await res.json();
-      const content =
-        j?.choices?.[0]?.message?.content ??
-        j?.message?.content ??
-        j?.content ??
-        '';
-      const bpm = parseBpmValue(content);
-      pushAiLog('ai-response-parse', {
-        seq: mySeq,
-        key: meta.key,
-        raw: String(content || '').slice(0, 200),
-        bpm
-      }, bpm ? 'info' : 'warn');
-      return bpm ? { bpm, src: 'ai' } : { bpm: 0, src: 'ai-miss' };
-    }).catch((err) => {
-      const abortReason = ctrl?.signal?.aborted
-        ? (ctrl.signal.reason ?? err?.message ?? String(err || 'abort'))
-        : (err?.name === 'AbortError' ? (ctrl?.signal?.reason ?? 'AbortError') : '');
-      const abortText = String(abortReason || '').trim();
-      if (ctrl?.signal?.aborted || err?.name === 'AbortError' || AI_ABORT_REASONS.has(abortText)) {
-        pushAiLog('ai-response-abort', {
-          seq: mySeq,
-          key: meta.key,
-          reason: abortText || 'abort'
-        }, 'warn');
-        return { bpm: 0, src: 'ai-abort' };
-      }
-      pushAiLog('ai-response-error', {
-        seq: mySeq,
-        key: meta.key,
-        error: err?.message || String(err || 'unknown-error')
-      }, 'error');
-      return { bpm: 0, src: 'ai-error' };
-    }).finally(() => {
-      pushAiLog('ai-request-finish', {
-        seq: mySeq,
-        key: meta.key,
-        activeMatch: activeRequest?.ctrl === ctrl
-      });
-      if (activeRequest?.ctrl === ctrl) activeRequest = null;
+      artist: meta.artist,
+      models
     });
 
-    activeRequest = { key: meta.key, seq: mySeq, ctrl, promise };
+    const promise = (async () => {
+      let sawRateLimit = false;
+      let sawServiceUnavailable = false;
+      let sawHttpError = false;
+
+      for (const model of models) {
+        if (mySeq !== seq) return { bpm: 0, src: 'ai-abort' };
+        if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) return { bpm: 0, src: 'ai-abort' };
+        if (!isAiSearchStatus(gate.status)) return { bpm: 0, src: 'ai-abort' };
+
+        const cooldownUntil = getModelCooldownUntil(model);
+        if (cooldownUntil > Date.now()) {
+          pushAiLog('ai-model-skip-cooldown', {
+            seq: mySeq,
+            key: meta.key,
+            model,
+            cooldownUntil,
+            retryInMs: cooldownUntil - Date.now()
+          }, 'warn');
+          sawRateLimit = true;
+          continue;
+        }
+
+        const ctrl = new AbortController();
+        activeRequest = { key: meta.key, seq: mySeq, ctrl, model, promise: null };
+
+        pushAiLog('ai-request-start', {
+          seq: mySeq,
+          key: meta.key,
+          artist: meta.artist,
+          title: meta.title,
+          endpoint: AI_ENDPOINT,
+          model,
+          sourceSite: BPM_SOURCE_SITE
+        });
+
+        try {
+          const res = await fetch(AI_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${AI_KEY}`
+            },
+            signal: ctrl.signal,
+            body: JSON.stringify(buildAiRequestBody(model, prompt))
+          });
+
+          pushAiLog('ai-response-http', {
+            seq: mySeq,
+            key: meta.key,
+            model,
+            status: res.status,
+            ok: res.ok
+          }, res.ok ? 'info' : 'warn');
+
+          if (!res.ok) {
+            if (res.status === 429) {
+              const retryAfterMs = getRetryAfterMs(res);
+              setModelCooldown(model, retryAfterMs);
+              sawRateLimit = true;
+              pushAiLog('ai-response-rate-limit', {
+                seq: mySeq,
+                key: meta.key,
+                model,
+                retryAfterMs
+              }, 'warn');
+              continue;
+            }
+
+            if (res.status === 503) sawServiceUnavailable = true;
+            else sawHttpError = true;
+
+            pushAiLog('ai-response-http-error', {
+              seq: mySeq,
+              key: meta.key,
+              model,
+              status: res.status
+            }, 'error');
+            continue;
+          }
+
+          const j = await res.json();
+          const content =
+            j?.choices?.[0]?.message?.content ??
+            j?.message?.content ??
+            j?.content ??
+            '';
+          const bpm = parseBpmValue(content);
+          pushAiLog('ai-response-parse', {
+            seq: mySeq,
+            key: meta.key,
+            model,
+            raw: String(content || '').slice(0, 200),
+            bpm
+          }, bpm ? 'info' : 'warn');
+
+          if (bpm) return { bpm, src: 'ai', model };
+        } catch (err) {
+          const abortReason = ctrl?.signal?.aborted
+            ? (ctrl.signal.reason ?? err?.message ?? String(err || 'abort'))
+            : (err?.name === 'AbortError' ? (ctrl?.signal?.reason ?? 'AbortError') : '');
+          const abortText = String(abortReason || '').trim();
+          if (ctrl?.signal?.aborted || err?.name === 'AbortError' || AI_ABORT_REASONS.has(abortText)) {
+            pushAiLog('ai-response-abort', {
+              seq: mySeq,
+              key: meta.key,
+              model,
+              reason: abortText || 'abort'
+            }, 'warn');
+            return { bpm: 0, src: 'ai-abort' };
+          }
+          sawHttpError = true;
+          pushAiLog('ai-response-error', {
+            seq: mySeq,
+            key: meta.key,
+            model,
+            error: err?.message || String(err || 'unknown-error')
+          }, 'error');
+        } finally {
+          pushAiLog('ai-request-finish', {
+            seq: mySeq,
+            key: meta.key,
+            model,
+            activeMatch: activeRequest?.ctrl === ctrl
+          });
+          if (activeRequest?.ctrl === ctrl) activeRequest = null;
+        }
+      }
+
+      if (sawRateLimit) return { bpm: 0, src: 'ai-rate-limit', retryDelayMs: getAiRetryDelayMs(AI_RETRY_MS) };
+      if (sawServiceUnavailable) return { bpm: 0, src: 'ai-service-unavailable', retryDelayMs: AI_RETRY_MS };
+      if (sawHttpError) return { bpm: 0, src: 'ai-http-error', retryDelayMs: AI_RETRY_MS };
+      return { bpm: 0, src: 'ai-miss', retryDelayMs: AI_RETRY_MS };
+    })();
+
+    if (activeRequest) activeRequest.promise = promise;
     return promise;
   };
 
@@ -624,7 +935,7 @@
   const shouldBlockPlayback = (el = null) => {
     if (getConfiguredDriveMode() !== DRIVE_MODE_BPM) return false;
     if (gate.selectedMode !== DRIVE_MODE_BPM) return false;
-    if (gate.status !== 'waiting') return false;
+    if (gate.status !== AI_STATUS_WAITING) return false;
     if (el && el.tagName !== 'AUDIO') return false;
     return true;
   };
@@ -747,7 +1058,7 @@
 
     if (!el) {
       const pendingAgeMs = gate.pendingResumeAt ? (Date.now() - gate.pendingResumeAt) : 0;
-      if (gate.status === 'bpm-active' && pendingAgeMs >= 2200) {
+      if ((gate.status === 'bpm-active' || gate.status === AI_STATUS_MANUAL) && pendingAgeMs >= 2200) {
         pushAiLog('playback-release-abort-no-element', {
           reason,
           pendingAgeMs,
@@ -791,7 +1102,7 @@
 
   const tryReleasePendingPlayback = (reason = 'deferred') => {
     if (!gate.pendingResume) return false;
-    if (gate.status === 'waiting') return false;
+    if (gate.status === AI_STATUS_WAITING) return false;
     if (!canRetryReleaseNow()) return false;
     const ok = releasePendingPlayback(reason);
     if (ok) {
@@ -807,7 +1118,7 @@
 
   const tryReleasePendingPlaybackOnAudioMutation = (reason = 'audio-dom-change') => {
     if (!gate.pendingResume) return false;
-    if (gate.status === 'waiting') return false;
+    if (gate.status === AI_STATUS_WAITING) return false;
 
     const signature = getAudioObserverSignature();
     if (!signature) return false;
@@ -825,6 +1136,25 @@
     return tryReleasePendingPlayback(reason);
   };
 
+  const enterManualSearchMode = ({ reason = 'manual-unlock', trackKey = '' } = {}) => {
+    pushAiLog('manual-search-unlock', {
+      reason,
+      trackKey: trackKey || gate.trackKey || curTrackKey
+    }, 'warn');
+    clearWaitTimer();
+    releaseState.lastAttemptAt = 0;
+    releaseState.lastDeferredLogAt = 0;
+    setGate({
+      selectedMode: DRIVE_MODE_BPM,
+      effectiveMode: DRIVE_MODE_RAW,
+      status: AI_STATUS_MANUAL,
+      trackKey: trackKey || gate.trackKey || curTrackKey
+    });
+    lastNet = { status: 'manual', src: 'ai-search', bpm: 0 };
+    publishNet();
+    clearPendingResumeIntent('manual-unlock');
+  };
+
   const enterRawMode = ({ reason = 'raw', resume = false, trackKey = '' } = {}) => {
     pushAiLog('enter-raw-mode', {
       reason,
@@ -833,6 +1163,7 @@
     }, reason === 'raw' ? 'info' : 'warn');
     clearWaitTimer();
     clearMetaPoll();
+    clearNextAiRetry();
     abortActiveRequest(reason);
     releaseState.lastAttemptAt = 0;
     releaseState.lastDeferredLogAt = 0;
@@ -853,10 +1184,12 @@
       title: meta?.title || '',
       artist: meta?.artist || '',
       bpm: out?.bpm || 0,
-      src: out?.src || 'ai'
+      src: out?.src || 'ai',
+      model: out?.model || ''
     });
     clearWaitTimer();
     clearMetaPoll();
+    clearNextAiRetry();
     releaseState.lastAttemptAt = 0;
     releaseState.lastDeferredLogAt = 0;
     setGate({
@@ -866,7 +1199,7 @@
       trackKey: meta?.key || gate.trackKey || curTrackKey
     });
     curTrackSig = meta?.sig || curTrackSig;
-    lastNet = { status: 'hit', src: out.src || 'ai', bpm: out.bpm };
+    lastNet = { status: 'hit', src: out.src || 'ai', bpm: out.bpm, model: out.model || '' };
     publishNet();
     try { window.OsuBeat?.retune?.({ presetBpm: out.bpm, source: 'ai' }); } catch {}
     tryReleasePendingPlayback('ai-bpm-apply');
@@ -912,7 +1245,7 @@
       }, 'warn');
       return;
     }
-    if (gate.status !== 'waiting') {
+    if (!isAiSearchStatus(gate.status)) {
       pushAiLog('ai-resolve-skip-status', {
         seq: mySeq,
         key: meta.key,
@@ -936,7 +1269,8 @@
         seq: mySeq,
         key: meta.key,
         bpm: out.bpm,
-        src: out.src || 'ai'
+        src: out.src || 'ai',
+        model: out.model || ''
       });
       applyAiBpm(meta, out);
       return;
@@ -950,18 +1284,21 @@
       return;
     }
 
+    const retryDelayMs = Math.max(900, Number(out.retryDelayMs) || AI_RETRY_MS);
+    setNextAiRetry(retryDelayMs);
     lastNet = {
-      status: out.src === 'ai-rate-limit' ? 'rate-limit' : 'miss',
+      status: out.src === 'ai-rate-limit' ? 'rate-limit' : out.src === 'ai-service-unavailable' ? 'service-unavailable' : 'searching',
       src: out.src || 'ai-miss',
       bpm: 0
     };
     publishNet();
-    pushAiLog('ai-resolve-fallback-raw', {
+    pushAiLog('ai-resolve-continue-search', {
       seq: mySeq,
       key: meta.key,
-      src: out.src || 'ai-miss'
+      src: out.src || 'ai-miss',
+      retryDelayMs,
+      status: gate.status
     }, 'warn');
-    enterRawMode({ reason: 'raw-fallback', resume: true, trackKey: meta.key });
   };
 
   const beginWaitingForTrack = (meta = null) => {
@@ -980,6 +1317,7 @@
     curTrackSig = fresh?.sig || '';
     clearWaitTimer();
     clearMetaPoll();
+    clearNextAiRetry();
     abortActiveRequest();
     try { window.OsuBeat?.reset?.(); } catch {}
     releaseState.lastAttemptAt = 0;
@@ -988,7 +1326,7 @@
     setGate({
       selectedMode: DRIVE_MODE_BPM,
       effectiveMode: DRIVE_MODE_BPM,
-      status: 'waiting',
+      status: AI_STATUS_WAITING,
       trackKey
     });
     lastNet = { status: 'pending', src: 'ai', bpm: 0 };
@@ -1005,16 +1343,16 @@
         pushAiLog('waiting-timeout-skip-mode', { seq: mySeq, key: trackKey, mode: getConfiguredDriveMode() }, 'warn');
         return;
       }
-      if (gate.status !== 'waiting') {
+      if (gate.status !== AI_STATUS_WAITING) {
         pushAiLog('waiting-timeout-skip-status', { seq: mySeq, key: trackKey, status: gate.status }, 'warn');
         return;
       }
-      pushAiLog('waiting-timeout-fallback', {
+      pushAiLog('waiting-timeout-manual-unlock', {
         seq: mySeq,
         key: trackKey,
         waitMs: AI_WAIT_MS
       }, 'warn');
-      enterRawMode({ reason: 'raw-fallback', resume: true, trackKey });
+      enterManualSearchMode({ reason: 'manual-unlock', trackKey });
     }, AI_WAIT_MS);
 
     metaPollTimer = setInterval(() => {
@@ -1022,7 +1360,7 @@
         clearMetaPoll();
         return;
       }
-      if (gate.status !== 'waiting') {
+      if (!isAiSearchStatus(gate.status)) {
         clearMetaPoll();
         return;
       }
@@ -1039,18 +1377,19 @@
         return;
       }
 
-      if (latest?.title && latest?.artist && latest?.key === gate.trackKey && (!activeRequest || activeRequest.key !== latest.key || activeRequest.seq !== mySeq)) {
+      if (latest?.title && latest?.artist && latest?.key === gate.trackKey && (!activeRequest || activeRequest.key !== latest.key || activeRequest.seq !== mySeq) && (!nextAiRetryAt || Date.now() >= nextAiRetryAt)) {
         pushAiLog('meta-poll-ready-for-ai', {
           seq: mySeq,
           key: latest.key,
           title: latest.title,
-          artist: latest.artist
+          artist: latest.artist,
+          status: gate.status
         });
         resolveWithAi(latest, mySeq);
       }
     }, META_POLL_MS);
 
-    if (fresh?.title && fresh?.artist) resolveWithAi(fresh, mySeq);
+    if (fresh?.title && fresh?.artist && (!nextAiRetryAt || Date.now() >= nextAiRetryAt)) resolveWithAi(fresh, mySeq);
   };
 
   const attachAudioLifecycle = (el) => {
@@ -1071,7 +1410,7 @@
         trackKey: gate.trackKey
       }, 'warn');
       pauseAndRewind(el, { remember: true });
-      if (gate.selectedMode === DRIVE_MODE_BPM && gate.status !== 'waiting') beginWaitingForTrack();
+      if (gate.selectedMode === DRIVE_MODE_BPM && gate.status === 'bpm-active') beginWaitingForTrack();
     };
 
     ['play', 'playing', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'seeked', 'durationchange'].forEach((evt) => {
@@ -1176,12 +1515,13 @@
     beginWaitingForTrack(getTrackMeta());
   };
 
+  publishModelRegistry();
   installPlayPatch();
   bindObservers();
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) tryReleasePendingPlayback('visibilitychange');
-    if (!document.hidden && getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+    if (!document.hidden && getConfiguredDriveMode() === DRIVE_MODE_BPM && isAiSearchStatus(gate.status)) {
       const meta = getTrackMeta();
       pushAiLog('visibility-resync', {
         hidden: document.hidden,
@@ -1193,7 +1533,7 @@
   });
   window.addEventListener('focus', () => {
     tryReleasePendingPlayback('focus');
-    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && isAiSearchStatus(gate.status)) {
       const meta = getTrackMeta();
       pushAiLog('focus-resync', {
         key: meta?.key || '',
@@ -1204,7 +1544,7 @@
   });
   window.addEventListener('pageshow', () => {
     tryReleasePendingPlayback('pageshow');
-    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && gate.status === 'waiting') {
+    if (getConfiguredDriveMode() === DRIVE_MODE_BPM && isAiSearchStatus(gate.status)) {
       const meta = getTrackMeta();
       pushAiLog('pageshow-resync', {
         key: meta?.key || '',
