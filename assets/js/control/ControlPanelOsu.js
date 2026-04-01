@@ -297,7 +297,14 @@
     return cfg;
   }
 
-  function persistCfg() {
+  let __pcwPersistTimer = 0;
+
+  function flushPersistCfg() {
+    if (__pcwPersistTimer) {
+      clearTimeout(__pcwPersistTimer);
+      __pcwPersistTimer = 0;
+    }
+
     try {
       const cfg = ensureBeatConfig();
       const out = {};
@@ -305,6 +312,22 @@
       localStorage.setItem(KEY_CFG, JSON.stringify(out));
       window.dispatchEvent(new CustomEvent("pulsecolor:beatDriverConfigChanged", { detail: { cfg } }));
     } catch { }
+  }
+
+  function persistCfg(opts = {}) {
+    const immediate = opts?.immediate !== false;
+    const delay = Math.max(16, Number(opts?.delay) || 120);
+
+    if (immediate) {
+      flushPersistCfg();
+      return;
+    }
+
+    if (__pcwPersistTimer) clearTimeout(__pcwPersistTimer);
+    __pcwPersistTimer = setTimeout(() => {
+      __pcwPersistTimer = 0;
+      flushPersistCfg();
+    }, delay);
   }
 
   function getCfgValue(key) {
@@ -318,10 +341,10 @@
     return !!v;
   }
 
-  function setCfgValue(key, value) {
+  function setCfgValue(key, value, opts = {}) {
     const cfg = ensureBeatConfig();
     cfg[key] = value;
-    persistCfg();
+    persistCfg(opts);
 
     if (key === "ENABLE_CUSTOM_WAVE") updateCustomWave(true);
   }
@@ -838,17 +861,17 @@
 
       applyVisual(input.value);
 
-      const commit = () => {
+      const commit = (phase = "input") => {
         if (li.getAttribute(DISABLED_ATTR) === "1") return;
 
         const n = Number(input.value);
         if (!Number.isFinite(n)) return;
         applyVisual(n);
-        try { onChange(n); } catch { }
+        try { onChange(n, { phase }); } catch { }
       };
 
-      input.addEventListener("input", commit);
-      input.addEventListener("change", commit);
+      input.addEventListener("input", () => commit("input"));
+      input.addEventListener("change", () => commit("change"));
 
       wrap.appendChild(valueLabel);
       wrap.appendChild(input);
@@ -986,7 +1009,7 @@
                 it.step,
                 it.min,
                 it.max,
-                (n) => setCfgValue(it.key, n),
+                (n, meta) => setCfgValue(it.key, n, { immediate: meta?.phase === "change", delay: 140 }),
                 false,
                 { gated: true }
               )
@@ -1019,7 +1042,7 @@
               it.step,
               it.min,
               it.max,
-              (n) => setCfgValue(it.key, n),
+              (n, meta) => setCfgValue(it.key, n, { immediate: meta?.phase === "change", delay: 140 }),
               false,
               { gated: true }
             )

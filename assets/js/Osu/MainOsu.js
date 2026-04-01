@@ -678,7 +678,7 @@ function __mediaPlaying() {
   };
   const isBpmWaveDriveForVisuals = () => getWaveDriveModeForVisuals() === 'bpm';
   const beatVisualActive = () => {
-    if (!isBpmWaveDriveForVisuals()) return audioActive();
+    if (!isBpmWaveDriveForVisuals()) return false;
     const bpm = +(window.OsuBeat?.bpm?.() || 0);
     const minConf = +(window.BeatDriverConfig?.MIN_CONF ?? 0.35);
     return audioActive() && !!bpm && getConf() >= minConf;
@@ -742,7 +742,7 @@ function __mediaPlaying() {
       const soft = (x, k = 0.9) => Math.tanh(x * k);
 
       const ph = window.OsuBeat?.phase?.() ?? 0;
-      const breath = Math.sin(ph * 2 * Math.PI) * 0.008;
+      const breath = bpmDrive ? Math.sin(ph * 2 * Math.PI) * 0.008 : 0;
       const rms = bpmDrive ? 0 : Math.min(1, Math.max(0, (window.__OSU__?.rms || 0) * 3.0));
       const micro = rms * 0.006;
 
@@ -912,7 +912,7 @@ function __mediaPlaying() {
       : audioOn;
     const moving = !!cfg.MOTION_ENABLED && (bpmDrive
       ? (audioOn && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
-      : (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35))));
+      : audioOn);
 
     // масштабы из драйвера (и одновременно тайминг распадов)
     const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
@@ -984,11 +984,14 @@ function __mediaPlaying() {
       if (rO > R) { const s = R / rO; S.dx *= s; S.dy *= s; }
 
       // 3) «дыхание» по BPM (медленно и плавно)
-      if (bpm) {
+      if (bpmDrive && bpm) {
         const omega = (Math.PI * 2) * (bpm / 60) * (0.22 + 0.4 * speed);
         const aimB = Math.sin(t * omega) * R * 0.22;
         const bL = 1 - Math.exp(-dtSec / 0.50);
         S.breath += (aimB - S.breath) * bL;
+      } else {
+        const bL = 1 - Math.exp(-dtSec / 0.28);
+        S.breath += (0 - S.breath) * bL;
       }
     }
 
