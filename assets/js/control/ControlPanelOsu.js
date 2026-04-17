@@ -558,6 +558,14 @@
   /* ===================== modal ===================== */
   let __modalOnEsc = null;
 
+  function setSettingsOpenState(isOpen) {
+    const next = !!isOpen;
+    window.__PCW_SETTINGS_OPEN__ = next;
+    try {
+      window.dispatchEvent(new CustomEvent("pulsecolor:waveSettingsOpenChanged", { detail: { open: next } }));
+    } catch { }
+  }
+
   function closeModal() {
     const portal = document.getElementById(PORTAL_ID);
     const dialog = portal?.querySelector("#_r_mh_");
@@ -569,18 +577,21 @@
     }
 
     if (!portal) {
+      setSettingsOpenState(false);
       unlockPageInteraction();
       return;
     }
 
     animateModalOut(portal, dialog, backdrop, () => {
       portal.remove();
+      setSettingsOpenState(false);
       unlockPageInteraction();
     });
   }
 
   function openModal() {
     if (document.getElementById(PORTAL_ID)) return;
+    setSettingsOpenState(true);
 
     const TITLE_CLASS =
       '_MWOVuZRvUQdXKTMcOPx LezmJlldtbHWqU7l1950 oyQL2RSmoNbNQf3Vc6YI V3WU123oO65AxsprotU9 Vi7Rd0SZWqD17F0872TB SettingsListToggleItem_title__Xz8_Q';
@@ -861,17 +872,39 @@
 
       applyVisual(input.value);
 
-      const commit = (phase = "input") => {
+      let inputCommitTimer = 0;
+      let lastInputValue = vInit;
+
+      const emitChange = (phase = "input", value = input.value) => {
         if (li.getAttribute(DISABLED_ATTR) === "1") return;
 
-        const n = Number(input.value);
+        const n = Number(value);
         if (!Number.isFinite(n)) return;
         applyVisual(n);
         try { onChange(n, { phase }); } catch { }
       };
 
-      input.addEventListener("input", () => commit("input"));
-      input.addEventListener("change", () => commit("change"));
+      const scheduleInputCommit = () => {
+        lastInputValue = Number(input.value);
+        if (inputCommitTimer) return;
+        inputCommitTimer = setTimeout(() => {
+          inputCommitTimer = 0;
+          emitChange("input", lastInputValue);
+        }, 50);
+      };
+
+      input.addEventListener("input", () => {
+        applyVisual(input.value);
+        scheduleInputCommit();
+      });
+
+      input.addEventListener("change", () => {
+        if (inputCommitTimer) {
+          clearTimeout(inputCommitTimer);
+          inputCommitTimer = 0;
+        }
+        emitChange("change", input.value);
+      });
 
       wrap.appendChild(valueLabel);
       wrap.appendChild(input);

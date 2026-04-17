@@ -76,6 +76,16 @@ function __mediaPlaying() {
   return (nowTs - (__mediaPlaying.__lastOnTs || 0)) < 420;
 }
 
+
+
+function __pcwSettingsOpen() {
+  try {
+    return !!window.__PCW_SETTINGS_OPEN__ || !!document.getElementById('pulsecolor-wave-settings-portal');
+  } catch {
+    return false;
+  }
+}
+
 /* ========================== AUDIOTAP v2 ========================== */
 (() => {
   const AC = window.AudioContext || window.webkitAudioContext;
