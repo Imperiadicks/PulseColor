@@ -59,7 +59,8 @@
         "http://localhost:2007/get_handle?name=PulseColor",
         "http://localhost:2007/get_handle",
         "http://127.0.0.1:2007/get_handle?name=PulseColor",
-        "http://127.0.0.1:2007/get_handle",
+        "http://127.0.0.1:2007/get_handle"
+    ],
     "supportedVersions": [],
     "fromPext": true,
     "installSource": "local",

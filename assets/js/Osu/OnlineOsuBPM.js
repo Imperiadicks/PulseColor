@@ -25,24 +25,13 @@
     'RAW'
   ];
 
-  /*---- deezer ---- */
-  const DEEZER_API_BASE = 'https://api.deezer.com';
-  const ENABLE_DEEZER_LOOKUP = true;
-  const DEEZER_LIMIT = 10;
+  const BPM_API_FILES = [
+    'DeezerBpmApi.js',
+    'GetSongBpmApi.js',
+    'ReccoBeatsBpmApi.js'
+  ];
 
-  /*---- getsongbpm ---- */
-  const GETSONGBPM_API_BASE = 'https://api.getsong.co';
-  const GETSONGBPM_API_KEY = '355f34fabf00b058b675ea3e427efa52';
-
-
-  /*---- reccobeats ---- */
-  const RECCOBEATS_API_BASE = 'https://api.reccobeats.com';
-  const ENABLE_RECCOBEATS_TRACK_LOOKUP = true;
-  const ENABLE_RECCOBEATS_AUDIO_ANALYSIS = true;
-  const RECCOBEATS_ID_LIMIT = 8;
-  const RECCOBEATS_AUDIO_FILE_NAME = 'pulsecolor-deezer-preview.mp3';
-  const RECCOBEATS_DEEZER_PREVIEW_LIMIT = 5;
-  const RECCOBEATS_UPLOAD_DEEZER_PREVIEW_WHEN_AVAILABLE = true;
+  const BPM_API_LOAD_TIMEOUT_MS = 7000;
 
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const normBpm = (b) => {
@@ -68,12 +57,21 @@
     .trim();
 
   const getConfiguredDriveMode = () => normalizeDriveMode(window.BeatDriverConfig?.WAVE_DRIVE_MODE);
-  const getGetSongBpmApiKey = () => String(GETSONGBPM_API_KEY || '').trim();
-  const hasAnyBpmApiProvider = () => !!(
-    ENABLE_DEEZER_LOOKUP ||
-    getGetSongBpmApiKey() ||
-    ENABLE_RECCOBEATS_TRACK_LOOKUP ||
-    ENABLE_RECCOBEATS_AUDIO_ANALYSIS
+
+  const bpmApiState = {
+    loadPromise: null,
+    loaded: false,
+    providers: {},
+    failedFiles: []
+  };
+
+  const hasAnyBpmApiProvider = () => (
+    !!bpmApiState.providers.Deezer ||
+    !!bpmApiState.providers.GetSongBPM ||
+    !!bpmApiState.providers.ReccoBeats ||
+    !!window.PulseColorBpmApiFactories?.Deezer ||
+    !!window.PulseColorBpmApiFactories?.GetSongBPM ||
+    !!window.PulseColorBpmApiFactories?.ReccoBeats
   );
 
   const loadCache = () => {
@@ -1700,510 +1698,6 @@
     return list.length ? list[0].bpm : 0;
   };
 
-  const getAudioBlobForReccoBeats = async ({ sig, context } = {}) => {
-    const provider = window.__PulseColorAudioBlobProvider || window.PulseColorAudioBlobProvider;
-    if (typeof provider === 'function') {
-      try {
-        const blob = await provider();
-        if (blob instanceof Blob) {
-          if (context) context.reccoAudioSource = 'external-provider';
-          logApi('reccobeats-audio-provider-hit', {
-            sig,
-            source: 'external-provider',
-            blobType: blob.type || '',
-            blobSize: blob.size || 0
-          });
-          return blob;
-        }
-      } catch (error) {
-        logApi('reccobeats-audio-provider-error', {
-          sig,
-          source: 'external-provider',
-          name: error?.name || 'Error',
-          message: error?.message || String(error)
-        });
-      }
-    }
-
-    if (!String(context?.deezerPreviewUrl || '').trim()) {
-      await ensureDeezerPreviewForReccoBeats({
-        sig,
-        context,
-        title: context?.requestedTitle || '',
-        artist: context?.requestedArtist || ''
-      });
-    }
-
-    const previewUrl = String(context?.deezerPreviewUrl || '').trim();
-    if (!previewUrl) return null;
-
-    const out = await fetchBlob(previewUrl, sig, {
-      method: 'GET',
-      headers: {
-        'Accept': 'audio/mpeg,audio/*,*/*'
-      }
-    });
-
-    if (!out.ok || !(out.blob instanceof Blob)) {
-      logApi('reccobeats-preview-audio-skip', {
-        sig,
-        reason: out.type || 'preview-fetch-failed',
-        url: maskUrlForLog(previewUrl)
-      });
-      return null;
-    }
-
-    if (context) context.reccoAudioSource = 'deezer-preview';
-
-    logApi('reccobeats-preview-audio-ready', {
-      sig,
-      source: 'deezer-preview',
-      url: maskUrlForLog(previewUrl),
-      blobType: out.blob.type || '',
-      blobSize: out.blob.size || 0
-    });
-
-    return out.blob;
-  };
-
-  /*---- deezer ---- */
-  const buildDeezerSearchQueries = ({ title, artist }) => {
-    const t = String(title || '').trim();
-    const a = String(artist || '').trim();
-    return uniqueClean([
-      a && t ? `artist:"${a}" track:"${t}"` : '',
-      a && t ? `${a} ${t}` : '',
-      t
-    ]).slice(0, 3);
-  };
-
-  const deezerArtistToText = (track) => track?.artist?.name || track?.artist || '';
-
-  const pickBestDeezerTrack = (tracks, targetTitle, targetArtist, targetDurationMs = 0) => {
-    const list = asArray(tracks);
-    let best = null;
-    let bestScore = -1;
-
-    for (const track of list) {
-      const trackTitle = track?.title || track?.title_short || '';
-      const trackArtist = deezerArtistToText(track);
-      const titleExact = normalizeCompare(trackTitle) === normalizeCompare(targetTitle);
-      const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
-      const titleNear = isTitleMatch(trackTitle, targetTitle);
-      const artistNear = isArtistMatch(trackArtist, targetArtist);
-
-      let score = 0;
-      if (titleExact) score += 10; else if (titleNear) score += 6;
-      if (artistExact) score += 10; else if (artistNear) score += 6;
-      if (track?.id) score += 2;
-      if (track?.bpm) score += 2;
-      if (track?.isrc) score += 2;
-      if (track?.preview) score += 1;
-      const trackDurationMs = parseDurationMs(track?.duration);
-      if (targetDurationMs && trackDurationMs) {
-        const diff = Math.abs(targetDurationMs - trackDurationMs);
-        if (diff <= 2500) score += 5;
-        else if (diff <= 7000) score += 3;
-        else if (diff <= 15000) score += 1;
-      }
-      if (Number.isFinite(Number(track?.rank))) score += Math.min(4, Math.round(Number(track.rank) / 250000));
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = track;
-      }
-    }
-
-    return bestScore >= 12 ? best : null;
-  };
-
-  const pickBestDeezerPreviewTrack = (tracks, targetTitle, targetArtist, targetDurationMs = 0) => {
-    const list = asArray(tracks).filter((track) => !!track?.preview);
-    let best = null;
-    let bestScore = -1;
-
-    for (const track of list) {
-      const trackTitle = track?.title || track?.title_short || '';
-      const trackArtist = deezerArtistToText(track);
-      const titleExact = normalizeCompare(trackTitle) === normalizeCompare(targetTitle);
-      const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
-      const titleNear = isTitleMatch(trackTitle, targetTitle);
-      const artistNear = isArtistMatch(trackArtist, targetArtist);
-
-      let score = 0;
-      if (titleExact) score += 10; else if (titleNear) score += 6;
-      if (artistExact) score += 10; else if (artistNear) score += 6;
-      if (track?.id) score += 2;
-      if (track?.preview) score += 4;
-      if (track?.isrc) score += 2;
-      const trackDurationMs = parseDurationMs(track?.duration);
-      if (targetDurationMs && trackDurationMs) {
-        const diff = Math.abs(targetDurationMs - trackDurationMs);
-        if (diff <= 2500) score += 5;
-        else if (diff <= 7000) score += 3;
-        else if (diff <= 15000) score += 1;
-      }
-      if (Number.isFinite(Number(track?.rank))) score += Math.min(4, Math.round(Number(track.rank) / 250000));
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = track;
-      }
-    }
-
-    return bestScore >= 10 ? best : null;
-  };
-
-  const ensureDeezerPreviewForReccoBeats = async ({ title, artist, sig, context } = {}) => {
-    if (!context || context.deezerPreviewUrl || !ENABLE_DEEZER_LOOKUP) return context?.deezerPreviewUrl || '';
-
-    const queries = buildDeezerSearchQueries({ title, artist });
-    if (!queries.length) {
-      logApi('reccobeats-preview-source-skip', { sig, reason: 'empty-deezer-query', title, artist });
-      return '';
-    }
-
-    for (const query of queries) {
-      const url = `${DEEZER_API_BASE}/search/track?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(RECCOBEATS_DEEZER_PREVIEW_LIMIT)}`;
-      const out = await fetchJson(url, sig, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!out.ok) {
-        logApi('reccobeats-preview-source-error', { sig, query, src: `deezer-${out.type}` });
-        continue;
-      }
-
-      const picked = pickBestDeezerPreviewTrack(out.data?.data || out.data, title, artist, context?.requestedDurationMs || 0);
-      logApi('reccobeats-preview-source-picked', {
-        sig,
-        query,
-        requested: { title, artist },
-        bestTrack: picked,
-        searchItems: asArray(out.data?.data || out.data)
-      });
-
-      if (!picked?.preview) continue;
-
-      context.deezerPreviewUrl = String(picked.preview || '').trim();
-      context.deezerTrackId = picked.id || context.deezerTrackId || '';
-      context.deezer = context.deezer || { query, search: out.data, track: picked, detail: null };
-      pushContextIsrc(context, picked?.isrc);
-      return context.deezerPreviewUrl;
-    }
-
-    return '';
-  };
-
-  const lookupDeezer = async ({ title, artist, sig, context } = {}) => {
-    logApi('deezer-apikey-check', {
-      provider: 'deezer',
-      required: false,
-      hasApiKey: false,
-      source: 'public-api',
-      sig
-    });
-
-    if (!ENABLE_DEEZER_LOOKUP) return { bpm: 0, src: 'deezer-disabled' };
-
-    const queries = buildDeezerSearchQueries({ title, artist });
-    if (!queries.length) return { bpm: 0, src: 'deezer-empty-query' };
-
-    let lastSrc = 'deezer-miss';
-    let bestTrack = null;
-    let bestSearchData = null;
-    let bestQuery = '';
-
-    for (const query of queries) {
-      const url = `${DEEZER_API_BASE}/search/track?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(DEEZER_LIMIT)}`;
-      const out = await fetchJson(url, sig, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!out.ok) {
-        lastSrc = `deezer-${out.type}`;
-        continue;
-      }
-
-      const picked = pickBestDeezerTrack(out.data?.data || out.data, title, artist, context?.requestedDurationMs || 0);
-      logApi('deezer-search-picked', {
-        sig,
-        query,
-        requested: { title, artist },
-        searchItems: asArray(out.data?.data || out.data),
-        bestTrack: picked
-      });
-
-      if (picked?.id) {
-        bestTrack = picked;
-        bestSearchData = out.data;
-        bestQuery = query;
-        break;
-      }
-    }
-
-    if (!bestTrack?.id) return { bpm: 0, src: lastSrc };
-
-    const detailUrl = `${DEEZER_API_BASE}/track/${encodeURIComponent(bestTrack.id)}`;
-    const detailOut = await fetchJson(detailUrl, sig, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    const detail = detailOut.ok && detailOut.data && !detailOut.data.error ? detailOut.data : null;
-    const merged = { ...bestTrack, ...(detail || {}) };
-    const tempo = normBpm(merged?.bpm) || extractFirstTempo(merged);
-
-    if (context) {
-      context.deezer = { query: bestQuery, search: bestSearchData, track: bestTrack, detail };
-      context.deezerTrackId = merged?.id || bestTrack.id;
-      context.deezerPreviewUrl = String(merged?.preview || bestTrack?.preview || '').trim();
-      pushContextIsrc(context, merged?.isrc || bestTrack?.isrc);
-    }
-
-    logApi('deezer-track-detail', {
-      sig,
-      requested: { title, artist },
-      trackId: bestTrack.id,
-      isrc: normalizeIsrc(merged?.isrc || bestTrack?.isrc),
-      previewUrl: merged?.preview || bestTrack?.preview || '',
-      normalizedTempo: tempo,
-      detail: merged
-    });
-
-    return tempo ? { bpm: tempo, src: 'deezer' } : { bpm: 0, src: 'deezer-no-bpm' };
-  };
-
-  /*---- getsongbpm ---- */
-  const lookupGetSongBpm = async ({ title, artist, sig } = {}) => {
-    const apiKey = getGetSongBpmApiKey();
-    logApiKeyCheck('getsongbpm', apiKey, { sig, title, artist });
-    if (!apiKey) {
-      logApi('getsongbpm-skip', { sig, reason: 'empty-api-key-in-code' });
-      return { bpm: 0, src: 'getsongbpm-no-key' };
-    }
-
-    const lookup = buildLookup({ title, artist });
-    const searchUrl = `${GETSONGBPM_API_BASE}/search/?type=both&limit=12&lookup=${encodeURIComponent(lookup)}&api_key=${encodeURIComponent(apiKey)}`;
-    const searchOut = await fetchJson(searchUrl, sig, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-    if (!searchOut.ok) return { bpm: 0, src: `getsongbpm-${searchOut.type}` };
-
-    const bestSong = pickBestSong(searchOut.data?.search, title, artist);
-    logApi('getsongbpm-search-picked', {
-      sig,
-      requested: { title, artist },
-      searchItems: Array.isArray(searchOut.data?.search) ? searchOut.data.search : [],
-      bestSong
-    });
-    if (!bestSong?.id) return { bpm: 0, src: 'getsongbpm-miss' };
-
-    const searchTempo = normBpm(bestSong?.tempo);
-    if (searchTempo) return { bpm: searchTempo, src: 'getsongbpm' };
-
-    const songUrl = `${GETSONGBPM_API_BASE}/song/?id=${encodeURIComponent(bestSong.id)}&api_key=${encodeURIComponent(apiKey)}`;
-    const songOut = await fetchJson(songUrl, sig, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-    if (!songOut.ok) return { bpm: 0, src: `getsongbpm-${songOut.type}` };
-
-    const tempo = normBpm(songOut.data?.song?.tempo) || extractFirstTempo(songOut.data);
-    logApi('getsongbpm-song-tempo', {
-      sig,
-      songId: bestSong.id,
-      song: songOut.data?.song || null,
-      normalizedTempo: tempo
-    });
-    return tempo ? { bpm: tempo, src: 'getsongbpm' } : { bpm: 0, src: 'getsongbpm-miss' };
-  };
-
-  /*---- reccobeats ---- */
-  const reccoBeatsArtistToText = (track) => {
-    const artists = track?.artists;
-    if (Array.isArray(artists)) {
-      return artists
-        .map((item) => item?.name || item?.artistName || item?.title || '')
-        .filter(Boolean)
-        .join(', ')
-        .trim();
-    }
-    return track?.artist?.name || track?.artistName || track?.artist || '';
-  };
-
-  const pickBestReccoBeatsTrack = (tracks, targetTitle, targetArtist) => {
-    const list = asArray(tracks);
-    let best = null;
-    let bestScore = -1;
-
-    for (const track of list) {
-      const trackTitle = track?.trackTitle || track?.title || track?.name || '';
-      const trackArtist = reccoBeatsArtistToText(track);
-      const titleExact = normalizeCompare(trackTitle) === normalizeCompare(targetTitle);
-      const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
-      const titleNear = isTitleMatch(trackTitle, targetTitle);
-      const artistNear = isArtistMatch(trackArtist, targetArtist);
-
-      let score = 0;
-      if (titleExact) score += 10; else if (titleNear) score += 6;
-      if (artistExact) score += 10; else if (artistNear) score += 6;
-      if (track?.id) score += 2;
-      if (track?.isrc) score += 2;
-      if (track?.href) score += 1;
-      if (Number.isFinite(Number(track?.popularity))) score += Math.min(4, Math.round(Number(track.popularity) / 25));
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = track;
-      }
-    }
-
-    return bestScore >= 10 ? best : null;
-  };
-
-  const getReccoBeatsTrackFeatures = async ({ id, sig } = {}) => {
-    if (!id) return { bpm: 0, src: 'reccobeats-no-id' };
-
-    const urls = [
-      `${RECCOBEATS_API_BASE}/v1/track/${encodeURIComponent(id)}/audio-features`,
-      `${RECCOBEATS_API_BASE}/v1/audio-features?ids=${encodeURIComponent(id)}`
-    ];
-
-    let lastSrc = 'reccobeats-features-miss';
-
-    for (const url of urls) {
-      const out = await fetchJson(url, sig, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!out.ok) {
-        lastSrc = `reccobeats-features-${out.type}`;
-        continue;
-      }
-
-      const tempo = normBpm(out.data?.tempo) || normBpm(out.data?.bpm) || extractFirstTempo(out.data);
-      logApi('reccobeats-track-features', {
-        sig,
-        id,
-        url: maskUrlForLog(url),
-        tempo,
-        data: out.data
-      });
-
-      if (tempo) return { bpm: tempo, src: 'reccobeats' };
-      lastSrc = 'reccobeats-features-miss';
-    }
-
-    return { bpm: 0, src: lastSrc };
-  };
-
-  const lookupReccoBeatsByIds = async ({ title, artist, sig, context } = {}) => {
-    if (!ENABLE_RECCOBEATS_TRACK_LOOKUP) return { bpm: 0, src: 'reccobeats-track-disabled' };
-
-    const ids = uniqueClean([...(context?.reccobeatsIds || []), ...(context?.isrcs || [])]).slice(0, RECCOBEATS_ID_LIMIT);
-    if (!ids.length) return { bpm: 0, src: 'reccobeats-no-id' };
-
-    const url = `${RECCOBEATS_API_BASE}/v1/track?ids=${encodeURIComponent(ids.join(','))}`;
-    const out = await fetchJson(url, sig, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!out.ok) return { bpm: 0, src: `reccobeats-track-${out.type}` };
-
-    const tracks = asArray(out.data?.data || out.data?.tracks || out.data);
-    const bestTrack = pickBestReccoBeatsTrack(tracks, title, artist) || tracks.find((track) => track?.id) || null;
-
-    logApi('reccobeats-track-picked', {
-      sig,
-      requested: { title, artist },
-      ids,
-      tracks,
-      bestTrack
-    });
-
-    if (!bestTrack?.id) return { bpm: 0, src: 'reccobeats-track-miss' };
-
-    pushContextReccoBeatsId(context, bestTrack.id);
-    pushContextIsrc(context, bestTrack.isrc);
-
-    return await getReccoBeatsTrackFeatures({ id: bestTrack.id, sig });
-  };
-
-  const lookupReccoBeatsByAudio = async ({ sig, context } = {}) => {
-    if (!ENABLE_RECCOBEATS_AUDIO_ANALYSIS) return { bpm: 0, src: 'reccobeats-audio-disabled' };
-
-    const blob = await getAudioBlobForReccoBeats({ sig, context });
-    if (!blob) {
-      logApi('reccobeats-skip', { sig, reason: 'no-audio-blob-or-preview' });
-      return { bpm: 0, src: 'reccobeats-no-audio' };
-    }
-
-    const form = new FormData();
-    const fileName = blob.name || RECCOBEATS_AUDIO_FILE_NAME;
-    form.append('audioFile', blob, fileName);
-
-    const endpoint = `${RECCOBEATS_API_BASE}/v1/analysis/audio-features`;
-    logApi('reccobeats-audio-upload-start', {
-      sig,
-      endpoint,
-      formField: 'audioFile',
-      fileName,
-      source: context?.reccoAudioSource || 'unknown',
-      deezerPreviewUrl: maskUrlForLog(context?.deezerPreviewUrl || ''),
-      blobType: blob.type || '',
-      blobSize: blob.size || 0
-    });
-
-    const out = await fetchJson(endpoint, sig, {
-      method: 'POST',
-      body: form,
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-    if (!out.ok) return { bpm: 0, src: `reccobeats-audio-${out.type}` };
-
-    const tempo = normBpm(out.data?.tempo) || normBpm(out.data?.bpm) || extractFirstTempo(out.data);
-    logApi('reccobeats-audio-tempo', { sig, tempo, data: out.data });
-    return tempo ? { bpm: tempo, src: 'reccobeats-audio' } : { bpm: 0, src: 'reccobeats-audio-miss' };
-  };
-
-  const lookupReccoBeats = async ({ title, artist, sig, context } = {}) => {
-    logApi('reccobeats-apikey-check', {
-      provider: 'reccobeats',
-      required: false,
-      hasApiKey: false,
-      source: 'no-api-key-required',
-      sig
-    });
-
-    const trackOut = await lookupReccoBeatsByIds({ title, artist, sig, context });
-    if (trackOut?.bpm) return trackOut;
-
-    const audioOut = await lookupReccoBeatsByAudio({ sig, context });
-    if (audioOut?.bpm) return audioOut;
-
-    return audioOut?.src !== 'reccobeats-no-audio' ? audioOut : trackOut;
-  };
-
   const uniqueClean = (items) => Array.from(new Set(
     (Array.isArray(items) ? items : [])
       .map((item) => String(item || '').trim())
@@ -2236,7 +1730,191 @@
   const pushContextReccoBeatsId = (context, value) => {
     const id = String(value || '').trim();
     if (!context || !id) return;
-    context.reccobeatsIds = uniqueClean([...(context.reccobeatsIds || []), id]).slice(0, RECCOBEATS_ID_LIMIT);
+    context.reccobeatsIds = uniqueClean([...(context.reccobeatsIds || []), id]).slice(0, 8);
+  };
+
+
+  const getCurrentScriptUrl = () => {
+    const byCurrent = document.currentScript?.src || '';
+    if (byCurrent) return byCurrent;
+
+    const scripts = Array.from(document.querySelectorAll('script[src]'));
+    const current = scripts.find((script) => /OnlineOsuBPM\.js/i.test(script.src));
+    return current?.src || '';
+  };
+
+  const buildBpmApiAssetUrls = (file) => {
+    const currentSrc = getCurrentScriptUrl();
+    const urls = [];
+
+    try {
+      const url = new URL(currentSrc || 'http://localhost:2007/assets/OnlineOsuBPM.js?name=PulseColor');
+      const name = url.searchParams.get('name') || 'PulseColor';
+      const origin = url.origin || 'http://localhost:2007';
+      const add = (assetPath) => {
+        const normalized = String(assetPath || '').replace(/^\/+/, '');
+        const rawUrl = `${origin}/assets/${normalized}?name=${encodeURIComponent(name)}`;
+        const encodedUrl = `${origin}/assets/${encodeURIComponent(normalized)}?name=${encodeURIComponent(name)}`;
+        if (!urls.includes(rawUrl)) urls.push(rawUrl);
+        if (!urls.includes(encodedUrl)) urls.push(encodedUrl);
+      };
+
+      add(file);
+      add(`API/${file}`);
+      add(`js/Osu/API/${file}`);
+      add(`assets/js/Osu/API/${file}`);
+    } catch {
+      urls.push(`http://localhost:2007/assets/${encodeURIComponent(file)}?name=PulseColor`);
+    }
+
+    return urls;
+  };
+
+  const loadScriptWithTimeout = (url, timeoutMs = BPM_API_LOAD_TIMEOUT_MS) => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    let done = false;
+    let timer = 0;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      script.onload = null;
+      script.onerror = null;
+    };
+
+    script.src = url;
+    script.async = false;
+    script.onload = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve(url);
+    };
+    script.onerror = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      try { script.remove(); } catch {}
+      reject(new Error(`Failed to load script: ${url}`));
+    };
+    timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      cleanup();
+      try { script.remove(); } catch {}
+      reject(new Error(`Script load timeout: ${url}`));
+    }, timeoutMs);
+
+    document.head.appendChild(script);
+  });
+
+  const loadBpmApiFile = async (file) => {
+    const urls = buildBpmApiAssetUrls(file);
+    let lastError = null;
+
+    for (const url of urls) {
+      try {
+        const loadedUrl = await loadScriptWithTimeout(url);
+        logApi('api-file-loaded', { file, url: loadedUrl });
+        return loadedUrl;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error(`Failed to load BPM API file: ${file}`);
+  };
+
+  const createBpmApiCore = () => ({
+    logApi,
+    logApiKeyCheck,
+    fetchJson,
+    fetchBlob,
+    maskUrlForLog,
+    normBpm,
+    normalizeCompare,
+    isTitleMatch,
+    isArtistMatch,
+    parseDurationMs,
+    uniqueClean,
+    asArray,
+    normalizeIsrc,
+    pushContextIsrc,
+    pushContextReccoBeatsId,
+    extractTempoCandidates,
+    extractFirstTempo,
+    buildLookup,
+    pickBestSong,
+    getProvider: (name) => bpmApiState.providers?.[name] || null
+  });
+
+  const ensureBpmApiProvidersLoaded = async () => {
+    if (bpmApiState.loaded) return bpmApiState.providers;
+    if (bpmApiState.loadPromise) return await bpmApiState.loadPromise;
+
+    bpmApiState.loadPromise = (async () => {
+      window.PulseColorBpmApiFactories = window.PulseColorBpmApiFactories || {};
+
+      for (const file of BPM_API_FILES) {
+        try {
+          await loadBpmApiFile(file);
+        } catch (error) {
+          bpmApiState.failedFiles.push(file);
+          logApi('api-file-load-error', {
+            file,
+            name: error?.name || 'Error',
+            message: error?.message || String(error)
+          });
+        }
+      }
+
+      const factories = window.PulseColorBpmApiFactories || {};
+      const core = createBpmApiCore();
+      const nextProviders = {};
+
+      for (const [name, factory] of Object.entries(factories)) {
+        if (typeof factory !== 'function') continue;
+        try {
+          const provider = factory(core);
+          if (provider?.name && typeof provider.lookup === 'function') {
+            nextProviders[provider.name] = provider;
+          }
+        } catch (error) {
+          logApi('api-provider-init-error', {
+            name,
+            errorName: error?.name || 'Error',
+            message: error?.message || String(error)
+          });
+        }
+      }
+
+      bpmApiState.providers = nextProviders;
+      bpmApiState.loaded = true;
+      logApi('api-providers-ready', {
+        providers: Object.keys(nextProviders),
+        failedFiles: [...bpmApiState.failedFiles]
+      });
+
+      return nextProviders;
+    })();
+
+    return await bpmApiState.loadPromise;
+  };
+
+  const getBpmProvider = (name) => bpmApiState.providers?.[name] || null;
+
+  const getBpmProviderEntries = () => BPM_SOURCES
+    .filter((name) => name !== 'RAW')
+    .map((name) => getBpmProvider(name))
+    .filter((provider) => provider && typeof provider.lookup === 'function')
+    .map((provider) => ({ name: provider.name, fn: provider.lookup }));
+
+  const shouldUploadDeezerPreviewToReccoBeats = (providerName, context) => {
+    const recco = getBpmProvider('ReccoBeats');
+    return !!(
+      recco?.uploadDeezerPreviewWhenAvailable &&
+      providerName !== 'ReccoBeats' &&
+      String(context?.deezerPreviewUrl || '').trim()
+    );
   };
 
   const lookupOnline = async (trackMeta = {}) => {
@@ -2284,11 +1962,9 @@
         deezerPreviewUrl: '',
         reccoAudioSource: ''
       };
-      const providers = [
-        { name: 'Deezer', fn: lookupDeezer },
-        { name: 'GetSongBPM', fn: lookupGetSongBpm },
-        { name: 'ReccoBeats', fn: lookupReccoBeats }
-      ];
+      await ensureBpmApiProvidersLoaded();
+      const providers = getBpmProviderEntries();
+      if (!providers.length) return { bpm: 0, src: 'bpm-api-no-provider' };
 
       let noKeyCount = 0;
       let lastOut = { bpm: 0, src: 'bpm-api-miss' };
@@ -2299,11 +1975,7 @@
         logApi('provider-result', { sig: s, provider: provider.name, out, context: providerContext });
 
         if (out?.bpm) {
-          const shouldStillUploadToReccoBeats = (
-            RECCOBEATS_UPLOAD_DEEZER_PREVIEW_WHEN_AVAILABLE &&
-            provider.name !== 'ReccoBeats' &&
-            !!String(providerContext.deezerPreviewUrl || '').trim()
-          );
+          const shouldStillUploadToReccoBeats = shouldUploadDeezerPreviewToReccoBeats(provider.name, providerContext);
 
           if (shouldStillUploadToReccoBeats) {
             bpmCandidate = bpmCandidate || out;
@@ -2339,7 +2011,10 @@
       }
 
       if ((providerContext.isrcs || []).length && !lastOut?.bpm) {
-        const reccoAfterMb = await lookupReccoBeats({ title: t, artist: a, sig: s, context: providerContext });
+        const reccoProvider = getBpmProvider('ReccoBeats');
+        const reccoAfterMb = reccoProvider
+          ? await reccoProvider.lookup({ title: t, artist: a, sig: s, context: providerContext })
+          : { bpm: 0, src: 'reccobeats-provider-missing' };
         logApi('provider-result', { sig: s, provider: 'ReccoBeats-after-Deezer-metadata', out: reccoAfterMb, context: providerContext });
         if (reccoAfterMb?.bpm) {
           setCooldown(s, REQUEST_COOLDOWN_MS);
@@ -2772,15 +2447,27 @@
     beginWaitingForTrack(getTrackMeta(), { reason: 'config-bpm-mode', forceResume: isAudioPlaying() });
   });
 
-  initYandexTrackMetaCapture();
-  installPlaybackHardGate();
-  document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-  bindCoverObserver();
-  bindTreeObserver();
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkTrackChange(true); });
-  window.addEventListener('focus', () => checkTrackChange(true));
-  window.addEventListener('pageshow', () => checkTrackChange(true));
+  async function initOnlineBpm() {
+    await ensureBpmApiProvidersLoaded();
 
-  if (getConfiguredDriveMode() === DRIVE_MODE_RAW) enterSelectedRaw('raw');
-  else beginWaitingForTrack(getTrackMeta(), { reason: 'initial-bpm-mode', forceResume: false });
+    initYandexTrackMetaCapture();
+    installPlaybackHardGate();
+    document.querySelectorAll('audio').forEach(attachAudioLifecycle);
+    bindCoverObserver();
+    bindTreeObserver();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkTrackChange(true); });
+    window.addEventListener('focus', () => checkTrackChange(true));
+    window.addEventListener('pageshow', () => checkTrackChange(true));
+
+    if (getConfiguredDriveMode() === DRIVE_MODE_RAW) enterSelectedRaw('raw');
+    else beginWaitingForTrack(getTrackMeta(), { reason: 'initial-bpm-mode', forceResume: false });
+  }
+
+  initOnlineBpm().catch((error) => {
+    logApi('init-error', {
+      name: error?.name || 'Error',
+      message: error?.message || String(error)
+    });
+    beginWaitingForTrack(getTrackMeta(), { reason: 'initial-bpm-mode-after-init-error', forceResume: false });
+  });
 })();
