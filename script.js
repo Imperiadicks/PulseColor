@@ -1,6 +1,6 @@
 (function () {
   const THEME_NAME = "PulseColor";
-  const ORIGIN = "http://127.0.0.1:2007";
+  const ORIGIN = "http://localhost:2007";
   const ASSETS_BASE = ORIGIN + "/assets/";
 
   function assetUrl(file) {

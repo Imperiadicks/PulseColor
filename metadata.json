@@ -1,34 +1,34 @@
 {
-  "name": "PulseColor",
-  "image": "image.png",
-  "banner": "banner.png",
-  "libraryLogo": "",
-  "author": [
-    "imperiadicks",
-    "Desaichk"
-  ],
-  "description": "полноценная тема, где вы получаете более динамические цвета с PulseColor",
-  "version": "1.1.0",
-  "css": "style.css",
-  "script": "script.js",
-  "type": "theme",
-  "tags": [
-    "PulseSync",
-    "Colored"
-  ],
-  "dependencies": [],
-  "allowedUrls": [
-    "http://127.0.0.1:2007",
-    "https://r.jina.ai",
-    "https://r.jina.ai/http://",
-    "https://r.jina.ai/https://",
-    "https://duckduckgo.com",
-    "https://bpmdatabase.com",
-    "https://musicstax.com",
-    "https://api.onlysq.ru/ai/v2",
-    "https://api.onlysq.ru/",
-    "https://api.onlysq.ru/ai/"
-  ],
-  "supportedVersions": [],
-  "fromPext": true
+    "name": "PulseColor",
+    "image": "image.png",
+    "banner": "banner.png",
+    "libraryLogo": "",
+    "author": [
+        "imperiadicks",
+        "desaichk"
+    ],
+    "description": "полноценная тема, где вы получаете более динамические цвета с PulseColor",
+    "version": "1.1.0",
+    "css": "style.css",
+    "script": "script.js",
+    "type": "theme",
+    "tags": [
+        "PulseSync",
+        "Colored"
+    ],
+    "dependencies": [],
+    "allowedUrls": [
+        "https://api.getsong.co",
+        "https://api.getsong.co/",
+        "https://getsongbpm.com/api",
+        "http://localhost:2007/get_handle?name=PulseColor",
+        "http://localhost:2007/get_handle",
+        "http://127.0.0.1:2007/get_handle?name=PulseColor",
+        "http://127.0.0.1:2007/get_handle"
+    ],
+    "supportedVersions": [],
+    "fromPext": true,
+    "installSource": "local",
+    "id": "2b8acd7560ab9fe95662057c",
+    "storeAddonId": "419c58cb-75c5-48bf-b053-933f3b81190f"
 }
