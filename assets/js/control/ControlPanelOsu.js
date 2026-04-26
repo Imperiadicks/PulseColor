@@ -11,8 +11,6 @@
 
   const KEY_LOG = "osuLogEnabled";
   const KEY_BPM = "osuShowBPM";
-  const KEY_GETSONGBPM_API = "PulseColor.getSongBpmApiKey";
-
   const KEY_CFG = "PulseColor.BeatDriverConfig.v1";
 
   const DEFAULT_CFG = {
@@ -193,18 +191,11 @@
           type: "choice",
           key: "WAVE_DRIVE_MODE",
           label: "Источник движения",
-          desc: "BPM — ищем BPM через GetSongBPM API. Если BPM не найден или API не ответил — волна уходит в RAW. RAW — сразу слушаем аудио без сетевого BPM-поиска.",
+          desc: "BPM — ищем BPM через API-провайдеры из кода. Если BPM не найден или API не ответил — волна уходит в RAW. RAW — сразу слушаем аудио без сетевого BPM-поиска.",
           options: [
             { value: "raw", label: "RAW" },
             { value: "bpm", label: "BPM" }
           ]
-        },
-        {
-          type: "text",
-          key: "__GETSONGBPM_API_KEY__",
-          label: "GetSongBPM API key",
-          desc: "Локальный ключ для BPM-режима. В код темы не записывается, хранится только в localStorage.",
-          placeholder: "YOUR_API_KEY_HERE"
         },
 
         { type: "toggle", key: "__LOG_ENABLED__", label: "Показывать логи", desc: "Включает всплывающие сообщения (если логгер подключён)." },
@@ -468,23 +459,6 @@
     return (localStorage.getItem(KEY_BPM) ?? "1") !== "0";
   }
 
-  function getGetSongBpmApiKey() {
-    try { return (localStorage.getItem(KEY_GETSONGBPM_API) || "").trim(); }
-    catch { return ""; }
-  }
-
-  function setGetSongBpmApiKey(value) {
-    const next = String(value || "").trim();
-    try {
-      if (next) localStorage.setItem(KEY_GETSONGBPM_API, next);
-      else localStorage.removeItem(KEY_GETSONGBPM_API);
-    } catch { }
-
-    window.__GETSONGBPM_API_KEY = next;
-    window.dispatchEvent(new CustomEvent("pulsecolor:getSongBpmApiKeyChanged", {
-      detail: { hasKey: !!next, storageKey: KEY_GETSONGBPM_API }
-    }));
-  }
 
   /* ===================== settings button injection ===================== */
   function findSettingsUl() {
@@ -851,55 +825,6 @@
       return li;
     }
 
-    function makeTextInputLi(title, desc, value, placeholder, onChange, opts = {}) {
-      const li = document.createElement("li");
-      li.className = "Settings_item__Ksa9h";
-      if (opts.gated) li.setAttribute("data-pcw-gated", "1");
-
-      const root = document.createElement("div");
-      root.className = "SettingsListToggleItem_root__yEEYT";
-      root.style.alignItems = "center";
-      root.style.gap = "14px";
-
-      const titleId = makeId(title);
-      const text = makeTextContainer(titleId, title, desc);
-      text.style.flex = "1 1 auto";
-      text.style.minWidth = "0";
-      root.appendChild(text);
-
-      const input = document.createElement("input");
-      input.className = "pcw-api-input";
-      input.type = "password";
-      input.autocomplete = "off";
-      input.spellcheck = false;
-      input.value = String(value || "");
-      input.placeholder = placeholder || "";
-      input.setAttribute("aria-describedby", titleId);
-
-      let timer = 0;
-      const commit = () => {
-        if (timer) clearTimeout(timer);
-        timer = 0;
-        try { onChange(input.value); } catch { }
-      };
-
-      input.addEventListener("input", () => {
-        if (li.getAttribute(DISABLED_ATTR) === "1") return;
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(commit, 300);
-      });
-
-      input.addEventListener("change", commit);
-      input.addEventListener("keydown", (e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") commit();
-      });
-
-      root.appendChild(input);
-      li.appendChild(root);
-      return li;
-    }
-
     function makeRangeLi(title, desc, value, step, min, max, onChange, disabled = false, opts = {}) {
       const li = document.createElement("li");
       li.className = "Settings_item__Ksa9h";
@@ -1106,20 +1031,6 @@
             ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
             continue;
           }
-
-          if (it.type === "text") {
-
-            if (it.key === "__GETSONGBPM_API_KEY__") {
-
-              ul.appendChild(makeTextInputLi(it.label, it.desc, getGetSongBpmApiKey(), it.placeholder || "", (v) => setGetSongBpmApiKey(v), { gated: true }));
-
-            }
-
-            continue;
-
-          }
-
-
           const hasRange = it.min != null && it.max != null;
           if (hasRange) {
             ul.appendChild(
@@ -1152,20 +1063,6 @@
           ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
           continue;
         }
-
-        if (it.type === "text") {
-
-          if (it.key === "__GETSONGBPM_API_KEY__") {
-
-            ul.appendChild(makeTextInputLi(it.label, it.desc, getGetSongBpmApiKey(), it.placeholder || "", (v) => setGetSongBpmApiKey(v), { gated: true }));
-
-          }
-
-          continue;
-
-        }
-
-
         const hasRange = it.min != null && it.max != null;
         if (hasRange) {
           ul.appendChild(
@@ -1232,24 +1129,6 @@
   color:rgba(255,255,255,.96);
 }
 #${PORTAL_ID} li.pcw-disabled .pcw-choice-btn {
-  pointer-events:none !important;
-}
-#${PORTAL_ID} .pcw-api-input {
-  width:180px;
-  max-width:42%;
-  border:1px solid rgba(255,255,255,.10);
-  border-radius:12px;
-  background:rgba(255,255,255,.06);
-  color:rgba(255,255,255,.94);
-  padding:9px 12px;
-  outline:none;
-  font:13px/1.2 monospace;
-}
-#${PORTAL_ID} .pcw-api-input:focus {
-  border-color:rgba(255,255,255,.24);
-  background:rgba(255,255,255,.10);
-}
-#${PORTAL_ID} li.pcw-disabled .pcw-api-input {
   pointer-events:none !important;
 }
     `.trim();
