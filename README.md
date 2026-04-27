@@ -2,21 +2,15 @@
 
 PulseColor — это ребрендинг аддона [Colorize 2](https://github.com/Imperiadicks/Colorize-2).
 
-### Что нового
+# API
 
-1. Изменения в работе волны
+<a href="https://getsongbpm.com/">GetSongBPM</a> — используется для поиска BPM по названию трека и артисту.
 
-2. Добавления настройки для волны в интерфейсе ЯМ
- 
----
+<a href="https://api.deezer.com/">Deezer API</a> — используется для поиска трека, получения preview, ISRC и дополнительных данных о релизе.
 
-### Что планируется на близжащее время 
+<a href="https://reccobeats.com/docs/documentation/Analysis/audio-features-extraction">ReccoBeats</a> — используется для анализа preview-аудио и получения tempo/BPM.
 
-1. Изменить настройки, под интерефейс ЯМ
-
-2. Добавить анимации на изображение в [VIBE_ANIMATION]
-
-3. Добавления исклюзивного OpenBlocker для этой темы
+<a href="https://music.yandex.ru/">Yandex Music</a> — используется только как источник metadata текущего трека внутри приложения. Аудио из Яндекс Музыки не отправляется во внешние API.
 
 ---
 ## Большая благодарнасть проекту [PulseSync](https://pulsesync.dev/) за предоставление возможности создания тем 

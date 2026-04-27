@@ -51,15 +51,64 @@
   });
 
   /*──────────────────────── cover helpers ───────────────────*/
+  const COVER_IMAGE_SELECTORS = [
+    'div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img',
+    '[data-test-id="FULLSCREEN_PLAYER_MODAL"] img[data-test-id="ENTITY_COVER_IMAGE"]',
+    'img[data-test-id="ENTITY_COVER_IMAGE"]',
+    'img[class*="AlbumCover_cover__"][src*="avatars.yandex.net/get-music-content"]',
+    'img[class*="AlbumCover_cover__"][srcset*="avatars.yandex.net/get-music-content"]',
+    'img[src*="avatars.yandex.net/get-music-content"]',
+    'img[srcset*="avatars.yandex.net/get-music-content"]'
+  ];
+
+  const coverSrcFromImg = (img) => {
+    if (!img) return '';
+    return img.currentSrc || img.src || (img.getAttribute && (img.getAttribute('src') || '')) || '';
+  };
+
+  const coverScore = (img) => {
+    if (!img || !img.isConnected) return -1;
+
+    const src = coverSrcFromImg(img);
+    if (!src) return -1;
+
+    const cls = String(img.className || '');
+    const rect = img.getBoundingClientRect?.() || { width: 0, height: 0, top: 0, bottom: 0 };
+    const style = getComputedStyle(img);
+    const visible = rect.width > 20 && rect.height > 20 && style.display !== 'none' && style.visibility !== 'hidden';
+
+    let score = 0;
+    if (visible) score += 120;
+    if (src.includes('avatars.yandex.net/get-music-content')) score += 90;
+    if (cls.includes('AlbumCover_cover__')) score += 70;
+    if (img.closest?.('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [class*="PlayerBar"], [class*="playerBar"]')) score += 130;
+    if (img.closest?.('[data-test-id="FULLSCREEN_PLAYER_MODAL"]')) score += 100;
+    if (rect.top > window.innerHeight * 0.52 || rect.bottom > window.innerHeight * 0.70) score += 35;
+    if (rect.width <= 260 && rect.height <= 260) score += 12;
+
+    return score;
+  };
+
+  const getCoverNode = () => {
+    const nodes = new Set();
+
+    for (const selector of COVER_IMAGE_SELECTORS) {
+      try {
+        document.querySelectorAll(selector).forEach((img) => nodes.add(img));
+      } catch {}
+    }
+
+    return Array.from(nodes)
+      .filter((img) => coverScore(img) >= 0)
+      .sort((a, b) => coverScore(b) - coverScore(a))[0] || null;
+  };
+
+  const normalizeCoverURL = (src, size = '1000x1000') => String(src || '')
+    .replace(/\/(?:50x50|80x80|100x100|200x200|300x300|400x400|800x800|1000x1000)(?=[/?]|$)/g, `/${size}`);
+
   const coverURL = () => {
-    const imgMini = document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img');
-    if (imgMini?.src) return imgMini.src;
-
-    const imgFull = document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"] img[data-test-id="ENTITY_COVER_IMAGE"]');
-    if (imgFull?.src) return imgFull.src;
-
-    const any = document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
-    return any?.src || null;
+    const src = coverSrcFromImg(getCoverNode());
+    return src ? normalizeCoverURL(src, '400x400') : null;
   };
 
   const CANVAS = document.createElement('canvas');
@@ -645,11 +694,6 @@
       display: none;
     }
 
-    .FullscreenPlayerDesktopContent_syncLyrics__6dTfH {
-      margin-block-end: 0;
-      height: 100vh;
-    }
-
     .FullscreenPlayerDesktop_poster_withSyncLyricsAnimation__bPO0o.FullscreenPlayerDesktop_important__dGfiL,
     .SyncLyricsCard_root__92qn_ {
       inset-block-end: 35px !important;
@@ -893,9 +937,8 @@
   let lastPageURL = location.href;
 
   async function getHiResCover() {
-    const img = document.querySelector('[class*="PlayerBarDesktopWithBackgroundProgressBar_cover"] img');
-    if (img && img.src.includes('/100x100')) return img.src.replace('/100x100', '/1000x1000');
-    return img?.src || null;
+    const src = coverSrcFromImg(getCoverNode());
+    return src ? normalizeCoverURL(src, '1000x1000') : null;
   }
 
   function backgroundReplace(imageURL) {
@@ -1114,12 +1157,6 @@
     });
   }
 
-  function getCoverNode() {
-    return document.querySelector('div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"] img')
-      || document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"] img[data-test-id="ENTITY_COVER_IMAGE"]')
-      || document.querySelector('img[data-test-id="ENTITY_COVER_IMAGE"]');
-  }
-
   function bindCoverObserver() {
     const node = getCoverNode();
     if (coverObserver?.__node === node) return;
@@ -1129,14 +1166,14 @@
 
     coverObserver = new MutationObserver((muts) => {
       for (const m of muts) {
-        if (m.type === 'attributes' && m.attributeName === 'src') {
+        if (m.type === 'attributes' && (m.attributeName === 'src' || m.attributeName === 'srcset')) {
           scheduleSync({ force: true, bg: true });
           break;
         }
       }
     });
     coverObserver.__node = node;
-    coverObserver.observe(node, { attributes: true, attributeFilter: ['src'] });
+    coverObserver.observe(node, { attributes: true, attributeFilter: ['src', 'srcset'] });
   }
 
   function bindVibeObserver() {
@@ -1156,8 +1193,9 @@
 
   function isRelevantNode(node) {
     if (!node || node.nodeType !== 1) return false;
-    if (node.matches?.('[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]')) return true;
-    return !!node.querySelector?.('[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]');
+    const relevantSelector = '[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], img[class*="AlbumCover_cover__"], img[src*="avatars.yandex.net/get-music-content"], img[srcset*="avatars.yandex.net/get-music-content"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]';
+    if (node.matches?.(relevantSelector)) return true;
+    return !!node.querySelector?.(relevantSelector);
   }
 
   function bindTreeObserver() {

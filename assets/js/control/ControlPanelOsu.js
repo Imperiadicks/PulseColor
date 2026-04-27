@@ -11,7 +11,6 @@
 
   const KEY_LOG = "osuLogEnabled";
   const KEY_BPM = "osuShowBPM";
-
   const KEY_CFG = "PulseColor.BeatDriverConfig.v1";
 
   const DEFAULT_CFG = {
@@ -23,9 +22,15 @@
 
     TH_RMS: 0.000001,
     MIN_CONF: 0.35,
+    AUDIO_HOLD_MS: 180,
 
     KICK_COOLDOWN_MS: 45,
     VOICE_COOLDOWN_MS: 60,
+    BPM_STRONG_BEAT_THR: 0.145,
+    BPM_STRONG_BEAT_RATIO: 1.22,
+    BPM_STRONG_BEAT_MIN_MS: 240,
+    BPM_RESYNC_WINDOW_MS: 180,
+    BPM_MOTION_RESET_GAIN: 0.72,
 
     VOICE_EVENT_THR: 0.10,
     VOICE_IMPULSE_GAIN: 1.20,
@@ -186,7 +191,7 @@
           type: "choice",
           key: "WAVE_DRIVE_MODE",
           label: "Источник движения",
-          desc: "BPM — ждём новый BPM от ИИ и блокируем запуск до ответа или 5 сек. RAW — сразу слушаем аудио и не отправляем AI-запросы.",
+          desc: "BPM — ищем BPM через API-провайдеры из кода. Если BPM не найден или API не ответил — волна уходит в RAW. RAW — сразу слушаем аудио без сетевого BPM-поиска.",
           options: [
             { value: "raw", label: "RAW" },
             { value: "bpm", label: "BPM" }
@@ -291,7 +296,14 @@
     return cfg;
   }
 
-  function persistCfg() {
+  let __pcwPersistTimer = 0;
+
+  function flushPersistCfg() {
+    if (__pcwPersistTimer) {
+      clearTimeout(__pcwPersistTimer);
+      __pcwPersistTimer = 0;
+    }
+
     try {
       const cfg = ensureBeatConfig();
       const out = {};
@@ -299,6 +311,22 @@
       localStorage.setItem(KEY_CFG, JSON.stringify(out));
       window.dispatchEvent(new CustomEvent("pulsecolor:beatDriverConfigChanged", { detail: { cfg } }));
     } catch { }
+  }
+
+  function persistCfg(opts = {}) {
+    const immediate = opts?.immediate !== false;
+    const delay = Math.max(16, Number(opts?.delay) || 120);
+
+    if (immediate) {
+      flushPersistCfg();
+      return;
+    }
+
+    if (__pcwPersistTimer) clearTimeout(__pcwPersistTimer);
+    __pcwPersistTimer = setTimeout(() => {
+      __pcwPersistTimer = 0;
+      flushPersistCfg();
+    }, delay);
   }
 
   function getCfgValue(key) {
@@ -312,10 +340,10 @@
     return !!v;
   }
 
-  function setCfgValue(key, value) {
+  function setCfgValue(key, value, opts = {}) {
     const cfg = ensureBeatConfig();
     cfg[key] = value;
-    persistCfg();
+    persistCfg(opts);
 
     if (key === "ENABLE_CUSTOM_WAVE") updateCustomWave(true);
   }
@@ -431,6 +459,7 @@
     return (localStorage.getItem(KEY_BPM) ?? "1") !== "0";
   }
 
+
   /* ===================== settings button injection ===================== */
   function findSettingsUl() {
     return (
@@ -529,6 +558,14 @@
   /* ===================== modal ===================== */
   let __modalOnEsc = null;
 
+  function setSettingsOpenState(isOpen) {
+    const next = !!isOpen;
+    window.__PCW_SETTINGS_OPEN__ = next;
+    try {
+      window.dispatchEvent(new CustomEvent("pulsecolor:waveSettingsOpenChanged", { detail: { open: next } }));
+    } catch { }
+  }
+
   function closeModal() {
     const portal = document.getElementById(PORTAL_ID);
     const dialog = portal?.querySelector("#_r_mh_");
@@ -540,18 +577,21 @@
     }
 
     if (!portal) {
+      setSettingsOpenState(false);
       unlockPageInteraction();
       return;
     }
 
     animateModalOut(portal, dialog, backdrop, () => {
       portal.remove();
+      setSettingsOpenState(false);
       unlockPageInteraction();
     });
   }
 
   function openModal() {
     if (document.getElementById(PORTAL_ID)) return;
+    setSettingsOpenState(true);
 
     const TITLE_CLASS =
       '_MWOVuZRvUQdXKTMcOPx LezmJlldtbHWqU7l1950 oyQL2RSmoNbNQf3Vc6YI V3WU123oO65AxsprotU9 Vi7Rd0SZWqD17F0872TB SettingsListToggleItem_title__Xz8_Q';
@@ -832,17 +872,39 @@
 
       applyVisual(input.value);
 
-      const commit = () => {
+      let inputCommitTimer = 0;
+      let lastInputValue = vInit;
+
+      const emitChange = (phase = "input", value = input.value) => {
         if (li.getAttribute(DISABLED_ATTR) === "1") return;
 
-        const n = Number(input.value);
+        const n = Number(value);
         if (!Number.isFinite(n)) return;
         applyVisual(n);
-        try { onChange(n); } catch { }
+        try { onChange(n, { phase }); } catch { }
       };
 
-      input.addEventListener("input", commit);
-      input.addEventListener("change", commit);
+      const scheduleInputCommit = () => {
+        lastInputValue = Number(input.value);
+        if (inputCommitTimer) return;
+        inputCommitTimer = setTimeout(() => {
+          inputCommitTimer = 0;
+          emitChange("input", lastInputValue);
+        }, 50);
+      };
+
+      input.addEventListener("input", () => {
+        applyVisual(input.value);
+        scheduleInputCommit();
+      });
+
+      input.addEventListener("change", () => {
+        if (inputCommitTimer) {
+          clearTimeout(inputCommitTimer);
+          inputCommitTimer = 0;
+        }
+        emitChange("change", input.value);
+      });
 
       wrap.appendChild(valueLabel);
       wrap.appendChild(input);
@@ -969,7 +1031,6 @@
             ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
             continue;
           }
-
           const hasRange = it.min != null && it.max != null;
           if (hasRange) {
             ul.appendChild(
@@ -980,7 +1041,7 @@
                 it.step,
                 it.min,
                 it.max,
-                (n) => setCfgValue(it.key, n),
+                (n, meta) => setCfgValue(it.key, n, { immediate: meta?.phase === "change", delay: 140 }),
                 false,
                 { gated: true }
               )
@@ -1002,7 +1063,6 @@
           ul.appendChild(makeChoiceLi(it.label, it.desc, getCfgValue(it.key), it.options || [], (v) => setCfgValue(it.key, String(v)), { gated: true }));
           continue;
         }
-
         const hasRange = it.min != null && it.max != null;
         if (hasRange) {
           ul.appendChild(
@@ -1013,7 +1073,7 @@
               it.step,
               it.min,
               it.max,
-              (n) => setCfgValue(it.key, n),
+              (n, meta) => setCfgValue(it.key, n, { immediate: meta?.phase === "change", delay: 140 }),
               false,
               { gated: true }
             )

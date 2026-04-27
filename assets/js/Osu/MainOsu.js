@@ -1,8 +1,25 @@
 /* ========================== Вспомогательно: true, если реально есть звук ========================== */
 function __audioOn() {
-  const rms = (window.__OSU__?.rms || 0);
-  const thr = (window.BeatDriverConfig?.TH_RMS || 0.000001) * 1.2;
-  return rms > thr;
+  const nowTs = performance.now();
+  const cfg = window.BeatDriverConfig || {};
+  const rms = +(window.__OSU__?.rms || 0);
+  const kickEnv = +(window.__OSU__?.kickEnv || 0);
+  const voiceEnv = +(window.__OSU__?.voiceEnv || 0);
+  const thr = Math.max(1e-7, +(cfg.TH_RMS || 0.000001));
+  const holdMs = Math.max(60, +(cfg.AUDIO_HOLD_MS || 180));
+
+  const audible = (
+    rms > thr * 1.35 ||
+    kickEnv > 0.082 ||
+    voiceEnv > 0.050
+  );
+
+  if (audible) {
+    __audioOn.__lastOnTs = nowTs;
+    return true;
+  }
+
+  return (nowTs - (__audioOn.__lastOnTs || 0)) < holdMs;
 }
 
 function __mediaPlaying() {
@@ -57,6 +74,16 @@ function __mediaPlaying() {
   if (uiPlaying === false) return false;
 
   return (nowTs - (__mediaPlaying.__lastOnTs || 0)) < 420;
+}
+
+
+
+function __pcwSettingsOpen() {
+  try {
+    return !!window.__PCW_SETTINGS_OPEN__ || !!document.getElementById('pulsecolor-wave-settings-portal');
+  } catch {
+    return false;
+  }
 }
 
 /* ========================== AUDIOTAP v2 ========================== */
@@ -318,7 +345,7 @@ function __mediaPlaying() {
   let lastRetempo = 0;
   let bpmSource = 'none';
 
-  const isExternalSource = () => bpmSource === 'ai' || bpmSource === 'cache' || bpmSource === 'external';
+  const isExternalSource = () => bpmSource === 'getsongbpm' || bpmSource === 'cache' || bpmSource === 'external';
 
   const now = () => performance.now();
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -359,7 +386,9 @@ function __mediaPlaying() {
     const kickStr = Math.sqrt(low / (nL || 1));
     const voiceStr = Math.sqrt(mid / (nM || 1));
 
-    // непрерывная огибающая голоса (EMA)
+    // непрерывные огибающие
+    OSU.kickEnv = (OSU.kickEnv ?? 0) * 0.90 + kickStr * 0.10;
+    OSU.kickLevel = kickStr;
     OSU.voiceEnv = (OSU.voiceEnv ?? 0) * 0.92 + voiceStr * 0.08;
     OSU.voiceLevel = voiceStr;
 
@@ -384,7 +413,7 @@ function __mediaPlaying() {
       if (d > 0) f += (d / 255) * w;
       lastSpec[i] = spec[i];
     }
-    return f;
+    return { flux: f, kickStr, voiceStr };
   }
 
   function localFluxThresh() {
@@ -424,14 +453,94 @@ function __mediaPlaying() {
 
   function dispatch(name, detail) { window.dispatchEvent(new CustomEvent(name, { detail })); }
 
+  let lastStrongBeatT = 0;
+
+  function getStrongBeatMinGap() {
+    const cfg = window.BeatDriverConfig || {};
+    const base = Math.max(120, +(cfg.BPM_STRONG_BEAT_MIN_MS || 240));
+    if (!(locked && periodMs > 0)) return base;
+    return Math.max(base, Math.min(periodMs * 0.52, 320));
+  }
+
+  function isStrongBeatCandidate({ t, isPeak, flux, thr, kickStr, audible }) {
+    if (!isPeak || !audible) return false;
+
+    const cfg = window.BeatDriverConfig || {};
+    const strongThr = +(cfg.BPM_STRONG_BEAT_THR ?? 0.145);
+    const strongRatio = +(cfg.BPM_STRONG_BEAT_RATIO ?? 1.22);
+    const kickEnv = +(OSU.kickEnv || 0);
+    const fluxFloor = Math.max((Number.isFinite(thr) ? thr : 0) * 0.82, 0.03);
+
+    if ((t - lastStrongBeatT) < getStrongBeatMinGap()) return false;
+
+    return kickStr >= Math.max(strongThr, kickEnv * strongRatio) && flux >= fluxFloor;
+  }
+
+  function resyncClockFromStrongBeat(detail) {
+    if (!detail || !(locked && periodMs > 0)) return false;
+
+    const cfg = window.BeatDriverConfig || {};
+    const t = +detail.time || now();
+    const snapWindow = Math.max(50, +(cfg.BPM_RESYNC_WINDOW_MS || 180));
+
+    if (nextBeat && bpmClockRunning) {
+      const prevGrid = nextBeat - periodMs;
+      const nearest = Math.abs(t - prevGrid) <= Math.abs(nextBeat - t) ? prevGrid : nextBeat;
+      const delta = t - nearest;
+      if (Math.abs(delta) > Math.max(snapWindow, periodMs * 0.45)) return false;
+    }
+
+    bpmClockRunning = true;
+    lastBeatT = t;
+    nextBeat = t + periodMs;
+
+    const payload = {
+      ...detail,
+      bpm,
+      beatIndex: ++beatIndex,
+      downbeat: (beatIndex % 4) === 1,
+      confidence: conf,
+      strong: true,
+      resynced: true
+    };
+    dispatch('osu-beat', payload);
+    dispatch('osu-beat-visual', payload);
+    return true;
+  }
+
   function loop() {
     bindAnalyser();
     const t = now();
     if (!analyser) { requestAnimationFrame(loop); return; }
 
-    const f = spectralFlux(); pushFlux(t, f);
+    const analysis = spectralFlux();
+    const f = analysis?.flux || 0;
+    pushFlux(t, f);
     const thr = localFluxThresh();
-    const isPeak = f > thr && (f - (fluxBuf.at(-2) || 0)) > 0;
+    const prevFlux = fluxBuf.length > 1 ? fluxBuf[fluxBuf.length - 2] : 0;
+    const isPeak = f > thr && (f - prevFlux) > 0;
+    const audible = (__audioOn?.() ?? true);
+    let strongBeatDetail = null;
+
+    if (isStrongBeatCandidate({
+      t,
+      isPeak,
+      flux: f,
+      thr,
+      kickStr: analysis?.kickStr || 0,
+      audible
+    })) {
+      lastStrongBeatT = t;
+      strongBeatDetail = {
+        time: t,
+        bpm: bpm || null,
+        confidence: conf,
+        strength: +(analysis?.kickStr || 0),
+        flux: f,
+        strong: true
+      };
+      dispatch('osu-strong-beat', strongBeatDetail);
+    }
 
     if (isPeak && (t - lastOnsetT) >= CFG.gateHoldMs) {
       lastOnsetT = t;
@@ -457,24 +566,32 @@ function __mediaPlaying() {
       if (!bpmDrive) {
         lastBeatT = t;
         if (locked && !isExternalSource()) { nextBeat = t + periodMs; }
-        const payload = { time: t, bpm: bpm || null, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+        const payload = {
+          time: t,
+          bpm: bpm || null,
+          beatIndex: ++beatIndex,
+          downbeat: (beatIndex % 4) === 1,
+          confidence: conf,
+          strong: !!strongBeatDetail,
+          strength: +(analysis?.kickStr || 0),
+          flux: f
+        };
         dispatch('osu-beat', payload);
         dispatch('osu-beat-visual', payload);
       }
     }
 
     const bpmDrive = isBpmWaveDrive();
-    const mediaPlaying = (typeof __mediaPlaying === 'function')
-      ? __mediaPlaying()
-      : (__audioOn?.() ?? true);
+    const audioAudible = audible;
 
     if (locked && periodMs > 0) {
       if (bpmDrive) {
-        if (mediaPlaying) {
+        if (audioAudible) {
+          if (strongBeatDetail) resyncClockFromStrongBeat(strongBeatDetail);
           if (!bpmClockRunning || !nextBeat) nextBeat = t + Math.min(periodMs, 120);
           bpmClockRunning = true;
           while (t >= nextBeat) {
-            const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+            const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf, strong: false, resynced: false };
             dispatch('osu-beat', payload);
             dispatch('osu-beat-visual', payload);
             nextBeat += periodMs;
@@ -482,9 +599,9 @@ function __mediaPlaying() {
         } else {
           bpmClockRunning = false;
         }
-      } else if (isExternalSource() || (__audioOn?.() ?? true)) {
+      } else if (isExternalSource() || audioAudible) {
         while (t >= nextBeat) {
-          const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf };
+          const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf, strong: false, resynced: false };
           dispatch('osu-beat', payload);
           dispatch('osu-beat-visual', payload);
           nextBeat += periodMs;
@@ -530,7 +647,7 @@ function __mediaPlaying() {
   OsuBeat.retune = ({ presetBpm, source = 'external' } = {}) => {
     if (!presetBpm) return;
     const b = clamp(Math.round(presetBpm), CFG.bpmMin, CFG.bpmMax);
-    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs; bpmClockRunning = false; bpmSource = source || 'external';
+    bpm = b; periodMs = 60000 / b; locked = true; conf = Math.max(conf, 0.50); nextBeat = now() + periodMs; bpmClockRunning = false; bpmSource = source || 'external'; lastStrongBeatT = 0;
   };
 
   OsuBeat.preset = (presetBpm, options = {}) => {
@@ -540,7 +657,7 @@ function __mediaPlaying() {
     const source = opts.source || 'external';
     const lock = opts.lock !== false;
     bpm = b; periodMs = 60000 / b; locked = !!lock; conf = Math.max(conf, lock ? 0.50 : 0.20);
-    nextBeat = now() + periodMs; beatIndex = 0; bpmClockRunning = false; bpmSource = source;
+    nextBeat = now() + periodMs; beatIndex = 0; bpmClockRunning = false; bpmSource = source; lastStrongBeatT = 0;
   };
   OsuBeat.reset = () => {
     fluxBuf = []; timeBuf = [];
@@ -550,7 +667,7 @@ function __mediaPlaying() {
     locked = false; conf = 0;
     nextBeat = 0; beatIndex = 0;
     bpmClockRunning = false;
-    lastRetempo = 0; bpmSource = 'none';
+    lastRetempo = 0; bpmSource = 'none'; lastStrongBeatT = 0;
   };
 
   requestAnimationFrame(loop);
@@ -571,13 +688,10 @@ function __mediaPlaying() {
   };
   const isBpmWaveDriveForVisuals = () => getWaveDriveModeForVisuals() === 'bpm';
   const beatVisualActive = () => {
-    if (!isBpmWaveDriveForVisuals()) return audioActive();
+    if (!isBpmWaveDriveForVisuals()) return false;
     const bpm = +(window.OsuBeat?.bpm?.() || 0);
     const minConf = +(window.BeatDriverConfig?.MIN_CONF ?? 0.35);
-    const mediaPlaying = (typeof __mediaPlaying === 'function')
-      ? __mediaPlaying()
-      : audioActive();
-    return mediaPlaying && !!bpm && getConf() >= minConf;
+    return audioActive() && !!bpm && getConf() >= minConf;
   };
 
   const onBeat = (e) => {
@@ -585,9 +699,11 @@ function __mediaPlaying() {
     const c = getConf();
     const weight = 0.6 + 0.4 * clamp(c, 0, 1);
     const down = !!e.detail?.downbeat;
+    const strong = !!e.detail?.strong || !!e.detail?.resynced;
     const cfg = window.BeatDriverConfig || {};
     const base = down ? (cfg.BEAT_IMPULSE_DOWN || 0) : (cfg.BEAT_IMPULSE || 0);
-    impKick += base * weight * (cfg.OUTER_GAIN || 1);
+    const strongMul = strong ? (1.20 + Math.min(0.55, (+e.detail?.strength || 0) * 1.35)) : 1;
+    impKick += base * weight * (cfg.OUTER_GAIN || 1) * strongMul;
 
     try {
       const outer = document.getElementById('osu-pulse-outer');
@@ -636,7 +752,7 @@ function __mediaPlaying() {
       const soft = (x, k = 0.9) => Math.tanh(x * k);
 
       const ph = window.OsuBeat?.phase?.() ?? 0;
-      const breath = Math.sin(ph * 2 * Math.PI) * 0.008;
+      const breath = bpmDrive ? Math.sin(ph * 2 * Math.PI) * 0.008 : 0;
       const rms = bpmDrive ? 0 : Math.min(1, Math.max(0, (window.__OSU__?.rms || 0) * 3.0));
       const micro = rms * 0.006;
 
@@ -752,6 +868,31 @@ function __mediaPlaying() {
     S.ty += Math.sin(ang) * kick;
   });
 
+  window.addEventListener('osu-strong-beat', (e) => {
+    const waveMode = window.PulseColorWaveMode?.getEffectiveMode?.() || String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase();
+    if (waveMode !== 'bpm') return;
+    if (!(typeof __audioOn === 'function' ? __audioOn() : true)) return;
+
+    const cfg = window.BeatDriverConfig || {};
+    const radius = +(cfg.MOTION_STRENGTH || 8);
+    const gain = +(cfg.BPM_MOTION_RESET_GAIN || 0.72);
+    const strength = Math.min(1.25, Math.max(0.18, (+e.detail?.strength || 0) * 2.2));
+    const amp = radius * gain * strength;
+    const sign = (S.__flip = (S.__flip || 1) * -1);
+    const angle = ((S.__lastStrongAngle || 0) + (Math.PI * (0.72 + Math.random() * 0.22)) * sign);
+    S.__lastStrongAngle = angle;
+
+    S.tx = Math.cos(angle) * amp;
+    S.ty = Math.sin(angle) * amp * 0.88;
+    S.dx = S.tx * 0.36;
+    S.dy = S.ty * 0.36;
+    S.vx = 0;
+    S.vy = 0;
+    S.vxLP = 0;
+    S.vyLP = 0;
+    S.breath = 0;
+  });
+
   // ────────────────── helpers для гладкого шумового движения ──────────────────
   const SEED_X = 11.37, SEED_Y = 29.51;
   const fract = x => x - Math.floor(x);
@@ -780,8 +921,8 @@ function __mediaPlaying() {
       ? __mediaPlaying()
       : audioOn;
     const moving = !!cfg.MOTION_ENABLED && (bpmDrive
-      ? (mediaPlaying && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
-      : (audioOn || (!!bpm && conf >= (cfg.MIN_CONF ?? 0.35))));
+      ? (audioOn && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
+      : audioOn);
 
     // масштабы из драйвера (и одновременно тайминг распадов)
     const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
@@ -853,11 +994,14 @@ function __mediaPlaying() {
       if (rO > R) { const s = R / rO; S.dx *= s; S.dy *= s; }
 
       // 3) «дыхание» по BPM (медленно и плавно)
-      if (bpm) {
+      if (bpmDrive && bpm) {
         const omega = (Math.PI * 2) * (bpm / 60) * (0.22 + 0.4 * speed);
         const aimB = Math.sin(t * omega) * R * 0.22;
         const bL = 1 - Math.exp(-dtSec / 0.50);
         S.breath += (aimB - S.breath) * bL;
+      } else {
+        const bL = 1 - Math.exp(-dtSec / 0.28);
+        S.breath += (0 - S.breath) * bL;
       }
     }
 
