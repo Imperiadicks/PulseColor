@@ -40,7 +40,6 @@
     INNER_GAIN: 1.00,
 
     BRIGHTNESS_BASE: 1.00,
-    OFFSET_X_VW: 3,
 
     OUTER_MIN_SCALE: 0.94,
     OUTER_MAX_SCALE: 1.60,
@@ -263,12 +262,11 @@
     },
     {
       group: "Движение волны",
-      hint: "Смещение единой волны: пружина + мягкий дрейф без дополнительного inner-слоя.",
+      hint: "Движение единой волны внутри статичного увеличенного блока: пружина + мягкий дрейф без дополнительного inner-слоя.",
       items: [
         { type: "toggle", key: "MOTION_ENABLED", label: "Включить движение волны", desc: "Двигает основную волну как единый слой, без создания второй волны." },
         { key: "MOTION_STRENGTH", label: "Сила движения (px)", step: 1, min: 0, max: 150 },
         { key: "MOTION_SPEED", label: "Скорость движения", step: 0.01, min: 0.05, max: 1.0 },
-        { key: "OFFSET_X_VW", label: "Смещение вправо (vw)", step: 0.1, min: 0, max: 20 },
         { key: "BEAT_LEAD_MS", label: "Опережение удара (мс)", step: 1, min: 0, max: 200 },
         { type: "toggle", key: "UNIFIED_MODE", label: "Единый режим (оба кольца одинаково)", desc: "Обе шкалы масштаба объединяются в одну." },
       ],

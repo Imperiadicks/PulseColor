@@ -1244,9 +1244,23 @@ function __pcwSettingsOpen() {
   // ── DOM ──────────────────────────────────────────────────────────────
   let root = document.getElementById('osu-pulse');
   if (!root) { root = document.createElement('div'); root.id = 'osu-pulse'; document.body.appendChild(root); }
+  root.style.removeProperty('transform');
+
+  const applyViewportWaveLayerBounds = (node) => {
+    if (!node?.style) return;
+    node.style.position = 'absolute';
+    node.style.inset = 'auto';
+    node.style.left = '25vw';
+    node.style.right = '25vw';
+    node.style.top = '25vh';
+    node.style.bottom = '25vh';
+    node.style.pointerEvents = 'none';
+    node.style.transformOrigin = '50% 50%';
+  };
 
   let outer = document.getElementById('osu-pulse-outer');
   if (!outer) { outer = document.createElement('div'); outer.id = 'osu-pulse-outer'; root.appendChild(outer); }
+  applyViewportWaveLayerBounds(outer);
 
   // Раньше inner был отдельным полноэкранным radial-gradient слоем.
   // При включении движения это выглядело как вторая волна поверх основной.
@@ -1259,9 +1273,10 @@ function __pcwSettingsOpen() {
   if (!ringHost) {
     ringHost = document.createElement('div');
     ringHost.id = 'osu-pulse-rings';
-    ringHost.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
     root.appendChild(ringHost);
   }
+  applyViewportWaveLayerBounds(ringHost);
+  ringHost.style.willChange = 'transform';
 
   // Glow-слой (яркость > 2 усиливает свечение)
   let glow = document.getElementById('osu-pulse-glow');
@@ -1269,7 +1284,7 @@ function __pcwSettingsOpen() {
     glow = document.createElement('div');
     glow.id = 'osu-pulse-glow';
     glow.style.cssText = `
-      position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen;
+      position:absolute; pointer-events:none; mix-blend-mode:screen;
       opacity:0; filter:blur(0px);
       background:
         radial-gradient(circle at 50% 55%,
@@ -1279,6 +1294,7 @@ function __pcwSettingsOpen() {
       will-change: opacity, filter;`;
     root.appendChild(glow);
   }
+  applyViewportWaveLayerBounds(glow);
 
   // ──────────────────────────────── Состояние движения ────────────────────────────────────────────
   if (!window.__pmState)
@@ -1421,8 +1437,6 @@ function __pcwSettingsOpen() {
       ? clamp(((Math.max(scales.outer, scales.inner) - 1) * 4.2) + conf * 0.15, 0, 1)
       : clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
     const alpha = waveActive ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
-    const offsetVW = (cfg.OFFSET_X_VW || 1);
-
     const renderBright = interactionActive ? 1 : bright;
     const renderAlpha = alpha;
 
@@ -1499,14 +1513,16 @@ function __pcwSettingsOpen() {
     }
 
     // ── применяем трансформы ──
-    // Движение больше не создаёт отдельную inner-волну.
-    // Пульс outer/inner объединяется в один видимый слой, а смещение применяется ко всей волне.
+    // Корневой блок волны больше экрана в 1.5 раза и остаётся статичным.
+    // Движение применяется только к видимым слоям внутри него, без отдельной inner-волны и без правого смещения.
     const moveX = moving ? S.dx : 0;
     const moveY = moving ? (S.dy + (S.breath || 0)) : 0;
+    const moveTransform = `translate3d(${moveX.toFixed(2)}px, ${moveY.toFixed(2)}px, 0)`;
     const visibleScale = Math.max(scales.outer || 1, scales.inner || 1);
 
-    setStyleCached(root, 'transform', `translate3d(calc(${offsetVW}vw + ${moveX.toFixed(2)}px), ${moveY.toFixed(2)}px, 0)`);
-    setStyleCached(outer, 'transform', `scale(${visibleScale.toFixed(4)})`);
+    setStyleCached(outer, 'transform', `${moveTransform} scale(${visibleScale.toFixed(4)})`);
+    setStyleCached(ringHost, 'transform', moveTransform);
+    setStyleCached(glow, 'transform', moveTransform);
 
     if (inner) {
       setStyleCached(inner, 'display', 'none');

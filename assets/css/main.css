@@ -126,19 +126,36 @@
 /* ─────────────────── Волна ─────────────────── */
 
 #osu-pulse{
-  position:fixed; inset:0; z-index:5; pointer-events:none; contain:layout paint;
+  position:fixed;
+  left:50%;
+  top:50%;
+  width:150vw;
+  height:150vh;
+  z-index:5;
+  pointer-events:none;
+  contain:layout paint;
   opacity: var(--osu-alpha, .04);
   filter: brightness(var(--osu-bright, 1));
-  transform: translate3d(var(--osu-offset-xvw, 1vw), 0, 0);
-  will-change: transform, opacity;
+  transform: translate3d(-50%, -50%, 0);
+  will-change: opacity, filter;
   isolation: isolate;
   transition: none;
 }
 
-#osu-pulse-outer, #osu-pulse-inner{
-  position:absolute; inset:0; pointer-events:none;
+#osu-pulse-outer,
+#osu-pulse-inner,
+#osu-pulse-rings,
+#osu-pulse-glow{
+  position:absolute;
+  inset:auto !important;
+  left:25vw !important;
+  right:25vw !important;
+  top:25vh !important;
+  bottom:25vh !important;
+  pointer-events:none;
   will-change: transform, opacity;
   transform: translate3d(0, 0, 0);
+  transform-origin: 50% 50%;
   transition: none;
 }
 

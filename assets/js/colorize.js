@@ -336,21 +336,21 @@
       l: clamp(tuned.l + (mode === 'light' ? 8 : 16), 4, 98)
     };
 
-    vars['--grad-main'] = `linear-gradient(135deg, ${H(gradFrom)} 0%, ${H(gradTo)} 100%)`;
+    vars['--grad-main-from'] = H(gradFrom);
+    vars['--grad-main-to'] = H(gradTo);
+    vars['--grad-main'] = 'linear-gradient(135deg, var(--grad-main-from) 0%, var(--grad-main-to) 100%)';
     return vars;
   };
 
 
-  const PALETTE_ANIMATION_MS = 820;
-  const PALETTE_FRAME_MS = 34;
+  const PALETTE_ANIMATION_MS = 920;
+  const PALETTE_TRANSITION_EASING = 'cubic-bezier(.22, 1, .36, 1)';
 
   const cloneHSL = (o) => ({
     h: ((+o.h % 360) + 360) % 360,
     s: +(+o.s).toFixed(1),
     l: +(+o.l).toFixed(1)
   });
-
-  const easePalette = (t) => 1 - Math.pow(1 - t, 3);
 
   const mixHue = (from, to, t) => {
     const delta = ((to - from + 540) % 360) - 180;
@@ -369,6 +369,51 @@
       && Math.abs(a.s - b.s) < 0.15
       && Math.abs(a.l - b.l) < 0.15;
   };
+
+  const COLORIZE_PALETTE_KEYS = (() => {
+    const keys = ['--grad-main-from', '--grad-main-to'];
+
+    for (let i = 1; i <= 10; i++) {
+      keys.push(`--color-light-${i}`);
+      keys.push(`--color-dark-${i}`);
+
+      for (let a = 1; a <= 10; a++) {
+        keys.push(`--color-light-${i}-${a}`);
+        keys.push(`--color-dark-${i}-${a}`);
+      }
+    }
+
+    return keys;
+  })();
+
+  const paletteEndpointName = (key, side) => `--pc-${String(key).replace(/^--/, '')}-${side}`;
+
+  const buildPaletteAliasBlock = () => COLORIZE_PALETTE_KEYS.map((key) => {
+    const from = paletteEndpointName(key, 'from');
+    const to = paletteEndpointName(key, 'to');
+    return `  ${key}: color-mix(in hsl, var(${from}, var(${to}, transparent)) var(--pc-palette-from-weight, 0%), var(${to}, var(${from}, transparent)) var(--pc-palette-to-weight, 100%));`;
+  }).join('\n');
+
+  const COLORIZE_DIRECT_PALETTE_KEYS = COLORIZE_PALETTE_KEYS.concat('--grad-main');
+
+  const arePaletteVarsSame = (a, b) => {
+    if (!a || !b) return false;
+    return COLORIZE_PALETTE_KEYS.every((key) => String(a[key] || '') === String(b[key] || ''));
+  };
+
+  const COLORIZE_TRANSITION_CSS = (() => {
+    return `
+.ym-dark-theme,
+.ym-light-theme {
+  --pc-palette-progress: 100%;
+  --pc-palette-from-weight: 0%;
+  --pc-palette-to-weight: 100%;
+${buildPaletteAliasBlock()}
+  --grad-main: linear-gradient(135deg, var(--grad-main-from) 0%, var(--grad-main-to) 100%);
+}
+`;
+  })();
+
 
   /*──────────────────────── YM MAPS ───────────────────────*/
   const YM_DARK_MAP = `
@@ -854,6 +899,7 @@
       filter: saturate(.82) brightness(1.01);
     }
 
+
     .ym-light-theme .CommonLayout_root__WC_W1,
     .ym-light-theme .WithTopBanner_root__P__x3,
     .ym-light-theme .Navbar_root__chfAR,
@@ -896,29 +942,236 @@
     }
   `;
 
-  const applyVars = ({ dark, light }) => {
-    let st = document.getElementById('colorize-style');
+  const buildThemeMapBlock = (selector, map) => `${selector}{\n${map}\n}\n`;
+
+  const ensureStaticColorizeStyle = () => {
+    let st = document.getElementById('colorize-static-style');
     if (!st) {
       st = document.createElement('style');
-      st.id = 'colorize-style';
+      st.id = 'colorize-static-style';
       document.head.appendChild(st);
     }
 
-    const buildThemeBlock = (selector, vars, map) => {
-      let out = `${selector}{\n`;
-      Object.entries(vars).forEach(([k, v]) => {
-        out += `  ${k}: ${v} !important;\n`;
-      });
-      out += map + '\n}\n';
-      return out;
-    };
-
     const css =
-      buildThemeBlock('.ym-dark-theme', dark, YM_DARK_MAP) +
-      buildThemeBlock('.ym-light-theme', light, YM_LIGHT_MAP) +
+      COLORIZE_TRANSITION_CSS + '\n' +
+      buildThemeMapBlock('.ym-dark-theme', YM_DARK_MAP) +
+      buildThemeMapBlock('.ym-light-theme', YM_LIGHT_MAP) +
       THEME_CSS_SHARED;
 
-    st.textContent = css;
+    if (st.textContent !== css) st.textContent = css;
+
+    const oldDynamicStyle = document.getElementById('colorize-style');
+    if (oldDynamicStyle) oldDynamicStyle.remove();
+  };
+
+  const lastInlinePalette = {
+    dark: null,
+    light: null,
+    retryTimer: 0,
+    settleTimer: 0
+  };
+
+  const activePaletteTransitions = new WeakMap();
+
+  const cleanupDirectPaletteVars = (node) => {
+    COLORIZE_DIRECT_PALETTE_KEYS.forEach((key) => node.style.removeProperty(key));
+  };
+
+  const writePaletteEndpoints = (node, vars, side) => {
+    COLORIZE_PALETTE_KEYS.forEach((key) => {
+      const value = vars?.[key];
+      if (value == null) return;
+      node.style.setProperty(paletteEndpointName(key, side), String(value), 'important');
+    });
+  };
+
+  const setPaletteProgress = (node, progress) => {
+    const p = clamp(progress, 0, 1);
+    const to = +(p * 100).toFixed(3);
+    const from = +(100 - to).toFixed(3);
+
+    node.style.setProperty('--pc-palette-progress', `${to}%`, 'important');
+    node.style.setProperty('--pc-palette-from-weight', `${from}%`, 'important');
+    node.style.setProperty('--pc-palette-to-weight', `${to}%`, 'important');
+  };
+
+  const parsePaletteColor = (value) => {
+    const raw = String(value || '').trim();
+    const m = raw.match(/^hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+    if (!m) return null;
+
+    return {
+      h: +m[1],
+      s: +m[2],
+      l: +m[3],
+      a: m[4] == null ? 1 : +m[4],
+      alpha: m[4] != null
+    };
+  };
+
+  const formatPaletteColor = (color, alphaMode = false) => {
+    const h = Math.round(((color.h % 360) + 360) % 360);
+    const s = +clamp(color.s, 0, 100).toFixed(1);
+    const l = +clamp(color.l, 0, 100).toFixed(1);
+    const a = +clamp(color.a == null ? 1 : color.a, 0, 1).toFixed(3);
+
+    return alphaMode || a < 1
+      ? `hsla(${h}, ${s}%, ${l}%, ${a})`
+      : `hsl(${h}, ${s}%, ${l}%)`;
+  };
+
+  const mixPaletteValue = (fromValue, toValue, progress) => {
+    if (String(fromValue || '') === String(toValue || '')) return toValue;
+
+    const from = parsePaletteColor(fromValue);
+    const to = parsePaletteColor(toValue);
+    if (!from || !to) return progress < 0.5 ? fromValue : toValue;
+
+    return formatPaletteColor({
+      h: mixHue(from.h, to.h, progress),
+      s: from.s + (to.s - from.s) * progress,
+      l: from.l + (to.l - from.l) * progress,
+      a: from.a + (to.a - from.a) * progress
+    }, from.alpha || to.alpha);
+  };
+
+  const mixPaletteVars = (fromVars, toVars, progress) => {
+    const out = {};
+    COLORIZE_PALETTE_KEYS.forEach((key) => {
+      out[key] = mixPaletteValue(fromVars?.[key], toVars?.[key], progress);
+    });
+    out['--grad-main'] = 'linear-gradient(135deg, var(--grad-main-from) 0%, var(--grad-main-to) 100%)';
+    return out;
+  };
+
+  const easePaletteProgress = (t) => {
+    const p = clamp(t, 0, 1);
+    return 1 - Math.pow(1 - p, 3);
+  };
+
+  const stopPaletteTransition = (node) => {
+    const active = activePaletteTransitions.get(node);
+    if (active?.raf) cancelAnimationFrame(active.raf);
+    activePaletteTransitions.delete(node);
+  };
+
+  const getCurrentPaletteVars = (node, fallbackVars) => {
+    const active = activePaletteTransitions.get(node);
+    if (!active) return fallbackVars;
+    return mixPaletteVars(active.fromVars, active.toVars, active.progress || 0);
+  };
+
+  const bakePaletteEndpoints = (selector, vars) => {
+    if (!vars || typeof vars !== 'object') return;
+
+    document.querySelectorAll(selector).forEach((node) => {
+      stopPaletteTransition(node);
+      cleanupDirectPaletteVars(node);
+      writePaletteEndpoints(node, vars, 'from');
+      writePaletteEndpoints(node, vars, 'to');
+      setPaletteProgress(node, 1);
+      node.classList.remove('pc-color-palette-reset');
+    });
+  };
+
+  const startPaletteCrossfade = (node, fromVars, toVars) => {
+    stopPaletteTransition(node);
+    cleanupDirectPaletteVars(node);
+    writePaletteEndpoints(node, fromVars, 'from');
+    writePaletteEndpoints(node, toVars, 'to');
+    setPaletteProgress(node, 0);
+    node.classList.remove('pc-color-palette-reset');
+
+    const state = {
+      fromVars,
+      toVars,
+      progress: 0,
+      startedAt: 0,
+      raf: 0
+    };
+
+    activePaletteTransitions.set(node, state);
+
+    const step = (now) => {
+      if (!state.startedAt) state.startedAt = now;
+
+      const raw = clamp((now - state.startedAt) / PALETTE_ANIMATION_MS, 0, 1);
+      const eased = easePaletteProgress(raw);
+
+      state.progress = eased;
+      setPaletteProgress(node, eased);
+
+      if (raw < 1) {
+        state.raf = requestAnimationFrame(step);
+        return;
+      }
+
+      cleanupDirectPaletteVars(node);
+      writePaletteEndpoints(node, toVars, 'from');
+      writePaletteEndpoints(node, toVars, 'to');
+      setPaletteProgress(node, 1);
+      activePaletteTransitions.delete(node);
+    };
+
+    state.raf = requestAnimationFrame(step);
+  };
+
+  const applyInlineThemeVars = (selector, nextVars, prevVars) => {
+    if (!nextVars || typeof nextVars !== 'object') return 0;
+
+    const nodes = document.querySelectorAll(selector);
+    const hasPrev = !!prevVars;
+
+    nodes.forEach((node) => {
+      const fromVars = hasPrev ? getCurrentPaletteVars(node, prevVars) : nextVars;
+      const shouldAnimate = hasPrev && !arePaletteVarsSame(fromVars, nextVars);
+
+      if (!shouldAnimate) {
+        stopPaletteTransition(node);
+        cleanupDirectPaletteVars(node);
+        writePaletteEndpoints(node, nextVars, 'from');
+        writePaletteEndpoints(node, nextVars, 'to');
+        setPaletteProgress(node, 1);
+        node.classList.remove('pc-color-palette-reset');
+        return;
+      }
+
+      startPaletteCrossfade(node, fromVars, nextVars);
+    });
+
+    return nodes.length;
+  };
+
+  const retryInlineThemeVars = () => {
+    clearTimeout(lastInlinePalette.retryTimer);
+
+    lastInlinePalette.retryTimer = setTimeout(() => {
+      if (!lastInlinePalette.dark || !lastInlinePalette.light) return;
+
+      applyInlineThemeVars('.ym-dark-theme', lastInlinePalette.dark, null);
+      applyInlineThemeVars('.ym-light-theme', lastInlinePalette.light, null);
+    }, 180);
+  };
+
+  const applyVars = ({ dark, light }) => {
+    ensureStaticColorizeStyle();
+
+    const prevDark = lastInlinePalette.dark;
+    const prevLight = lastInlinePalette.light;
+
+    const darkCount = applyInlineThemeVars('.ym-dark-theme', dark, prevDark);
+    const lightCount = applyInlineThemeVars('.ym-light-theme', light, prevLight);
+
+    lastInlinePalette.dark = dark;
+    lastInlinePalette.light = light;
+
+    clearTimeout(lastInlinePalette.settleTimer);
+    lastInlinePalette.settleTimer = setTimeout(() => {
+      bakePaletteEndpoints('.ym-dark-theme', lastInlinePalette.dark);
+      bakePaletteEndpoints('.ym-light-theme', lastInlinePalette.light);
+    }, PALETTE_ANIMATION_MS + 120);
+
+    if (!darkCount || !lightCount) retryInlineThemeVars();
   };
 
 
@@ -954,32 +1207,15 @@
       return;
     }
 
-    const startedAt = performance.now();
-    let lastPaint = startedAt;
     const token = ++paletteAnimationToken;
 
-    const step = (now) => {
+    // Не пересобираем промежуточные палитры от base-цвета.
+    // applyVars ставит from/to-переменные, а переход двигается одной общей прогресс-переменной.
+    paletteAnimationFrame = requestAnimationFrame(() => {
       if (token !== paletteAnimationToken) return;
-
-      const elapsed = now - startedAt;
-      const progress = Math.min(1, elapsed / PALETTE_ANIMATION_MS);
-      const eased = easePalette(progress);
-
-      if (progress >= 1 || now - lastPaint >= PALETTE_FRAME_MS) {
-        lastPaint = now;
-        applyBasePalette(mixBase(from, target, eased));
-      }
-
-      if (progress < 1) {
-        paletteAnimationFrame = requestAnimationFrame(step);
-        return;
-      }
-
       paletteAnimationFrame = 0;
       applyBasePalette(target);
-    };
-
-    paletteAnimationFrame = requestAnimationFrame(step);
+    });
   };
 
   function ensureGradientOverlay() {
