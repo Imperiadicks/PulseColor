@@ -434,8 +434,8 @@
 
         ul.appendChild(
             makeToggleLi(
-                "FullVibe (увеличить главную)",
-                "Включает FullVibe() (растягивает блок Моей Волны).",
+                "FullVibe (ванильная Моя Волна)",
+                "Растягивает старый блок Моей Волны. В экспериментальном интерфейсе не меняет высоту, чтобы не скрывать экран.",
                 !!core.enableFullVibe,
                 (v) => setCore({ enableFullVibe: !!v })
             )
@@ -458,10 +458,52 @@
     }
 
     // init
+    const SETTINGS_MUTATION_SELECTOR = '.SettingsPage_content__cR6Ra, [class*="SettingsPage_content"], [class*="SettingsListButtonItem"], [class*="SettingsList"]';
+    let injectTimer = 0;
+
     function tickInject() { try { injectSettingsButton(); } catch { } }
-    const mo = new MutationObserver(() => tickInject());
+
+    function scheduleInject(delay = 160) {
+        if (injectTimer) return;
+        injectTimer = window.setTimeout(() => {
+            injectTimer = 0;
+            if (!document.getElementById(ITEM_ID)) tickInject();
+        }, delay);
+    }
+
+    function isSettingsMutationNode(node) {
+        if (!node || node.nodeType !== 1) return false;
+        try {
+            if (node.matches?.(SETTINGS_MUTATION_SELECTOR)) return true;
+            const cls = typeof node.className === "string" ? node.className : "";
+            if (cls.includes("SettingsPage") || cls.includes("SettingsList")) return true;
+            return !!node.querySelector?.(SETTINGS_MUTATION_SELECTOR);
+        } catch {
+            return false;
+        }
+    }
+
+    function hasSettingsMutation(muts) {
+        for (const m of muts) {
+            if (isSettingsMutationNode(m.target)) return true;
+            for (const n of m.addedNodes || []) {
+                if (isSettingsMutationNode(n)) return true;
+            }
+        }
+        return false;
+    }
+
+    const mo = new MutationObserver((muts) => {
+        if (document.getElementById(ITEM_ID)) return;
+        if (hasSettingsMutation(muts)) scheduleInject();
+    });
+
     mo.observe(document.documentElement, { childList: true, subtree: true });
     tickInject();
+
+    document.addEventListener("DOMContentLoaded", () => scheduleInject(0), { once: true });
+    window.addEventListener("popstate", () => scheduleInject(220));
+    window.addEventListener("hashchange", () => scheduleInject(220));
 
     // export for debug
     window.PulseColorCoreUI = Object.assign(window.PulseColorCoreUI || {}, { open: openModal, close: closeModal, getCore, setCore });

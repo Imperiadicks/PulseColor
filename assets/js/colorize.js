@@ -89,7 +89,21 @@
     return score;
   };
 
+  let coverNodeCache = null;
+  let coverNodeCacheTime = 0;
+
   const getCoverNode = () => {
+    const now = performance.now?.() || Date.now();
+
+    if (
+      coverNodeCache &&
+      coverNodeCache.isConnected &&
+      coverSrcFromImg(coverNodeCache) &&
+      now - coverNodeCacheTime < 180
+    ) {
+      return coverNodeCache;
+    }
+
     const nodes = new Set();
 
     for (const selector of COVER_IMAGE_SELECTORS) {
@@ -98,9 +112,12 @@
       } catch {}
     }
 
-    return Array.from(nodes)
+    coverNodeCache = Array.from(nodes)
       .filter((img) => coverScore(img) >= 0)
       .sort((a, b) => coverScore(b) - coverScore(a))[0] || null;
+    coverNodeCacheTime = now;
+
+    return coverNodeCache;
   };
 
   const normalizeCoverURL = (src, size = '1000x1000') => String(src || '')
@@ -116,11 +133,16 @@
   const CTX = CANVAS.getContext('2d', { willReadFrequently: true });
   const CACHE = new Map();
 
-  const normL = o => ({
-    ...o,
-    s: clamp(o.s, 8, 92),
-    l: clamp(o.l, 18, 82)
-  });
+  const normL = o => {
+    const neutral = (+o.s || 0) <= 4;
+
+    return {
+      ...o,
+      h: neutral ? 0 : o.h,
+      s: neutral ? 0 : clamp(o.s, 8, 92),
+      l: neutral ? clamp(o.l, 28, 92) : clamp(o.l, 18, 82)
+    };
+  };
 
   const colorsFromCover = (src) => {
     if (CACHE.has(src)) return Promise.resolve(CACHE.get(src));
@@ -141,6 +163,8 @@
           const d = CTX.getImageData(0, 0, 64, 64).data;
           const hueMap = new Map();
           let count = 0;
+          let neutralBrightCount = 0;
+          let neutralBrightL = 0;
 
           for (let y = 0; y < 64; y++) {
             for (let x = 0; x < 64; x++) {
@@ -150,9 +174,16 @@
               const b = d[idx + 2];
               const sum = r + g + b;
 
-              if (sum < 36 || sum > 738) continue;
+              if (sum < 36) continue;
 
               const hsl = rgb2hsl(r, g, b);
+
+              if (hsl.l >= 68 && hsl.s <= 18) {
+                neutralBrightCount += 1;
+                neutralBrightL += hsl.l;
+              }
+
+              if (sum > 738) continue;
               if (hsl.s < 14) continue;
 
               const hueKey = Math.round(hsl.h / 8) * 8;
@@ -163,6 +194,24 @@
               hueMap.set(hueKey, cur);
               count += 1;
             }
+          }
+
+          const neutralTotal = count + neutralBrightCount;
+          const neutralRatio = neutralBrightCount / Math.max(1, neutralTotal);
+
+          if (
+            neutralBrightCount >= 90 &&
+            (neutralRatio >= 0.22 || count < neutralBrightCount * 1.8)
+          ) {
+            const neutral = normL({
+              h: 0,
+              s: 0,
+              l: clamp(neutralBrightL / neutralBrightCount, 72, 90)
+            });
+            const result = [neutral, neutral];
+            CACHE.set(src, result);
+            res(result);
+            return;
           }
 
           if (!count) {
@@ -210,6 +259,24 @@
 
   /*──────────────────────── palette & vars ────────────────*/
   const tuneBaseForTheme = (base, mode = 'dark') => {
+    const neutral = (+base.s || 0) <= 2;
+
+    if (neutral) {
+      if (mode === 'light') {
+        return {
+          h: 0,
+          s: 0,
+          l: +clamp(base.l * 0.94, 78, 92).toFixed(1)
+        };
+      }
+
+      return {
+        h: 0,
+        s: 0,
+        l: +clamp(base.l * 0.46, 34, 48).toFixed(1)
+      };
+    }
+
     if (mode === 'light') {
       return {
         h: base.h,
@@ -228,19 +295,22 @@
   const buildVars = (base, mode = 'dark') => {
     const tuned = tuneBaseForTheme(base, mode);
     const vars = {};
+    const neutral = (+tuned.s || 0) <= 2;
+    const minSat = neutral ? 0 : 8;
+    const maxSat = neutral ? 0 : 72;
 
     for (let i = 1; i <= 10; i++) {
       const p = i / 10;
 
       const lightColor = {
-        h: tuned.h,
-        s: clamp(tuned.s - p * (mode === 'light' ? 5 : 4), 8, 72),
+        h: neutral ? 0 : tuned.h,
+        s: clamp(tuned.s - p * (mode === 'light' ? 5 : 4), minSat, maxSat),
         l: clamp(tuned.l + (98 - tuned.l) * p, 4, 98)
       };
 
       const darkColor = {
-        h: tuned.h,
-        s: clamp(tuned.s - p * (mode === 'light' ? 3.5 : 8), 8, 72),
+        h: neutral ? 0 : tuned.h,
+        s: clamp(tuned.s - p * (mode === 'light' ? 3.5 : 8), minSat, maxSat),
         l: clamp(tuned.l - (tuned.l - (mode === 'light' ? 10 : 4)) * p, 2, 96)
       };
 
@@ -255,14 +325,14 @@
     }
 
     const gradFrom = {
-      h: tuned.h,
-      s: clamp(tuned.s + (mode === 'light' ? 8 : 0), 4, 76),
+      h: neutral ? 0 : tuned.h,
+      s: neutral ? 0 : clamp(tuned.s + (mode === 'light' ? 8 : 0), 4, 76),
       l: clamp(tuned.l - (mode === 'light' ? 6 : 12), 4, 96)
     };
 
     const gradTo = {
-      h: tuned.h,
-      s: clamp(tuned.s - (mode === 'light' ? 4 : 2), 4, 76),
+      h: neutral ? 0 : tuned.h,
+      s: neutral ? 0 : clamp(tuned.s - (mode === 'light' ? 4 : 2), 4, 76),
       l: clamp(tuned.l + (mode === 'light' ? 8 : 16), 4, 98)
     };
 
@@ -941,16 +1011,75 @@
     return src ? normalizeCoverURL(src, '1000x1000') : null;
   }
 
+  function getVibeNode() {
+    const nodes = [...document.querySelectorAll('[class*="MainPage_vibe"]')]
+      .filter(node => node && node.nodeType === 1 && node.isConnected);
+
+    if (!nodes.length) return null;
+
+    return nodes.find(hasLegacyVibeMarkers) || nodes.find(node => {
+      const rect = node.getBoundingClientRect?.();
+      const style = getComputedStyle(node);
+      return rect && rect.width > 0 && rect.height >= 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    }) || nodes[0];
+  }
+
+  function hasLegacyVibeMarkers(vibe) {
+    if (!vibe || !vibe.querySelector) return false;
+
+    const legacySelectors = [
+      '[class*="VibeBlock_"]',
+      '[class*="VibeAnimation_"]',
+      '[data-test-id="MY_VIBE_PLAY_BUTTON"]',
+      '[data-test-id*="VIBE"]',
+      '[aria-label*="Моя волна"]',
+      '[aria-label*="волна" i]'
+    ];
+
+    for (const selector of legacySelectors) {
+      try {
+        if (vibe.querySelector(selector)) return true;
+      } catch {}
+    }
+
+    return false;
+  }
+
+  function syncVibeModeClass(vibe) {
+    const isLegacy = hasLegacyVibeMarkers(vibe);
+    document.body?.classList.toggle('pulsecolor-legacy-vibe', !!isLegacy);
+    document.body?.classList.toggle('pulsecolor-modern-vibe', !!vibe && !isLegacy);
+    return isLegacy;
+  }
+
+  function resetFullVibeHeight(vibe = getVibeNode()) {
+    if (!vibe) return;
+    vibe.style.removeProperty('height');
+    vibe.style.removeProperty('min-height');
+    vibe.style.removeProperty('max-height');
+    delete vibe.dataset.pulsecolorFullVibe;
+  }
+
   function backgroundReplace(imageURL) {
-    const target = document.querySelector('[class*="MainPage_vibe"]');
-    if (!target || !imageURL || imageURL === lastBackgroundURL) return;
+    const target = getVibeNode();
+    if (!target || !imageURL) return;
+
+    const hasCurrentLayer = !!target.querySelector('.bg-layer .bg-cover');
+    if ((imageURL === lastBackgroundURL || target.dataset.pulsecolorBgUrl === imageURL) && hasCurrentLayer) {
+      lastBackgroundURL = imageURL;
+      target.dataset.pulsecolorBgUrl = imageURL;
+      return;
+    }
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = imageURL;
 
     img.onload = () => {
+      if (!target.isConnected) return;
+
       lastBackgroundURL = imageURL;
+      target.dataset.pulsecolorBgUrl = imageURL;
 
       const wrapper = document.createElement('div');
       wrapper.className = 'bg-layer';
@@ -1004,6 +1133,7 @@
 
   function removeBackgroundImage() {
     document.querySelectorAll('.bg-layer').forEach(layer => {
+      try { delete layer.closest?.('[class*="MainPage_vibe"]')?.dataset?.pulsecolorBgUrl; } catch {}
       layer.style.opacity = '0';
       layer.style.transition = 'opacity .6s ease';
       setTimeout(() => layer.remove(), 700);
@@ -1012,13 +1142,27 @@
   }
 
   function FullVibe() {
-    const v = document.querySelector('[class*="MainPage_vibe"]');
-    if (v) v.style.setProperty('height', '88.35vh', 'important');
+    const v = getVibeNode();
+    if (!v) return;
+
+    const isLegacy = syncVibeModeClass(v);
+
+    if (!isLegacy) {
+      resetFullVibeHeight(v);
+      v.dataset.pulsecolorFullVibe = 'modern-skip';
+      return;
+    }
+
+    v.dataset.pulsecolorFullVibe = 'legacy-full';
+    v.style.setProperty('height', '88.35vh', 'important');
   }
 
   function RemoveFullVibe() {
-    const v = document.querySelector('[class*="MainPage_vibe"]');
-    if (v) v.style.setProperty('height', '0', 'important');
+    const v = getVibeNode();
+    if (!v) return;
+
+    syncVibeModeClass(v);
+    resetFullVibeHeight(v);
   }
 
   const CORE_KEY = 'PulseColor.CoreSettings.v1';
@@ -1051,7 +1195,7 @@
 
     try {
       if (!CORE.enableBackgroundImage) removeBackgroundImage();
-      else tryInjectBackground?.();
+      else scheduleSync?.({ bg: true });
     } catch {}
   }
 
@@ -1063,7 +1207,7 @@
     const core = e?.detail?.core;
     applyCoreSettings(core);
     try {
-      recolor?.(true);
+      scheduleSync?.({ force: true, bg: true });
     } catch {}
   });
 
@@ -1126,35 +1270,46 @@
   let vibeObserver = null;
   let treeObserver = null;
 
-  function scheduleSync({ force = false, bg = false } = {}) {
+  function runWhenIdle(fn, timeout = 900) {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(fn, { timeout });
+      return;
+    }
+
+    window.setTimeout(fn, 0);
+  }
+
+  function scheduleSync({ force = false, bg = false, delay = 160 } = {}) {
     syncForce = syncForce || !!force;
     syncNeedBg = syncNeedBg || !!bg;
     if (syncFrame) return;
 
-    syncFrame = requestAnimationFrame(async () => {
+    syncFrame = window.setTimeout(() => {
       syncFrame = 0;
 
-      if (syncRunning) {
-        scheduleSync({ force: syncForce, bg: syncNeedBg });
-        return;
-      }
+      runWhenIdle(async () => {
+        if (syncRunning) {
+          scheduleSync({ force: syncForce, bg: syncNeedBg, delay: 120 });
+          return;
+        }
 
-      const runForce = syncForce;
-      const runBg = syncNeedBg;
-      syncForce = false;
-      syncNeedBg = false;
-      syncRunning = true;
+        const runForce = syncForce;
+        const runBg = syncNeedBg;
+        syncForce = false;
+        syncNeedBg = false;
+        syncRunning = true;
 
-      try {
-        if (runBg) await tryInjectBackground();
-        await recolor(runForce || runBg);
-      } catch (e) {
-        LOG('sync error', e);
-      } finally {
-        syncRunning = false;
-        if (syncForce || syncNeedBg) scheduleSync({ force: syncForce, bg: syncNeedBg });
-      }
-    });
+        try {
+          if (runBg) await tryInjectBackground();
+          await recolor(runForce || runBg);
+        } catch (e) {
+          LOG('sync error', e);
+        } finally {
+          syncRunning = false;
+          if (syncForce || syncNeedBg) scheduleSync({ force: syncForce, bg: syncNeedBg, delay: 120 });
+        }
+      });
+    }, delay);
   }
 
   function bindCoverObserver() {
@@ -1177,7 +1332,7 @@
   }
 
   function bindVibeObserver() {
-    const vibe = document.querySelector('[class*="MainPage_vibe"]');
+    const vibe = getVibeNode();
     if (vibeObserver?.__node === vibe) return;
     if (vibeObserver) vibeObserver.disconnect();
     vibeObserver = null;
@@ -1201,6 +1356,17 @@
   function bindTreeObserver() {
     if (treeObserver) return;
 
+    let bindTimer = 0;
+
+    const scheduleObserverBind = (delay = 120) => {
+      if (bindTimer) return;
+      bindTimer = window.setTimeout(() => {
+        bindTimer = 0;
+        bindCoverObserver();
+        bindVibeObserver();
+      }, delay);
+    };
+
     treeObserver = new MutationObserver((muts) => {
       let shouldSync = false;
       let shouldBg = false;
@@ -1208,7 +1374,7 @@
       for (const m of muts) {
         if (m.type !== 'childList') continue;
 
-        for (const n of m.addedNodes) {
+        for (const n of m.addedNodes || []) {
           if (isRelevantNode(n)) {
             shouldSync = true;
             shouldBg = true;
@@ -1217,7 +1383,7 @@
         }
         if (shouldSync) break;
 
-        for (const n of m.removedNodes) {
+        for (const n of m.removedNodes || []) {
           if (isRelevantNode(n)) {
             shouldSync = true;
             shouldBg = true;
@@ -1227,10 +1393,10 @@
         if (shouldSync) break;
       }
 
-      bindCoverObserver();
-      bindVibeObserver();
+      if (!shouldSync) return;
 
-      if (shouldSync) scheduleSync({ force: true, bg: shouldBg });
+      scheduleObserverBind(120);
+      scheduleSync({ force: true, bg: shouldBg, delay: 180 });
     });
 
     treeObserver.observe(document.documentElement, { childList: true, subtree: true });
@@ -1240,9 +1406,12 @@
     const currentURL = location.href;
     if (currentURL === lastPageURL) return;
     lastPageURL = currentURL;
-    bindCoverObserver();
-    bindVibeObserver();
-    scheduleSync({ force: true, bg: true });
+
+    window.setTimeout(() => {
+      bindCoverObserver();
+      bindVibeObserver();
+      scheduleSync({ force: true, bg: true, delay: 220 });
+    }, 80);
   }
 
   function bindHistoryObserver() {
@@ -1264,7 +1433,7 @@
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);
     window.addEventListener('visibilitychange', () => {
-      if (!document.hidden) scheduleSync({ force: true, bg: true });
+      if (!document.hidden) scheduleSync({ force: true, bg: true, delay: 220 });
     });
   }
 
@@ -1278,7 +1447,6 @@
     const image = await getHiResCover();
     if (!image) return;
 
-    lastBackgroundURL = '';
     backgroundReplace(image);
   }
 

@@ -22,16 +22,55 @@ function __audioOn() {
   return (nowTs - (__audioOn.__lastOnTs || 0)) < holdMs;
 }
 
+
+function __pcwIsUsableAudio(audio) {
+  try {
+    if (!audio || !audio.isConnected) return false;
+    if (String(audio.tagName || '').toLowerCase() !== 'audio') return false;
+    if (audio.muted || Number(audio.volume || 0) <= 0) return false;
+    if (audio.ended || audio.paused) return false;
+    if ((audio.playbackRate || 1) === 0) return false;
+    if (audio.readyState < 2 && Number(audio.currentTime || 0) <= 0) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function __pcwGetActiveAudio() {
+  try {
+    const tapAudio = window.PulseColorAudioTap?.getActiveMedia?.();
+    if (__pcwIsUsableAudio(tapAudio)) return tapAudio;
+  } catch { }
+
+  try {
+    const cached = __mediaPlaying?.__audio || null;
+    if (__pcwIsUsableAudio(cached)) return cached;
+  } catch { }
+
+  try {
+    const audios = Array.from(document.querySelectorAll('audio'));
+    return audios.find(__pcwIsUsableAudio) || audios.find(a => a && a.isConnected && !a.ended && Number(a.currentTime || 0) > 0) || null;
+  } catch {
+    return null;
+  }
+}
+
+
 function __mediaPlaying() {
   const nowTs = performance.now();
+  const cached = __mediaPlaying.__cache;
 
-  const audios = Array.from(document.querySelectorAll('audio'));
-  const audioPlaying = audios.some((el) => {
-    if (!el || !el.isConnected) return false;
-    if (el.paused || el.ended) return false;
-    if ((el.playbackRate || 1) === 0) return false;
-    return (el.readyState >= 2) || (Number(el.currentTime || 0) > 0);
-  });
+  if (cached && (nowTs - cached.ts) < 350) return cached.value;
+
+  let audioPlaying = false;
+  let audio = null;
+
+  try {
+    audio = __pcwGetActiveAudio();
+    __mediaPlaying.__audio = audio || null;
+    audioPlaying = __pcwIsUsableAudio(audio);
+  } catch { }
 
   const mediaSessionPlaying = (() => {
     try {
@@ -39,21 +78,6 @@ function __mediaPlaying() {
     } catch {
       return false;
     }
-  })();
-
-  const uiPlaying = (() => {
-    try {
-      const pauseBtn = document.querySelector(
-        '[data-test-id="player-controls-pause"], [data-test-id="PLAYER_CONTROLS_PAUSE"], button[aria-label*="Пауза"], button[title*="Пауза"]'
-      );
-      if (pauseBtn) return true;
-
-      const playBtn = document.querySelector(
-        '[data-test-id="player-controls-play"], [data-test-id="PLAYER_CONTROLS_PLAY"], button[aria-label*="Слушать"], button[aria-label*="Играть"], button[title*="Слушать"], button[title*="Играть"]'
-      );
-      if (playBtn) return false;
-    } catch { }
-    return null;
   })();
 
   const rmsPlaying = (() => {
@@ -64,17 +88,19 @@ function __mediaPlaying() {
     }
   })();
 
-  const playing = audioPlaying || mediaSessionPlaying || uiPlaying === true || rmsPlaying;
+  const playing = audioPlaying || mediaSessionPlaying || rmsPlaying;
 
   if (playing) {
     __mediaPlaying.__lastOnTs = nowTs;
+    __mediaPlaying.__cache = { ts: nowTs, value: true };
     return true;
   }
 
-  if (uiPlaying === false) return false;
-
-  return (nowTs - (__mediaPlaying.__lastOnTs || 0)) < 420;
+  const value = (nowTs - (__mediaPlaying.__lastOnTs || 0)) < 420;
+  __mediaPlaying.__cache = { ts: nowTs, value };
+  return value;
 }
+
 
 
 
@@ -86,7 +112,113 @@ function __pcwSettingsOpen() {
   }
 }
 
-/* ========================== AUDIOTAP v2 ========================== */
+/* ========================== PulseColor performance guard ========================== */
+(() => {
+  const state = (window.__PulseColorPerf = window.__PulseColorPerf || {
+    interactingUntil: 0,
+    reducedMotion: false
+  });
+
+  const normalizeMode = (value) => {
+    const mode = String(value || '').trim().toLowerCase();
+    return mode === 'max' || mode === 'maximum' ? 'max' : 'efficient';
+  };
+
+  const getMode = () => normalizeMode(window.BeatDriverConfig?.WAVE_PERFORMANCE_MODE || 'efficient');
+  const isGuardEnabled = () => getMode() !== 'max';
+
+  const clearReducedMotion = () => {
+    clearTimeout(state.timer);
+    state.timer = 0;
+    state.interactingUntil = 0;
+    state.reducedMotion = false;
+    document.documentElement.classList.remove('pcw-interacting');
+  };
+
+  const clearReducedMotionWhenReady = () => {
+    clearTimeout(state.timer);
+
+    const delay = Math.max(80, (state.interactingUntil || 0) - performance.now() + 80);
+
+    state.timer = setTimeout(() => {
+      if (!isGuardEnabled()) {
+        clearReducedMotion();
+        return;
+      }
+
+      if (performance.now() < (state.interactingUntil || 0)) {
+        clearReducedMotionWhenReady();
+        return;
+      }
+
+      clearReducedMotion();
+    }, delay);
+  };
+
+  const markInteraction = (holdMs = 650) => {
+    if (!isGuardEnabled()) {
+      clearReducedMotion();
+      return;
+    }
+
+    const nowTs = performance.now();
+    state.interactingUntil = Math.max(state.interactingUntil || 0, nowTs + holdMs);
+
+    if (!state.reducedMotion) {
+      state.reducedMotion = true;
+      document.documentElement.classList.add('pcw-interacting');
+    }
+
+    if ((nowTs - (state.lastMarkTs || 0)) < 120) {
+      if (!state.timer) clearReducedMotionWhenReady();
+      return;
+    }
+
+    state.lastMarkTs = nowTs;
+    clearReducedMotionWhenReady();
+  };
+
+  const api = (window.PulseColorPerformance = window.PulseColorPerformance || {});
+  api.markInteraction = markInteraction;
+  api.clearInteraction = clearReducedMotion;
+  api.getMode = getMode;
+  api.isGuardEnabled = isGuardEnabled;
+  api.isInteracting = () => isGuardEnabled() && performance.now() < (state.interactingUntil || 0);
+
+  window.addEventListener('wheel', () => markInteraction(760), {
+    capture: true,
+    passive: true
+  });
+
+  window.addEventListener('scroll', () => markInteraction(760), {
+    capture: true,
+    passive: true
+  });
+
+  window.addEventListener('touchmove', () => markInteraction(760), {
+    capture: true,
+    passive: true
+  });
+
+  window.addEventListener('keydown', () => markInteraction(420), {
+    capture: true,
+    passive: true
+  });
+
+  window.addEventListener('pointermove', (event) => {
+    if (!event || event.buttons === 0) return;
+    markInteraction(420);
+  }, {
+    capture: true,
+    passive: true
+  });
+
+  window.addEventListener('pulsecolor:beatDriverConfigChanged', () => {
+    if (!isGuardEnabled()) clearReducedMotion();
+  });
+})();
+
+/* ========================== AUDIOTAP v3: только активный audio ========================== */
 (() => {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
@@ -94,16 +226,28 @@ function __pcwSettingsOpen() {
   const OSU = (window.__OSU__ = window.__OSU__ || {});
 
   const LOOP_HIDDEN_MS = 250;
+  const ZERO_DECAY = 0.78;
+
+  let ctxMain = null;
   let __loopRunning = false;
   let __loopHandle = 0;
   let __loopType = '';
   let __lastTick = performance.now();
+  let ema = 0;
+
+  const bundles = new Set();
+  const perCtx = new WeakMap();
+  const perMedia = new WeakMap();
+  const tappedAudio = new WeakSet();
+  const teedNodes = new WeakSet();
+  const mediaLifecycleBound = new WeakSet();
 
   function __cancelScheduled() {
     try {
       if (__loopType === 'raf' && __loopHandle) cancelAnimationFrame(__loopHandle);
       if (__loopType === 'to' && __loopHandle) clearTimeout(__loopHandle);
     } catch { }
+
     __loopHandle = 0;
     __loopType = '';
     OSU.__tapRaf = 0;
@@ -128,13 +272,17 @@ function __pcwSettingsOpen() {
 
   function __resumeCtxIfNeeded() {
     try {
-      const ctx = OSU?.ctx;
+      const ctx = ctxMain || OSU?.ctx;
       if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => { });
     } catch { }
   }
 
   function startLoop() {
-    if (__loopRunning) return;
+    if (__loopRunning) {
+      __scheduleNext();
+      return;
+    }
+
     __loopRunning = true;
     __lastTick = performance.now();
     __scheduleNext();
@@ -142,40 +290,152 @@ function __pcwSettingsOpen() {
 
   function __ensureLoopAlive() {
     const now = performance.now();
+
+    __resumeCtxIfNeeded();
+
     if (!__loopRunning) {
       startLoop();
       return;
     }
-    if ((now - __lastTick) > 2000) {
-      OSU.__tapRaf = 0;
+
+    if ((now - __lastTick) > 1200 || !OSU.__tapRaf) {
       __scheduleNext();
     }
   }
 
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      __resumeCtxIfNeeded();
-      __ensureLoopAlive();
+  function isMediaActive(el) {
+    try {
+      if (typeof __pcwIsUsableAudio === 'function') return __pcwIsUsableAudio(el);
+      return !!(
+        el &&
+        el.isConnected &&
+        String(el.tagName || '').toLowerCase() === 'audio' &&
+        !el.paused &&
+        !el.ended &&
+        !el.muted &&
+        Number(el.volume || 0) > 0 &&
+        (el.playbackRate || 1) !== 0 &&
+        (el.readyState >= 2 || Number(el.currentTime || 0) > 0)
+      );
+    } catch {
+      return false;
     }
-  });
+  }
 
-  window.addEventListener('focus', () => {
-    __resumeCtxIfNeeded();
-    __ensureLoopAlive();
-  });
+  function getKnownAudios() {
+    const out = [];
 
-  window.addEventListener('pageshow', () => {
-    __resumeCtxIfNeeded();
-    __ensureLoopAlive();
-  });
+    try {
+      document.querySelectorAll('audio').forEach((audio) => {
+        if (audio && audio.isConnected) out.push(audio);
+      });
+    } catch { }
 
-  const mediaLifecycleBound = new WeakSet();
+    return out;
+  }
+
+  function getActiveMedia() {
+    try {
+      const cached = getActiveMedia.__last;
+      if (isMediaActive(cached)) return cached;
+    } catch { }
+
+    const audios = getKnownAudios();
+
+    const active = audios.find(isMediaActive) || audios.find((audio) => {
+      try {
+        return audio && audio.isConnected && !audio.ended && Number(audio.currentTime || 0) > 0 && !audio.muted && Number(audio.volume || 0) > 0;
+      } catch {
+        return false;
+      }
+    }) || null;
+
+    getActiveMedia.__last = active;
+    return active;
+  }
+
+  function setMainBundle(b) {
+    if (!b || !b.analyser) return;
+
+    OSU.ctx = b.ctx;
+    ctxMain = b.ctx;
+    OSU.analyser = b.analyser;
+    OSU.fftBins = b.analyser.frequencyBinCount;
+    OSU.spec = b.spec;
+    OSU.timeBuf = new Uint8Array(b.analyser.fftSize);
+
+    try {
+      if (b.ctx && !b.ctx.__osuStateBound && typeof b.ctx.addEventListener === 'function') {
+        b.ctx.addEventListener('statechange', __ensureLoopAlive);
+        b.ctx.__osuStateBound = true;
+      }
+    } catch { }
+  }
+
+  function makeBundle(ctx, media = null) {
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0.55;
+
+    const b = {
+      ctx,
+      media,
+      analyser,
+      time: new Float32Array(analyser.fftSize),
+      spec: new Uint8Array(analyser.frequencyBinCount)
+    };
+
+    bundles.add(b);
+    if (!OSU.analyser || media) setMainBundle(b);
+    return b;
+  }
+
+  function ensureBundleForCtx(ctx) {
+    if (!ctx) return null;
+
+    let b = perCtx.get(ctx);
+    if (!b) {
+      b = makeBundle(ctx, null);
+      perCtx.set(ctx, b);
+      window.showLog?.('[Tap] bound WebAudio fallback analyser');
+    }
+
+    return b;
+  }
+
+  function ensureMediaBundle(ctx, media) {
+    if (!ctx || !media) return null;
+
+    let b = perMedia.get(media);
+    if (!b) {
+      b = makeBundle(ctx, media);
+      perMedia.set(media, b);
+      window.showLog?.('[Tap] bound active media analyser');
+    }
+
+    return b;
+  }
+
+  function resetAudioState() {
+    ema *= ZERO_DECAY;
+    if (ema < 0.00001) ema = 0;
+
+    OSU.rms = ema;
+    OSU.kickEnv = (OSU.kickEnv || 0) * 0.76;
+    OSU.voiceEnv = (OSU.voiceEnv || 0) * 0.76;
+    OSU.kickLevel = 0;
+    OSU.voiceLevel = 0;
+  }
+
   function attachAudioLifecycle(el) {
     if (!el || mediaLifecycleBound.has(el)) return;
     mediaLifecycleBound.add(el);
 
     const ping = () => {
       __resumeCtxIfNeeded();
+      tapMediaElement(el);
+      const b = perMedia.get(el);
+      if (b) setMainBundle(b);
       __ensureLoopAlive();
     };
 
@@ -191,133 +451,205 @@ function __pcwSettingsOpen() {
       'ratechange',
       'timeupdate'
     ].forEach(evt => el.addEventListener(evt, ping, { passive: true }));
+
+    ['pause', 'ended', 'emptied', 'stalled', 'suspend'].forEach(evt => el.addEventListener(evt, () => {
+      if (getActiveMedia() === el && !isMediaActive(el)) {
+        resetAudioState();
+        try { window.OsuBeat?.resync?.('audio-inactive'); } catch { }
+      }
+    }, { passive: true }));
   }
 
-  // already patched?
-  // Раньше тут было: if (!OSU.__tapRaf) OSU.__tapRaf = requestAnimationFrame(loop);
-  // Это ломается после фона (OSU.__tapRaf "залипает"). Теперь просто стартуем планировщик.
-  if (AudioNode.prototype.__osuTapPatched) { try { startLoop(); } catch { } return; }
-
-  let ctxMain = null;
-  const bundles = new Set();
-  const perCtx = new WeakMap();
-  const tappedAudio = new WeakSet();
-  const teedNodes = new WeakSet();
-
-  function ensureBundleForCtx(ctx) {
-    if (!ctx) return null;
-    let b = perCtx.get(ctx);
-    if (!b) {
-      const a = ctx.createAnalyser();
-      a.fftSize = 4096;
-      a.smoothingTimeConstant = 0.55;
-      b = { ctx, analyser: a, time: new Float32Array(a.fftSize), spec: new Uint8Array(a.frequencyBinCount) };
-      perCtx.set(ctx, b); bundles.add(b);
-      if (!OSU.analyser) {
-        OSU.ctx = ctx; ctxMain = ctx;
-        OSU.analyser = a;
-        OSU.fftBins = a.frequencyBinCount;
-        OSU.spec = b.spec;
-        OSU.timeBuf = new Uint8Array(a.fftSize);
-        try {
-          if (!ctx.__osuStateBound && typeof ctx.addEventListener === 'function') {
-            ctx.addEventListener('statechange', __ensureLoopAlive);
-            ctx.__osuStateBound = true;
-          }
-        } catch { }
-        window.showLog?.('[Tap] bound main analyser');
-      }
-    }
-    return b;
-  }
-
-  const origConnect = AudioNode.prototype.connect;
-  AudioNode.prototype.connect = function (dest, ...rest) {
-    const out = origConnect.call(this, dest, ...rest);
-    try {
-      const ctx = this.context || dest?.context;
-      if (dest && ctx && /Destination/i.test(dest.constructor?.name || '')) {
-        const b = ensureBundleForCtx(ctx);
-        if (b && !teedNodes.has(this)) {
-          try { origConnect.call(this, b.analyser); } catch { }
-          teedNodes.add(this);
-          startLoop();
-          window.showLog?.('[Tap] tee @dest from ' + (this.constructor?.name || 'AudioNode'));
-        }
-      }
-    } catch { }
-    return out;
-  };
-  AudioNode.prototype.__osuTapPatched = true;
-
-  // прямой захват <audio>
   function tapMediaElement(el) {
-    if (!el || tappedAudio.has(el)) return;
-    tappedAudio.add(el);
+    if (!el) return;
 
     const ctx = ctxMain || new AC();
     ctxMain = ctx;
 
-    const stream = el.captureStream?.();
-    if (stream) {
-      const src = ctx.createMediaStreamSource(stream);
-      const b = ensureBundleForCtx(ctx);
-      try { src.connect(b.analyser); } catch { }
-      startLoop();
-      window.showLog?.('[Tap] captureStream attached');
+    if (tappedAudio.has(el)) {
+      const b = perMedia.get(el);
+      if (isMediaActive(el) && b) setMainBundle(b);
       return;
     }
+
+    tappedAudio.add(el);
+
+    const b = ensureMediaBundle(ctx, el);
+    if (!b) return;
+
+    const stream = el.captureStream?.();
+    if (stream) {
+      try {
+        const src = ctx.createMediaStreamSource(stream);
+        src.connect(b.analyser);
+        startLoop();
+        window.showLog?.('[Tap] captureStream attached to active media');
+        return;
+      } catch (error) {
+        window.showLog?.('[Tap] captureStream failed: ' + (error?.name || error));
+      }
+    }
+
     try {
       const src = ctx.createMediaElementSource(el);
-      const b = ensureBundleForCtx(ctx);
       src.connect(b.analyser);
       startLoop();
-      window.showLog?.('[Tap] mediaElementSource attached');
-    } catch (e) {
-      window.showLog?.('[Tap] mediaElementSource failed: ' + e?.name);
+      window.showLog?.('[Tap] mediaElementSource attached to active media');
+    } catch (error) {
+      window.showLog?.('[Tap] mediaElementSource failed: ' + (error?.name || error));
     }
   }
-  document.querySelectorAll('audio').forEach(el => { tapMediaElement(el); attachAudioLifecycle(el); });
-  new MutationObserver(muts => {
-    for (const m of muts) {
-      m.addedNodes && m.addedNodes.forEach(n => {
-        if (n && n.nodeType === 1) {
-          if (n.tagName === 'AUDIO') {
-            tapMediaElement(n);
-            attachAudioLifecycle(n);
-          }
-          n.querySelectorAll && n.querySelectorAll('audio').forEach(el => {
-            tapMediaElement(el);
-            attachAudioLifecycle(el);
-          });
-        }
-      });
-    }
-  }).observe(document.documentElement, { childList: true, subtree: true });
-  if (OSU.ctx) ensureBundleForCtx(OSU.ctx);
 
-  // цикл анализа
-  let ema = 0;
+  if (!AudioNode.prototype.__osuTapPatched) {
+    const origConnect = AudioNode.prototype.connect;
+
+    AudioNode.prototype.connect = function (dest, ...rest) {
+      const out = origConnect.call(this, dest, ...rest);
+
+      try {
+        const ctx = this.context || dest?.context;
+        if (dest && ctx && /Destination/i.test(dest.constructor?.name || '') && !teedNodes.has(this)) {
+          const b = ensureBundleForCtx(ctx);
+          if (b) {
+            try { origConnect.call(this, b.analyser); } catch { }
+            teedNodes.add(this);
+            startLoop();
+            window.showLog?.('[Tap] tee @dest fallback from ' + (this.constructor?.name || 'AudioNode'));
+          }
+        }
+      } catch { }
+
+      return out;
+    };
+
+    AudioNode.prototype.__osuTapPatched = true;
+  }
+
+  function scanAudioNodes() {
+    getKnownAudios().forEach((el) => {
+      attachAudioLifecycle(el);
+      tapMediaElement(el);
+    });
+  }
+
+  new MutationObserver(muts => {
+    let found = false;
+
+    for (const m of muts) {
+      for (const n of m.addedNodes || []) {
+        if (!n || n.nodeType !== 1) continue;
+
+        if (String(n.tagName || '').toLowerCase() === 'audio') {
+          attachAudioLifecycle(n);
+          tapMediaElement(n);
+          found = true;
+        }
+
+        try {
+          n.querySelectorAll?.('audio').forEach((el) => {
+            attachAudioLifecycle(el);
+            tapMediaElement(el);
+            found = true;
+          });
+        } catch { }
+      }
+    }
+
+    if (found) __ensureLoopAlive();
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
   function loop() {
-    __lastTick = performance.now();
+    const tickTs = performance.now();
+    __lastTick = tickTs;
+
+    const interactionThrottleMs = window.PulseColorPerformance?.isInteracting?.() ? 48 : 0;
+    if (interactionThrottleMs && (tickTs - (loop.__lastAnalysisTs || 0)) < interactionThrottleMs) {
+      __scheduleNext();
+      return;
+    }
+    loop.__lastAnalysisTs = tickTs;
+
+    const activeMedia = getActiveMedia();
+    const activeBundle = activeMedia ? perMedia.get(activeMedia) : null;
+    const hasMediaBundles = getKnownAudios().some((audio) => perMedia.has(audio));
+
+    let readableBundles = [];
+
+    if (activeBundle && isMediaActive(activeMedia)) {
+      setMainBundle(activeBundle);
+      readableBundles = [activeBundle];
+    } else if (!hasMediaBundles) {
+      readableBundles = Array.from(bundles).filter(b => !b.media);
+      if (readableBundles[0]) setMainBundle(readableBundles[0]);
+    }
+
+    if (!readableBundles.length) {
+      resetAudioState();
+      __scheduleNext();
+      return;
+    }
 
     let maxRms = 0;
-    for (const b of bundles) {
+
+    for (const b of readableBundles) {
       try {
         b.analyser.getFloatTimeDomainData(b.time);
-        let s = 0; const t = b.time;
-        for (let i = 0; i < t.length; i++) { const v = t[i]; s += v * v; }
+
+        let s = 0;
+        const t = b.time;
+
+        for (let i = 0; i < t.length; i++) {
+          const v = t[i];
+          s += v * v;
+        }
+
         const rms = Math.sqrt(s / t.length);
-        if (rms > maxRms) maxRms = rms;
+        if (rms > maxRms) {
+          maxRms = rms;
+          setMainBundle(b);
+        }
+
         b.analyser.getByteFrequencyData(b.spec);
         if (b.analyser === OSU.analyser) OSU.spec = b.spec;
       } catch { }
     }
+
     ema = ema * 0.85 + maxRms * 0.15;
     OSU.rms = ema;
 
     __scheduleNext();
   }
+
+  const api = (window.PulseColorAudioTap = window.PulseColorAudioTap || {});
+  api.getActiveMedia = getActiveMedia;
+  api.rescan = scanAudioNodes;
+  api.resync = (reason = 'manual') => {
+    try {
+      scanAudioNodes();
+      __resumeCtxIfNeeded();
+
+      const active = getActiveMedia();
+      const b = active ? perMedia.get(active) : null;
+      if (b) setMainBundle(b);
+
+      __ensureLoopAlive();
+      window.showLog?.('[Tap] resync: ' + reason);
+    } catch { }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) api.resync('visibility');
+  });
+
+  window.addEventListener('focus', () => api.resync('focus'));
+  window.addEventListener('pageshow', () => api.resync('pageshow'));
+  window.addEventListener('pulsecolor:trackchange', () => {
+    resetAudioState();
+    setTimeout(() => api.resync('trackchange'), 80);
+  });
+
+  scanAudioNodes();
+  startLoop();
 })();
 
 /* ========================== OsuBeatClassic  ========================== */
@@ -349,6 +681,42 @@ function __pcwSettingsOpen() {
 
   const now = () => performance.now();
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+
+  function snapStaleBeatClock(t, reason = 'stale-clock') {
+    if (!(locked && periodMs > 0)) return false;
+
+    const maxLag = Math.max(1200, periodMs * 2.5);
+    const maxLead = Math.max(2400, periodMs * 6);
+
+    if (!nextBeat || (t - nextBeat) > maxLag || (nextBeat - t) > maxLead) {
+      nextBeat = t + Math.min(periodMs, 140);
+      lastBeatT = t;
+      bpmClockRunning = false;
+
+      try {
+        window.showLog?.(`[OsuBeat] resync ${reason}`);
+      } catch { }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  function emitScheduledBeat(at, strong = false, resynced = false) {
+    const payload = {
+      time: at,
+      bpm,
+      beatIndex: ++beatIndex,
+      downbeat: (beatIndex % 4) === 1,
+      confidence: conf,
+      strong,
+      resynced
+    };
+
+    dispatch('osu-beat', payload);
+    dispatch('osu-beat-visual', payload);
+  }
 
 
   const getWaveDriveMode = () => {
@@ -513,6 +881,13 @@ function __pcwSettingsOpen() {
     const t = now();
     if (!analyser) { requestAnimationFrame(loop); return; }
 
+    const interactionThrottleMs = window.PulseColorPerformance?.isInteracting?.() ? 50 : 0;
+    if (interactionThrottleMs && (t - (loop.__lastAnalysisTs || 0)) < interactionThrottleMs) {
+      requestAnimationFrame(loop);
+      return;
+    }
+    loop.__lastAnalysisTs = t;
+
     const analysis = spectralFlux();
     const f = analysis?.flux || 0;
     pushFlux(t, f);
@@ -589,22 +964,34 @@ function __pcwSettingsOpen() {
         if (audioAudible) {
           if (strongBeatDetail) resyncClockFromStrongBeat(strongBeatDetail);
           if (!bpmClockRunning || !nextBeat) nextBeat = t + Math.min(periodMs, 120);
+          snapStaleBeatClock(t, 'bpm-drive-focus');
           bpmClockRunning = true;
-          while (t >= nextBeat) {
-            const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf, strong: false, resynced: false };
-            dispatch('osu-beat', payload);
-            dispatch('osu-beat-visual', payload);
+
+          let emitted = 0;
+          while (t >= nextBeat && emitted < 4) {
+            emitScheduledBeat(nextBeat, false, false);
             nextBeat += periodMs;
+            emitted += 1;
+          }
+
+          if (t >= nextBeat) {
+            nextBeat = t + Math.min(periodMs, 140);
           }
         } else {
           bpmClockRunning = false;
         }
       } else if (isExternalSource() || audioAudible) {
-        while (t >= nextBeat) {
-          const payload = { time: nextBeat, bpm, beatIndex: ++beatIndex, downbeat: (beatIndex % 4) === 1, confidence: conf, strong: false, resynced: false };
-          dispatch('osu-beat', payload);
-          dispatch('osu-beat-visual', payload);
+        snapStaleBeatClock(t, 'scheduled-drive-focus');
+
+        let emitted = 0;
+        while (t >= nextBeat && emitted < 4) {
+          emitScheduledBeat(nextBeat, false, false);
           nextBeat += periodMs;
+          emitted += 1;
+        }
+
+        if (t >= nextBeat) {
+          nextBeat = t + Math.min(periodMs, 140);
         }
       } else {
         nextBeat = t + periodMs;
@@ -670,6 +1057,48 @@ function __pcwSettingsOpen() {
     lastRetempo = 0; bpmSource = 'none'; lastStrongBeatT = 0;
   };
 
+  OsuBeat.resync = (reason = 'manual') => {
+    const t = now();
+
+    fluxBuf = [];
+    timeBuf = [];
+    ibIs = [];
+    lastOnsetT = 0;
+    lastBeatT = t;
+    lastStrongBeatT = 0;
+    bpmClockRunning = false;
+
+    if (locked && periodMs > 0) {
+      nextBeat = t + Math.min(periodMs, 140);
+    } else {
+      nextBeat = 0;
+    }
+
+    try {
+      window.PulseColorAudioTap?.resync?.(reason);
+    } catch { }
+
+    try {
+      window.showLog?.(`[OsuBeat] resync: ${reason}`);
+    } catch { }
+  };
+
+  window.addEventListener('pulsecolor:trackchange', () => {
+    OsuBeat.resync?.('trackchange');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setTimeout(() => OsuBeat.resync?.('visibility'), 80);
+  });
+
+  window.addEventListener('focus', () => {
+    setTimeout(() => OsuBeat.resync?.('focus'), 80);
+  });
+
+  window.addEventListener('pageshow', () => {
+    setTimeout(() => OsuBeat.resync?.('pageshow'), 80);
+  });
+
   requestAnimationFrame(loop);
 })();
 
@@ -706,16 +1135,19 @@ function __pcwSettingsOpen() {
     impKick += base * weight * (cfg.OUTER_GAIN || 1) * strongMul;
 
     try {
+      if (window.PulseColorPerformance?.isInteracting?.()) return;
       const outer = document.getElementById('osu-pulse-outer');
       if (outer) {
-        outer.classList.remove('pulse'); void outer.offsetWidth;
-        outer.classList.add('pulse');
-        setTimeout(() => outer && outer.classList.remove('pulse'), 480);
+        outer.classList.remove('pulse');
+        requestAnimationFrame(() => {
+          if (!outer.isConnected) return;
+          outer.classList.add('pulse');
+          setTimeout(() => outer && outer.classList.remove('pulse'), 480);
+        });
       }
     } catch { }
   };
   window.addEventListener('osu-beat-visual', onBeat);
-  window.addEventListener('osu-beat', onBeat);
 
   window.addEventListener('osu-kick', (e) => {
     if (isBpmWaveDriveForVisuals()) return;
@@ -831,6 +1263,7 @@ function __pcwSettingsOpen() {
   function spawnRing(detail) {
     const bpm = window.OsuBeat?.bpm?.();
     if (!bpm) return;
+    if (window.PulseColorPerformance?.isInteracting?.()) return;
 
     while (rings.length >= MAX_RINGS) { const r = rings.shift(); r?.el?.remove(); }
     const conf = +(window.OsuBeat?.confidence?.() ?? 0);
@@ -855,7 +1288,6 @@ function __pcwSettingsOpen() {
     ringHost.appendChild(el);
     rings.push({ el, t0: now(), dur, start: { s: baseScale, a: startAlpha }, end: { s: endScale, a: 0 } });
   }
-  window.addEventListener('osu-beat', e => spawnRing(e.detail));
   window.addEventListener('osu-beat-visual', e => spawnRing(e.detail));
 
   // лёгкий «тычок» цели от вокала
@@ -899,10 +1331,35 @@ function __pcwSettingsOpen() {
   const hash = n => fract(Math.sin(n * 12.9898 + 78.233) * 43758.5453);
   const vnoise = (tt, seed) => { const i = Math.floor(tt), f = tt - i; const a = hash(i + seed), b = hash(i + 1 + seed); const u = f * f * (3 - 2 * f); return (a * (1 - u) + b * u) * 2 - 1; };
 
+  // ────────────────── Недорогие style-записи ─────────────────────────────────────────────
+  const styleCache = new WeakMap();
+  let lastVisualFrameTs = 0;
+
+  function setStyleCached(node, prop, value) {
+    if (!node || !node.style) return;
+    let cache = styleCache.get(node);
+    if (!cache) {
+      cache = Object.create(null);
+      styleCache.set(node, cache);
+    }
+    if (cache[prop] === value) return;
+    cache[prop] = value;
+    node.style[prop] = value;
+  }
+
   // ────────────────── Главный кадр ────────────────────────────────────────────────────
   (function frame() {
     const tNow = performance.now();
-    const dtSec = Math.min(0.060, (tNow - (S.__ts || tNow)) / 1000); S.__ts = tNow;
+    const interactionActive = !!window.PulseColorPerformance?.isInteracting?.();
+    const targetFrameMs = interactionActive ? 66 : 16;
+
+    if ((tNow - lastVisualFrameTs) < targetFrameMs) {
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    lastVisualFrameTs = tNow;
+    const dtSec = Math.min(0.080, (tNow - (S.__ts || tNow)) / 1000); S.__ts = tNow;
 
     const cfg = window.BeatDriverConfig || {};
     const bpm = window.OsuBeat?.bpm?.();
@@ -917,9 +1374,6 @@ function __pcwSettingsOpen() {
     const audioOn = (typeof __audioOn === 'function')
       ? __audioOn()
       : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
-    const mediaPlaying = (typeof __mediaPlaying === 'function')
-      ? __mediaPlaying()
-      : audioOn;
     const moving = !!cfg.MOTION_ENABLED && (bpmDrive
       ? (audioOn && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
       : audioOn);
@@ -937,15 +1391,23 @@ function __pcwSettingsOpen() {
     const alpha = moving ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
     const offsetVW = (cfg.OFFSET_X_VW || 1);
 
-    root.style.filter = `brightness(${bright.toFixed(3)})`;
-    root.style.opacity = alpha.toFixed(3);
-    root.style.transform = `translateX(${offsetVW}vw)`;
+    const renderBright = interactionActive ? 1 : bright;
+    const renderAlpha = alpha;
 
-    const over = Math.max(0, bright - 2);
-    const glowAlpha = Math.min(0.65, 0.18 + over * 0.12);
-    const glowBlur = Math.min(90, 14 + over * 24);
-    glow.style.opacity = glowAlpha.toFixed(3);
-    glow.style.filter = `blur(${glowBlur.toFixed(1)}px)`;
+    setStyleCached(root, 'filter', renderBright === 1 ? 'none' : `brightness(${renderBright.toFixed(3)})`);
+    setStyleCached(root, 'opacity', renderAlpha.toFixed(3));
+    setStyleCached(root, 'transform', `translate3d(${offsetVW}vw, 0, 0)`);
+
+    if (interactionActive) {
+      setStyleCached(glow, 'opacity', '0');
+      setStyleCached(glow, 'filter', 'none');
+    } else {
+      const over = Math.max(0, bright - 2);
+      const glowAlpha = Math.min(0.65, 0.18 + over * 0.12);
+      const glowBlur = Math.min(90, 14 + over * 24);
+      setStyleCached(glow, 'opacity', glowAlpha.toFixed(3));
+      setStyleCached(glow, 'filter', `blur(${glowBlur.toFixed(1)}px)`);
+    }
 
     // ── сверхплавное движение (value-noise цель + пере-демпфированная пружина) ──
     const R = (cfg.MOTION_STRENGTH || 100);                // радиус области, px
@@ -1006,11 +1468,11 @@ function __pcwSettingsOpen() {
     }
 
     // ── применяем трансформы ──
-    outer && (outer.style.transform = `scale(${(scales.outer || 1).toFixed(4)})`);
+    setStyleCached(outer, 'transform', `scale(${(scales.outer || 1).toFixed(4)})`);
     if (inner) {
       const dx = S.dx;
       const dy = S.dy + (S.breath || 0);
-      inner.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${(scales.inner || 1).toFixed(4)})`;
+      setStyleCached(inner, 'transform', `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0) scale(${(scales.inner || 1).toFixed(4)})`);
     }
 
     // ── апдейт колец ──
@@ -1020,8 +1482,8 @@ function __pcwSettingsOpen() {
         const r = rings[i];
         const p = clamp((tt - r.t0) / r.dur, 0, 1);
         const k = easeOutCubic(p);
-        r.el.style.transform = `scale(${(r.start.s + (r.end.s - r.start.s) * k).toFixed(4)})`;
-        r.el.style.opacity = (r.start.a + (r.end.a - r.start.a) * k).toFixed(3);
+        setStyleCached(r.el, 'transform', `scale(${(r.start.s + (r.end.s - r.start.s) * k).toFixed(4)})`);
+        setStyleCached(r.el, 'opacity', (r.start.a + (r.end.a - r.start.a) * k).toFixed(3));
         if (p >= 1) toRemove.push(i);
       }
       for (let i = toRemove.length - 1; i >= 0; i--) { const r = rings.splice(toRemove[i], 1)[0]; r?.el?.remove(); }

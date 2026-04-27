@@ -130,12 +130,16 @@
   opacity: var(--osu-alpha, .04);
   filter: brightness(var(--osu-bright, 1));
   transform: translate3d(var(--osu-offset-xvw, 1vw), 0, 0);
-  transition: filter 120ms ease, opacity 140ms ease;
+  will-change: transform, opacity;
+  isolation: isolate;
+  transition: none;
 }
 
 #osu-pulse-outer, #osu-pulse-inner{
   position:absolute; inset:0; pointer-events:none;
-  transition: transform 160ms cubic-bezier(.22,.61,.36,1), opacity 200ms ease;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  transition: none;
 }
 
 #osu-pulse-outer{
@@ -182,6 +186,26 @@
 .VibeWidget_root__Chpsm
 {
   background: linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0, var(--ym-controls-color-secondary-text-disabled) 80%)
+}
+
+
+/* Лёгкий режим во время скролла/движения в экспериментальном интерфейсе ЯМ.
+   Нужен, чтобы полноэкранные radial-gradient/filter слои не стопорили SPA при активной волне. */
+.pcw-interacting #osu-pulse{
+  filter: none !important;
+  transition: none !important;
+  opacity: var(--osu-alpha, .04);
+}
+
+.pcw-interacting #osu-pulse-glow,
+.pcw-interacting .osu-ring{
+  opacity: 0 !important;
+  filter: none !important;
+}
+
+.pcw-interacting #osu-pulse-outer,
+.pcw-interacting #osu-pulse-inner{
+  transition: none !important;
 }
 
 /* картинка-фон .bg-cover не пульсирует */

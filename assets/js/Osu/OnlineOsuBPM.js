@@ -104,6 +104,7 @@
   let coverObserver = null;
   let treeObserver = null;
   const mediaLifecycleBound = new WeakSet();
+  let audioNodeCache = null;
   let apiRequestCounter = 0;
   let playbackLockTimer = 0;
 
@@ -223,9 +224,50 @@
     }
   };
 
-  const getAudioNode = () => {
+  let lastTrackChangeEventKey = '';
+
+  const dispatchPulseColorTrackChange = (meta = null, reason = 'trackchange') => {
+    try {
+      const fresh = meta || getTrackMeta?.() || null;
+      const trackKey = fresh?.key || curTrackKey || getCoverSig?.() || '';
+      const trackSig = fresh?.sig || curTrackSig || '';
+      const eventKey = `${trackKey}::${trackSig}::${reason}`;
+
+      if (eventKey === lastTrackChangeEventKey) return;
+      lastTrackChangeEventKey = eventKey;
+
+      window.dispatchEvent(new CustomEvent('pulsecolor:trackchange', {
+        detail: {
+          reason,
+          trackKey,
+          trackSig,
+          title: fresh?.title || '',
+          artist: fresh?.artist || '',
+          mode: getConfiguredDriveMode(),
+          gate: { ...gate }
+        }
+      }));
+
+      logApi('trackchange-event', { reason, trackKey, trackSig });
+    } catch {}
+  };
+
+  const rememberAudioNode = (audio) => {
+    if (!audio || !audio.isConnected) return null;
+    audioNodeCache = audio;
+    return audio;
+  };
+
+  const scanAudioNodes = () => {
     const list = Array.from(document.querySelectorAll('audio'));
-    return list.find((audio) => audio && audio.isConnected && (audio.currentSrc || audio.src)) || list[0] || null;
+    const picked = list.find((audio) => audio && audio.isConnected && (audio.currentSrc || audio.src)) || list[0] || null;
+    return picked ? rememberAudioNode(picked) : null;
+  };
+
+  const getAudioNode = () => {
+    if (audioNodeCache && audioNodeCache.isConnected) return audioNodeCache;
+    audioNodeCache = null;
+    return scanAudioNodes();
   };
 
   const isAudioPlaying = (audio = getAudioNode()) => !!(
@@ -777,7 +819,21 @@
     return score;
   };
 
+  let coverNodeCache = null;
+  let coverNodeCacheTime = 0;
+
   const getCoverNode = () => {
+    const now = performance.now?.() || Date.now();
+
+    if (
+      coverNodeCache &&
+      coverNodeCache.isConnected &&
+      coverSrcFromImg(coverNodeCache) &&
+      now - coverNodeCacheTime < 180
+    ) {
+      return coverNodeCache;
+    }
+
     const nodes = new Set();
 
     for (const selector of COVER_IMAGE_SELECTORS) {
@@ -786,9 +842,12 @@
       } catch {}
     }
 
-    return Array.from(nodes)
+    coverNodeCache = Array.from(nodes)
       .filter((img) => coverScore(img) >= 0)
       .sort((a, b) => coverScore(b) - coverScore(a))[0] || null;
+    coverNodeCacheTime = now;
+
+    return coverNodeCache;
   };
 
   const normalizeCoverSig = (src) => String(src || '')
@@ -2086,6 +2145,8 @@
     lastNet = { status: 'hit', src, bpm };
     publishNet();
     try { window.OsuBeat?.retune?.({ presetBpm: bpm, source: src }); } catch {}
+    try { window.OsuBeat?.resync?.('bpm-active'); } catch {}
+    dispatchPulseColorTrackChange(meta, 'bpm-active');
     releasePlaybackAfterBpmGate(src || 'bpm-active');
   };
 
@@ -2170,6 +2231,7 @@
     clearWaitTimer();
     cancelPendingLookup();
     try { window.OsuBeat?.reset?.(); } catch {}
+    dispatchPulseColorTrackChange(fresh, reason);
 
     const cache = loadCache();
     const row = fresh?.sig ? cache[fresh.sig] : null;
@@ -2210,6 +2272,8 @@
       if (key && key !== curTrackKey) {
         curTrackKey = key;
         curTrackSig = meta?.sig || '';
+        dispatchPulseColorTrackChange(meta, 'raw-track-key-change');
+        try { window.OsuBeat?.resync?.('raw-track-key-change'); } catch {}
         enterSelectedRaw('raw');
         return;
       }
@@ -2260,7 +2324,9 @@
   }
 
   function attachAudioLifecycle(el) {
-    if (!el || mediaLifecycleBound.has(el)) return;
+    if (!el) return;
+    rememberAudioNode(el);
+    if (mediaLifecycleBound.has(el)) return;
     mediaLifecycleBound.add(el);
 
     const ping = () => checkTrackChange(true);
@@ -2413,26 +2479,100 @@
     }
   }
 
+  function attachAudioFromNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+
+    let found = false;
+
+    try {
+      if (String(node.tagName || '').toLowerCase() === 'audio') {
+        attachAudioLifecycle(node);
+        found = true;
+      }
+    } catch {}
+
+    try {
+      node.querySelectorAll?.('audio').forEach((audio) => {
+        attachAudioLifecycle(audio);
+        found = true;
+      });
+    } catch {}
+
+    return found;
+  }
+
+  function attachAudioFromMutations(muts) {
+    let found = false;
+
+    for (const m of muts) {
+      if (m.type !== 'childList') continue;
+      for (const n of m.addedNodes || []) {
+        if (attachAudioFromNode(n)) found = true;
+      }
+    }
+
+    return found;
+  }
+
   function bindTreeObserver() {
     if (treeObserver) return;
+
+    let refreshTimer = 0;
+    let pendingRelevant = false;
+    let pendingAudio = false;
+
+    const scheduleRefresh = (delay = 140) => {
+      if (refreshTimer) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = 0;
+
+        const runRelevant = pendingRelevant;
+        const runAudio = pendingAudio;
+
+        pendingRelevant = false;
+        pendingAudio = false;
+
+        if (runAudio) scanAudioNodes();
+        if (runRelevant) {
+          initYandexTrackMetaCapture();
+          bindCoverObserver();
+          checkTrackChange(true);
+        }
+      }, delay);
+    };
+
     treeObserver = new MutationObserver((muts) => {
       let relevant = false;
+
       for (const m of muts) {
         if (m.type !== 'childList') continue;
-        for (const n of m.addedNodes) {
-          if (isRelevantNode(n)) { relevant = true; break; }
+
+        for (const n of m.addedNodes || []) {
+          if (isRelevantNode(n)) {
+            relevant = true;
+            break;
+          }
         }
         if (relevant) break;
-        for (const n of m.removedNodes) {
-          if (isRelevantNode(n)) { relevant = true; break; }
+
+        for (const n of m.removedNodes || []) {
+          if (isRelevantNode(n)) {
+            relevant = true;
+            break;
+          }
         }
         if (relevant) break;
       }
-      initYandexTrackMetaCapture();
-      document.querySelectorAll('audio').forEach(attachAudioLifecycle);
-      bindCoverObserver();
-      if (relevant) checkTrackChange(true);
+
+      const audioFound = attachAudioFromMutations(muts);
+
+      if (!relevant && !audioFound) return;
+
+      pendingRelevant = pendingRelevant || relevant;
+      pendingAudio = pendingAudio || audioFound;
+      scheduleRefresh(relevant ? 120 : 180);
     });
+
     treeObserver.observe(document.documentElement, { childList: true, subtree: true });
   }
 

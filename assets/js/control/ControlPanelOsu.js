@@ -56,7 +56,8 @@
     BEAT_LEAD_MS: 20,
 
     ENABLE_CUSTOM_WAVE: true,
-    WAVE_DRIVE_MODE: "raw"
+    WAVE_DRIVE_MODE: "raw",
+    WAVE_PERFORMANCE_MODE: "efficient"
   };
 
 
@@ -195,6 +196,17 @@
           options: [
             { value: "raw", label: "RAW" },
             { value: "bpm", label: "BPM" }
+          ]
+        },
+
+        {
+          type: "choice",
+          key: "WAVE_PERFORMANCE_MODE",
+          label: "Производительность волны",
+          desc: "Эффективная — включает защиту при скролле и перетаскивании: меньше лагов в экспериментальной Яндекс Музыке. Максимальная — не ограничивает эффекты волны и может подвешивать приложение на тяжёлых страницах.",
+          options: [
+            { value: "efficient", label: "Эффективная" },
+            { value: "max", label: "Максимальная" }
           ]
         },
 
@@ -346,6 +358,9 @@
     persistCfg(opts);
 
     if (key === "ENABLE_CUSTOM_WAVE") updateCustomWave(true);
+    if (key === "WAVE_PERFORMANCE_MODE" && String(value).trim().toLowerCase() === "max") {
+      try { window.PulseColorPerformance?.clearInteraction?.(); } catch { }
+    }
   }
 
   /* ===================== custom wave visibility ===================== */
@@ -361,10 +376,37 @@
   }
 
   function observePulseElement() {
-    const mo = new MutationObserver(() => {
-      const el = document.getElementById("osu-pulse");
-      if (el) updateCustomWave(true);
+    let pulseTimer = 0;
+
+    const schedulePulseUpdate = () => {
+      if (pulseTimer) return;
+      pulseTimer = window.setTimeout(() => {
+        pulseTimer = 0;
+        const el = document.getElementById("osu-pulse");
+        if (el) updateCustomWave(true);
+      }, 120);
+    };
+
+    const nodeHasPulse = (node) => {
+      if (!node || node.nodeType !== 1) return false;
+      try {
+        return node.id === "osu-pulse" || !!node.querySelector?.("#osu-pulse");
+      } catch {
+        return false;
+      }
+    };
+
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        for (const n of m.addedNodes || []) {
+          if (nodeHasPulse(n)) {
+            schedulePulseUpdate();
+            return;
+          }
+        }
+      }
     });
+
     mo.observe(document.documentElement, { childList: true, subtree: true });
   }
 
@@ -1195,12 +1237,52 @@
   });
 
   /* ===================== lifecycle ===================== */
+  const SETTINGS_MUTATION_SELECTOR = '.SettingsPage_content__cR6Ra, [class*="SettingsPage_content"], [class*="SettingsListButtonItem"], [class*="SettingsList"]';
+  let injectTimer = 0;
+
   function tickInject() {
     try { injectSettingsButton(); } catch { }
   }
 
-  const mo = new MutationObserver(() => tickInject());
+  function scheduleInject(delay = 160) {
+    if (injectTimer) return;
+    injectTimer = window.setTimeout(() => {
+      injectTimer = 0;
+      if (!document.getElementById(ITEM_ID)) tickInject();
+    }, delay);
+  }
+
+  function isSettingsMutationNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    try {
+      if (node.matches?.(SETTINGS_MUTATION_SELECTOR)) return true;
+      const cls = typeof node.className === "string" ? node.className : "";
+      if (cls.includes("SettingsPage") || cls.includes("SettingsList")) return true;
+      return !!node.querySelector?.(SETTINGS_MUTATION_SELECTOR);
+    } catch {
+      return false;
+    }
+  }
+
+  function hasSettingsMutation(muts) {
+    for (const m of muts) {
+      if (isSettingsMutationNode(m.target)) return true;
+      for (const n of m.addedNodes || []) {
+        if (isSettingsMutationNode(n)) return true;
+      }
+    }
+    return false;
+  }
+
+  const mo = new MutationObserver((muts) => {
+    if (document.getElementById(ITEM_ID)) return;
+    if (hasSettingsMutation(muts)) scheduleInject();
+  });
+
   mo.observe(document.documentElement, { childList: true, subtree: true });
 
   tickInject();
+  document.addEventListener("DOMContentLoaded", () => scheduleInject(0), { once: true });
+  window.addEventListener("popstate", () => scheduleInject(220));
+  window.addEventListener("hashchange", () => scheduleInject(220));
 })();
