@@ -414,6 +414,42 @@ ${buildPaletteAliasBlock()}
 `;
   })();
 
+  const COLORIZE_WAVE_CROSSFADE_CSS = `
+html.pcw-color-transitioning #osu-pulse-outer {
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
+      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
+      transparent 75%) !important;
+}
+
+html.pcw-color-transitioning #osu-pulse-outer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
+      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
+      transparent 75%);
+  opacity: var(--pc-wave-crossfade-opacity, 0);
+  mix-blend-mode: screen;
+  will-change: opacity;
+}
+
+html.pcw-color-transitioning #osu-pulse-outer::after {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+html.pcw-color-transitioning #osu-pulse-glow,
+html.pcw-color-transitioning .osu-ring {
+  opacity: 0 !important;
+  filter: none !important;
+}
+`;
+
 
   /*──────────────────────── YM MAPS ───────────────────────*/
   const YM_DARK_MAP = `
@@ -954,6 +990,7 @@ ${buildPaletteAliasBlock()}
 
     const css =
       COLORIZE_TRANSITION_CSS + '\n' +
+      COLORIZE_WAVE_CROSSFADE_CSS + '\n' +
       buildThemeMapBlock('.ym-dark-theme', YM_DARK_MAP) +
       buildThemeMapBlock('.ym-light-theme', YM_LIGHT_MAP) +
       THEME_CSS_SHARED;
@@ -993,6 +1030,63 @@ ${buildPaletteAliasBlock()}
     node.style.setProperty('--pc-palette-progress', `${to}%`, 'important');
     node.style.setProperty('--pc-palette-from-weight', `${from}%`, 'important');
     node.style.setProperty('--pc-palette-to-weight', `${to}%`, 'important');
+  };
+
+  const getThemeModeFromNode = (node) => {
+    if (node?.classList?.contains('ym-light-theme')) return 'light';
+    if (node?.classList?.contains('ym-dark-theme')) return 'dark';
+    return null;
+  };
+
+  const getActiveThemeMode = () => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (root?.classList?.contains('ym-light-theme') || body?.classList?.contains('ym-light-theme')) return 'light';
+    if (root?.classList?.contains('ym-dark-theme') || body?.classList?.contains('ym-dark-theme')) return 'dark';
+
+    const activeRoot = document.querySelector('.ym-light-theme, .ym-dark-theme');
+    return activeRoot?.classList?.contains('ym-light-theme') ? 'light' : 'dark';
+  };
+
+  const getWavePaletteKeyForMode = (mode) => mode === 'light' ? '--color-light-3' : '--color-dark-5';
+
+  const isWaveThemeNode = (node) => {
+    const nodeMode = getThemeModeFromNode(node);
+    return !!nodeMode && nodeMode === getActiveThemeMode();
+  };
+
+  const syncWaveCrossfadeVars = (node, fromVars, toVars, progress) => {
+    if (!isWaveThemeNode(node)) return;
+
+    const mode = getThemeModeFromNode(node) || getActiveThemeMode();
+    const key = getWavePaletteKeyForMode(mode);
+    const fallbackKey = mode === 'light' ? '--color-light-3' : '--color-dark-5';
+    const fromValue = fromVars?.[key] || fromVars?.[fallbackKey] || fromVars?.['--color-dark-5'] || fromVars?.['--color-light-3'];
+    const toValue = toVars?.[key] || toVars?.[fallbackKey] || toVars?.['--color-dark-5'] || toVars?.['--color-light-3'];
+    const rootStyle = document.documentElement.style;
+
+    if (fromValue) rootStyle.setProperty('--pc-wave-blur-from', String(fromValue), 'important');
+    if (toValue) rootStyle.setProperty('--pc-wave-blur-to', String(toValue), 'important');
+    rootStyle.setProperty('--pc-wave-crossfade-opacity', clamp(progress, 0, 1).toFixed(3), 'important');
+    document.documentElement.classList.add('pcw-color-transitioning');
+  };
+
+  const clearWaveCrossfadeVars = (node, vars) => {
+    if (node && !isWaveThemeNode(node)) return;
+
+    const mode = node ? getThemeModeFromNode(node) || getActiveThemeMode() : getActiveThemeMode();
+    const key = getWavePaletteKeyForMode(mode);
+    const value = vars?.[key] || vars?.['--color-dark-5'] || vars?.['--color-light-3'];
+    const rootStyle = document.documentElement.style;
+
+    if (value) {
+      rootStyle.setProperty('--pc-wave-blur-from', String(value), 'important');
+      rootStyle.setProperty('--pc-wave-blur-to', String(value), 'important');
+    }
+
+    rootStyle.setProperty('--pc-wave-crossfade-opacity', '0', 'important');
+    document.documentElement.classList.remove('pcw-color-transitioning');
   };
 
   const parsePaletteColor = (value) => {
@@ -1052,6 +1146,7 @@ ${buildPaletteAliasBlock()}
   const stopPaletteTransition = (node) => {
     const active = activePaletteTransitions.get(node);
     if (active?.raf) cancelAnimationFrame(active.raf);
+    if (active?.wave) clearWaveCrossfadeVars(node, active.toVars || active.fromVars);
     activePaletteTransitions.delete(node);
   };
 
@@ -1070,6 +1165,7 @@ ${buildPaletteAliasBlock()}
       writePaletteEndpoints(node, vars, 'from');
       writePaletteEndpoints(node, vars, 'to');
       setPaletteProgress(node, 1);
+      clearWaveCrossfadeVars(node, vars);
       node.classList.remove('pc-color-palette-reset');
     });
   };
@@ -1082,12 +1178,19 @@ ${buildPaletteAliasBlock()}
     setPaletteProgress(node, 0);
     node.classList.remove('pc-color-palette-reset');
 
+    const wave = isWaveThemeNode(node);
+    if (wave) {
+      syncWaveCrossfadeVars(node, fromVars, toVars, 0);
+      window.PulseColorPerformance?.markInteraction?.(PALETTE_ANIMATION_MS + 220);
+    }
+
     const state = {
       fromVars,
       toVars,
       progress: 0,
       startedAt: 0,
-      raf: 0
+      raf: 0,
+      wave
     };
 
     activePaletteTransitions.set(node, state);
@@ -1100,6 +1203,7 @@ ${buildPaletteAliasBlock()}
 
       state.progress = eased;
       setPaletteProgress(node, eased);
+      if (state.wave) syncWaveCrossfadeVars(node, fromVars, toVars, eased);
 
       if (raw < 1) {
         state.raf = requestAnimationFrame(step);
@@ -1110,6 +1214,7 @@ ${buildPaletteAliasBlock()}
       writePaletteEndpoints(node, toVars, 'from');
       writePaletteEndpoints(node, toVars, 'to');
       setPaletteProgress(node, 1);
+      if (state.wave) clearWaveCrossfadeVars(node, toVars);
       activePaletteTransitions.delete(node);
     };
 
