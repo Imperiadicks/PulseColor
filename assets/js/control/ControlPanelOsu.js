@@ -17,15 +17,15 @@
     BEAT_IMPULSE_DOWN: 0.60,
     BEAT_IMPULSE: 0.06,
     KICK_IMPULSE_BASE: 0.00,
-    DECAY_MS: 150,
-    DECAY_MS_VOICE: 190,
+    DECAY_MS: 220,
+    DECAY_MS_VOICE: 260,
 
     TH_RMS: 0.000001,
     MIN_CONF: 0.35,
     AUDIO_HOLD_MS: 180,
 
-    KICK_COOLDOWN_MS: 45,
-    VOICE_COOLDOWN_MS: 60,
+    KICK_COOLDOWN_MS: 70,
+    VOICE_COOLDOWN_MS: 85,
     BPM_STRONG_BEAT_THR: 0.145,
     BPM_STRONG_BEAT_RATIO: 1.22,
     BPM_STRONG_BEAT_MIN_MS: 240,
@@ -33,8 +33,8 @@
     BPM_MOTION_RESET_GAIN: 0.72,
 
     VOICE_EVENT_THR: 0.10,
-    VOICE_IMPULSE_GAIN: 1.20,
-    VOICE_ENVELOPE_GAIN: 1.40,
+    VOICE_IMPULSE_GAIN: 1.65,
+    VOICE_ENVELOPE_GAIN: 1.90,
 
     OUTER_GAIN: 1.00,
     INNER_GAIN: 1.00,
@@ -59,6 +59,15 @@
     WAVE_DRIVE_MODE: "raw",
     WAVE_PERFORMANCE_MODE: "efficient"
   };
+
+  const FIXED_SMOOTH_ENERGY_TUNING = Object.freeze({
+    DECAY_MS: 220,
+    DECAY_MS_VOICE: 260,
+    KICK_COOLDOWN_MS: 70,
+    VOICE_COOLDOWN_MS: 85,
+    VOICE_IMPULSE_GAIN: 1.65,
+    VOICE_ENVELOPE_GAIN: 1.90
+  });
 
 
   const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
@@ -224,16 +233,6 @@
       ],
     },
     {
-      group: "Затухание и анти-дребезг",
-      hint: "Скорость остывания и защита от частых срабатываний.",
-      items: [
-        { key: "DECAY_MS", label: "Спад внешнего (мс)", step: 1, min: 0, max: 500 },
-        { key: "DECAY_MS_VOICE", label: "Спад голоса (мс)", step: 1, min: 0, max: 500 },
-        { key: "KICK_COOLDOWN_MS", label: "Анти-дребезг баса (мс)", step: 1, min: 0, max: 500 },
-        { key: "VOICE_COOLDOWN_MS", label: "Анти-дребезг голоса (мс)", step: 1, min: 0, max: 500 },
-      ],
-    },
-    {
       group: "Порог и уверенность",
       hint: "Фильтрация шума и минимальная уверенность детектора.",
       items: [
@@ -243,11 +242,9 @@
     },
     {
       group: "Голос",
-      hint: "Реакция inner на вокал: пороги и усиление.",
+      hint: "Реакция inner на вокал: порог срабатывания. Усиление голоса теперь зафиксировано внутри плавного профиля.",
       items: [
         { key: "VOICE_EVENT_THR", label: "Порог голосового события (0..1)", step: 0.01, min: 0, max: 1 },
-        { key: "VOICE_IMPULSE_GAIN", label: "Усиление импульса голоса", step: 0.01, min: 0.1, max: 3 },
-        { key: "VOICE_ENVELOPE_GAIN", label: "Усиление огибающей голоса", step: 0.01, min: 0.1, max: 3.5 },
       ],
     },
     {
@@ -265,10 +262,10 @@
       ],
     },
     {
-      group: "Движение внутреннего кольца",
-      hint: "Смещение inner: пружина + мягкий дрейф.",
+      group: "Движение волны",
+      hint: "Смещение единой волны: пружина + мягкий дрейф без дополнительного inner-слоя.",
       items: [
-        { type: "toggle", key: "MOTION_ENABLED", label: "Включить движение (Inner)", desc: "Если выключено — inner только пульсирует без смещения." },
+        { type: "toggle", key: "MOTION_ENABLED", label: "Включить движение волны", desc: "Двигает основную волну как единый слой, без создания второй волны." },
         { key: "MOTION_STRENGTH", label: "Сила движения (px)", step: 1, min: 0, max: 150 },
         { key: "MOTION_SPEED", label: "Скорость движения", step: 0.01, min: 0.05, max: 1.0 },
         { key: "OFFSET_X_VW", label: "Смещение вправо (vw)", step: 0.1, min: 0, max: 20 },
@@ -290,6 +287,12 @@
     return cfg;
   }
 
+  function applyFixedSmoothEnergyTuning(cfg = ensureBeatConfig()) {
+    for (const k in FIXED_SMOOTH_ENERGY_TUNING) cfg[k] = FIXED_SMOOTH_ENERGY_TUNING[k];
+    window.PulseColorFixedSmoothEnergyTuning = FIXED_SMOOTH_ENERGY_TUNING;
+    return cfg;
+  }
+
   function loadBeatConfigIntoCfgOnce() {
     const cfg = ensureBeatConfig();
 
@@ -305,6 +308,8 @@
       for (const k in saved) cfg[k] = saved[k];
     }
 
+    applyFixedSmoothEnergyTuning(cfg);
+
     return cfg;
   }
 
@@ -317,7 +322,7 @@
     }
 
     try {
-      const cfg = ensureBeatConfig();
+      const cfg = applyFixedSmoothEnergyTuning(ensureBeatConfig());
       const out = {};
       for (const k in DEFAULT_CFG) out[k] = cfg[k];
       localStorage.setItem(KEY_CFG, JSON.stringify(out));

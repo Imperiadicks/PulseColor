@@ -1,3 +1,28 @@
+/* ========================== PulseColor fixed smooth energy tuning ========================== */
+(() => {
+  const FIXED = Object.freeze({
+    DECAY_MS: 220,
+    DECAY_MS_VOICE: 260,
+    KICK_COOLDOWN_MS: 70,
+    VOICE_COOLDOWN_MS: 85,
+    VOICE_IMPULSE_GAIN: 1.65,
+    VOICE_ENVELOPE_GAIN: 1.90
+  });
+
+  function applyFixedTuning() {
+    const cfg = (window.BeatDriverConfig && typeof window.BeatDriverConfig === 'object')
+      ? window.BeatDriverConfig
+      : (window.BeatDriverConfig = {});
+
+    for (const k in FIXED) cfg[k] = FIXED[k];
+    window.PulseColorFixedSmoothEnergyTuning = FIXED;
+    return cfg;
+  }
+
+  applyFixedTuning();
+  window.addEventListener('pulsecolor:beatDriverConfigChanged', applyFixedTuning);
+})();
+
 /* ========================== Вспомогательно: true, если реально есть звук ========================== */
 function __audioOn() {
   const nowTs = performance.now();
@@ -1223,8 +1248,12 @@ function __pcwSettingsOpen() {
   let outer = document.getElementById('osu-pulse-outer');
   if (!outer) { outer = document.createElement('div'); outer.id = 'osu-pulse-outer'; root.appendChild(outer); }
 
-  let inner = document.getElementById('osu-pulse-inner');
-  if (!inner) { inner = document.createElement('div'); inner.id = 'osu-pulse-inner'; root.appendChild(inner); }
+  // Раньше inner был отдельным полноэкранным radial-gradient слоем.
+  // При включении движения это выглядело как вторая волна поверх основной.
+  // Теперь движение применяется к единой волне, поэтому старый inner-слой удаляем.
+  const legacyInner = document.getElementById('osu-pulse-inner');
+  if (legacyInner) legacyInner.remove();
+  let inner = null;
 
   let ringHost = document.getElementById('osu-pulse-rings');
   if (!ringHost) {
@@ -1292,6 +1321,7 @@ function __pcwSettingsOpen() {
 
   // лёгкий «тычок» цели от вокала
   window.addEventListener('osu-voice', (e) => {
+    if (!window.BeatDriverConfig?.MOTION_ENABLED) return;
     if ((window.PulseColorWaveMode?.getEffectiveMode?.() || String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase()) === 'bpm') return;
     const s = +e.detail?.strength || 0;
     const kick = (window.BeatDriverConfig?.MOTION_STRENGTH || 100) * 0.18 * Math.min(1, Math.max(0, s * 160));
@@ -1301,6 +1331,7 @@ function __pcwSettingsOpen() {
   });
 
   window.addEventListener('osu-strong-beat', (e) => {
+    if (!window.BeatDriverConfig?.MOTION_ENABLED) return;
     const waveMode = window.PulseColorWaveMode?.getEffectiveMode?.() || String(window.BeatDriverConfig?.WAVE_DRIVE_MODE || '').trim().toLowerCase();
     if (waveMode !== 'bpm') return;
     if (!(typeof __audioOn === 'function' ? __audioOn() : true)) return;
@@ -1374,21 +1405,22 @@ function __pcwSettingsOpen() {
     const audioOn = (typeof __audioOn === 'function')
       ? __audioOn()
       : ((window.__OSU__?.rms || 0) > (cfg.TH_RMS || 1e-6));
-    const moving = !!cfg.MOTION_ENABLED && (bpmDrive
+    const waveActive = bpmDrive
       ? (audioOn && !!bpm && conf >= (cfg.MIN_CONF ?? 0.35))
-      : audioOn);
+      : audioOn;
+    const moving = !!cfg.MOTION_ENABLED && waveActive;
 
     // масштабы из драйвера (и одновременно тайминг распадов)
     const scales = window.BeatDriver?.scales?.(dtSec * 1000) || { outer: 1, inner: 1, active: false };
 
     // ── яркость/свечение (яркость >2 усиливает glow) ──
-    const baseBright = moving ? (1 + (Math.max(scales.outer, scales.inner) - 1) * 0.9) : 1;
+    const baseBright = waveActive ? (1 + (Math.max(scales.outer, scales.inner) - 1) * 0.9) : 1;
     const brightRaw = baseBright * (cfg.BRIGHTNESS_BASE || 1);
     const bright = Math.min(brightRaw, 8);
     const rmsUi = bpmDrive
       ? clamp(((Math.max(scales.outer, scales.inner) - 1) * 4.2) + conf * 0.15, 0, 1)
       : clamp((window.__OSU__?.rms || 0) * 3.0, 0, 1);
-    const alpha = moving ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
+    const alpha = waveActive ? (0.05 + (0.18 - 0.05) * rmsUi) : 0.05;
     const offsetVW = (cfg.OFFSET_X_VW || 1);
 
     const renderBright = interactionActive ? 1 : bright;
@@ -1396,7 +1428,6 @@ function __pcwSettingsOpen() {
 
     setStyleCached(root, 'filter', renderBright === 1 ? 'none' : `brightness(${renderBright.toFixed(3)})`);
     setStyleCached(root, 'opacity', renderAlpha.toFixed(3));
-    setStyleCached(root, 'transform', `translate3d(${offsetVW}vw, 0, 0)`);
 
     if (interactionActive) {
       setStyleCached(glow, 'opacity', '0');
@@ -1468,11 +1499,17 @@ function __pcwSettingsOpen() {
     }
 
     // ── применяем трансформы ──
-    setStyleCached(outer, 'transform', `scale(${(scales.outer || 1).toFixed(4)})`);
+    // Движение больше не создаёт отдельную inner-волну.
+    // Пульс outer/inner объединяется в один видимый слой, а смещение применяется ко всей волне.
+    const moveX = moving ? S.dx : 0;
+    const moveY = moving ? (S.dy + (S.breath || 0)) : 0;
+    const visibleScale = Math.max(scales.outer || 1, scales.inner || 1);
+
+    setStyleCached(root, 'transform', `translate3d(calc(${offsetVW}vw + ${moveX.toFixed(2)}px), ${moveY.toFixed(2)}px, 0)`);
+    setStyleCached(outer, 'transform', `scale(${visibleScale.toFixed(4)})`);
+
     if (inner) {
-      const dx = S.dx;
-      const dy = S.dy + (S.breath || 0);
-      setStyleCached(inner, 'transform', `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0) scale(${(scales.inner || 1).toFixed(4)})`);
+      setStyleCached(inner, 'display', 'none');
     }
 
     // ── апдейт колец ──
