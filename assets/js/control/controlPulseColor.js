@@ -426,7 +426,7 @@
         ul.appendChild(
             makeToggleLi(
                 "BackgroundImage (обложка фоном)",
-                "Включает backgroundReplace() и вставку картинки в vibe.",
+                "ставит обложку в качестве фона в vibe.",
                 !!core.enableBackgroundImage,
                 (v) => setCore({ enableBackgroundImage: !!v })
             )
@@ -435,7 +435,7 @@
         ul.appendChild(
             makeToggleLi(
                 "FullVibe (ванильная Моя Волна)",
-                "Растягивает старый блок Моей Волны. В экспериментальном интерфейсе не меняет высоту, чтобы не скрывать экран.",
+                "Растягивает блок Моей Волны. В экспериментальном интерфейсе это кнопка не работает.",
                 !!core.enableFullVibe,
                 (v) => setCore({ enableFullVibe: !!v })
             )
@@ -444,7 +444,7 @@
         ul.appendChild(
             makeToggleLi(
                 "Recolor: белая база",
-                "Принудительно делает базовый цвет белым (для темы/градиентов).",
+                "Принудительно делает базовый цвет белым (сейчас нет, в следующих версиях будет исправлено).",
                 !!core.forceWhiteRecolor,
                 (v) => setCore({ forceWhiteRecolor: !!v })
             )

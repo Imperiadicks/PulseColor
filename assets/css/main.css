@@ -134,7 +134,7 @@
   z-index:5;
   pointer-events:none;
   contain:layout paint;
-  opacity: var(--osu-alpha, .04);
+  opacity: var(--osu-alpha, .055);
   filter: brightness(var(--osu-bright, 1));
   transform: translate3d(-50%, -50%, 0);
   will-change: opacity, filter;
@@ -145,6 +145,7 @@
 #osu-pulse-outer,
 #osu-pulse-inner,
 #osu-pulse-rings,
+#osu-pulse-center-rings,
 #osu-pulse-glow{
   position:absolute;
   inset:auto !important;
@@ -163,26 +164,26 @@
   transform: scale(var(--osu-scale,1));
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 45%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 24%, transparent) 35%,
-      transparent 75%);
-  opacity: var(--osu-outer-opacity, 1);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 34%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.09)) 16%, transparent) 34%,
+      transparent 68%);
+  opacity: var(--osu-outer-opacity, .90);
 }
 #osu-pulse-outer::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 60%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 20%, transparent) 24%,
-      transparent 70%);
-  opacity:0; transform:scale(.86);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.18)) 34%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 10%, transparent) 26%,
+      transparent 66%);
+  opacity:0; transform:scale(.88);
 }
-#osu-pulse-outer.pulse::after{ animation: osuRing 440ms cubic-bezier(.22,.61,.36,1); }
+#osu-pulse-outer.pulse::after{ animation: osuRing 520ms cubic-bezier(.22,.61,.36,1); }
 @keyframes osuRing{
-  0%   { opacity:0;   transform:scale(.86); }
-  14%  { opacity:.28; transform:scale(.94); }
-  45%  { opacity:.18; transform:scale(1.02); }
-  100% { opacity:0;   transform:scale(1.10); }
+  0%   { opacity:0;    transform:scale(.88); }
+  18%  { opacity:.145; transform:scale(.95); }
+  52%  { opacity:.082; transform:scale(1.02); }
+  100% { opacity:0;    transform:scale(1.09); }
 }
 
 #osu-pulse-inner{
@@ -211,7 +212,7 @@
 .pcw-interacting #osu-pulse{
   filter: none !important;
   transition: none !important;
-  opacity: var(--osu-alpha, .04);
+  opacity: var(--osu-alpha, .055);
 }
 
 .pcw-interacting #osu-pulse-glow,
@@ -296,17 +297,17 @@
 .ym-light-theme #osu-pulse-outer{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.08)) 34%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.08)) 18%, transparent) 35%,
-      transparent 75%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.055)) 22%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.045)) 9%, transparent) 34%,
+      transparent 68%);
 }
 
 .ym-light-theme #osu-pulse-outer::after{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.12)) 46%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.12)) 14%, transparent) 24%,
-      transparent 70%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.075)) 30%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 8%, transparent) 26%,
+      transparent 66%);
 }
 
 .ym-light-theme #osu-pulse-inner{

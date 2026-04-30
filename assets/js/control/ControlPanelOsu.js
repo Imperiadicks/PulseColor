@@ -68,6 +68,22 @@
     VOICE_ENVELOPE_GAIN: 1.90
   });
 
+  const DEPRECATED_AUTO_ENERGY_KEYS = Object.freeze([
+    "ENERGY_RESPONSE",
+    "ENERGY_FAST_ALPHA",
+    "ENERGY_SLOW_ALPHA",
+    "ENERGY_SMOOTH_ALPHA",
+    "ENERGY_RISE_GAIN",
+    "ENERGY_RISE_THR",
+    "ENERGY_RISE_COOLDOWN_MS"
+  ]);
+
+  function clearDeprecatedAutoEnergyKeys(cfg) {
+    if (!cfg || typeof cfg !== "object") return cfg;
+    for (const key of DEPRECATED_AUTO_ENERGY_KEYS) delete cfg[key];
+    return cfg;
+  }
+
 
   const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
   const MODAL_ANIM_MS = 220;
@@ -200,7 +216,7 @@
           type: "choice",
           key: "WAVE_DRIVE_MODE",
           label: "Источник движения",
-          desc: "BPM — ищем BPM через API-провайдеры из кода. Если BPM не найден или API не ответил — волна уходит в RAW. RAW — сразу слушаем аудио без сетевого BPM-поиска.",
+          desc: "RAW - движение волны напрямую слушает песню. BPM - движение синхронизировано по BPM выданный с API-источников.",
           options: [
             { value: "raw", label: "RAW" },
             { value: "bpm", label: "BPM" }
@@ -211,39 +227,39 @@
           type: "choice",
           key: "WAVE_PERFORMANCE_MODE",
           label: "Производительность волны",
-          desc: "Эффективная — включает защиту при скролле и перетаскивании: меньше лагов в экспериментальной Яндекс Музыке. Максимальная — не ограничивает эффекты волны и может подвешивать приложение на тяжёлых страницах.",
+          desc: "Эффективная - уменьшает движения от ЯМ во время скролла. Максимальная - волна работает без ограничений.",
           options: [
             { value: "efficient", label: "Эффективная" },
             { value: "max", label: "Максимальная" }
           ]
         },
 
-        { type: "toggle", key: "__LOG_ENABLED__", label: "Показывать логи", desc: "Включает всплывающие сообщения (если логгер подключён)." },
-        { type: "toggle", key: "__BPM_HUD__", label: "Показывать BPM", desc: "HUD в правом верхнем углу (если HUD подключён)." },
+        { type: "toggle", key: "__LOG_ENABLED__", label: "Показывать логи", desc: "Включает всплывающие сообщения." },
+        { type: "toggle", key: "__BPM_HUD__", label: "Показывать BPM", desc: "HUD в правом верхнем углу." },
       ],
     },
     {
       group: "Реакция на удары",
-      hint: "Отклик внешнего кольца на такт и сильную долю.",
+      hint: "Отклик на такт и сильные биты.",
       items: [
-        { key: "BEAT_IMPULSE_DOWN", label: "Импульс сильной доли (Downbeat)", step: 0.01, min: 0.1, max: 5 },
-        { key: "BEAT_IMPULSE", label: "Импульс обычного бита", step: 0.01, min: 0.1, max: 2 },
-        { key: "KICK_IMPULSE_BASE", label: "База баса (Kick Base)", step: 0.01, min: 0, max: 3 },
+        { key: "BEAT_IMPULSE_DOWN", label: "Импульс сильной доли", step: 0.01, min: 0.1, max: 5 },
+        { key: "BEAT_IMPULSE", label: "Импульс бита", step: 0.01, min: 0.1, max: 2 },
+        { key: "KICK_IMPULSE_BASE", label: "Импульс обычного отбития", step: 0.01, min: 0, max: 3 },
       ],
     },
     {
       group: "Порог и уверенность",
       hint: "Фильтрация шума и минимальная уверенность детектора.",
       items: [
-        { key: "TH_RMS", label: "Порог тишины RMS", step: 0.000001, min: 0, max: 1 },
-        { key: "MIN_CONF", label: "Мин. уверенность (0..1)", step: 0.01, min: 0, max: 1 },
+        { key: "TH_RMS", label: "Порог тишины RMS", step: 0.01, min: 0, max: 1 },
+        { key: "MIN_CONF", label: "Мин. уверенность", step: 0.01, min: 0, max: 1 },
       ],
     },
     {
       group: "Голос",
-      hint: "Реакция inner на вокал: порог срабатывания. Усиление голоса теперь зафиксировано внутри плавного профиля.",
+      hint: "Реакция на вокал.",
       items: [
-        { key: "VOICE_EVENT_THR", label: "Порог голосового события (0..1)", step: 0.01, min: 0, max: 1 },
+        { key: "VOICE_EVENT_THR", label: "Порог голосового события", step: 0.01, min: 0, max: 1 },
       ],
     },
     {
@@ -262,7 +278,7 @@
     },
     {
       group: "Движение волны",
-      hint: "Движение единой волны внутри статичного увеличенного блока: пружина + мягкий дрейф без дополнительного inner-слоя.",
+      hint: "Движение волны: пружина + мягкий дрейф (в следующей версии будет убрано).",
       items: [
         { type: "toggle", key: "MOTION_ENABLED", label: "Включить движение волны", desc: "Двигает основную волну как единый слой, без создания второй волны." },
         { key: "MOTION_STRENGTH", label: "Сила движения (px)", step: 1, min: 0, max: 150 },
@@ -306,6 +322,7 @@
       for (const k in saved) cfg[k] = saved[k];
     }
 
+    clearDeprecatedAutoEnergyKeys(cfg);
     applyFixedSmoothEnergyTuning(cfg);
 
     return cfg;
@@ -320,7 +337,7 @@
     }
 
     try {
-      const cfg = applyFixedSmoothEnergyTuning(ensureBeatConfig());
+      const cfg = clearDeprecatedAutoEnergyKeys(applyFixedSmoothEnergyTuning(ensureBeatConfig()));
       const out = {};
       for (const k in DEFAULT_CFG) out[k] = cfg[k];
       localStorage.setItem(KEY_CFG, JSON.stringify(out));
