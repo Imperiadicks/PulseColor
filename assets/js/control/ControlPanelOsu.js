@@ -55,6 +55,7 @@
     BEAT_LEAD_MS: 20,
 
     ENABLE_CUSTOM_WAVE: true,
+    ENABLE_FULLSCREEN_WAVE: true,
     WAVE_DRIVE_MODE: "raw",
     WAVE_PERFORMANCE_MODE: "efficient"
   };
@@ -212,6 +213,7 @@
       group: "Общее",
       items: [
         { type: "toggle", key: "ENABLE_CUSTOM_WAVE", label: "Кастомная волна", desc: "Главный переключатель. Если выключен — остальные настройки недоступны." },
+        { type: "toggle", key: "ENABLE_FULLSCREEN_WAVE", label: "Волна в полноэкранном режиме", desc: "Дополнительная настройка. Если выключить — основная волна работает, но в fullscreen-плеере не показывается." },
         {
           type: "choice",
           key: "WAVE_DRIVE_MODE",
@@ -251,7 +253,7 @@
       group: "Порог и уверенность",
       hint: "Фильтрация шума и минимальная уверенность детектора.",
       items: [
-        { key: "TH_RMS", label: "Порог тишины RMS", step: 0.01, min: 0, max: 1 },
+        { key: "TH_RMS", label: "Порог тишины", step: 0.01, min: 0, max: 1 },
         { key: "MIN_CONF", label: "Мин. уверенность", step: 0.01, min: 0, max: 1 },
       ],
     },
@@ -377,7 +379,7 @@
     cfg[key] = value;
     persistCfg(opts);
 
-    if (key === "ENABLE_CUSTOM_WAVE") updateCustomWave(true);
+    if (key === "ENABLE_CUSTOM_WAVE" || key === "ENABLE_FULLSCREEN_WAVE") updateCustomWave(true);
     if (key === "WAVE_PERFORMANCE_MODE" && String(value).trim().toLowerCase() === "max") {
       try { window.PulseColorPerformance?.clearInteraction?.(); } catch { }
     }

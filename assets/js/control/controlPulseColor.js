@@ -1,5 +1,5 @@
 // controlPulseColor.js — Core settings for PulseColor (BackgroundImage / FullVibe / Recolor White)
-// ВАЖНО: этот файл только управляет настройками. Реальное применение делает colorize.js (см. патч ниже).
+// ВАЖНО: этот файл только управляет настройками. Применение делает Main.js.
 
 (() => {
     "use strict";
@@ -144,6 +144,13 @@
     function safeParseJson(s) { try { return JSON.parse(s); } catch { return null; } }
 
     function getCore() {
+        try {
+            const shared = window.PulseColorCore?.get?.();
+            if (shared && typeof shared === "object") {
+                return Object.assign({}, DEFAULT_CORE, shared);
+            }
+        } catch { }
+
         const saved = safeParseJson(localStorage.getItem(KEY_CORE) || "");
         const obj = (saved && typeof saved === "object") ? saved : {};
         return Object.assign({}, DEFAULT_CORE, obj);
@@ -154,9 +161,14 @@
         const merged = Object.assign({}, cur, next);
         localStorage.setItem(KEY_CORE, JSON.stringify(merged));
 
-        window.dispatchEvent(new CustomEvent("pulsecolor:coreSettingsChanged", { detail: { core: merged } }));
+        try {
+            if (window.PulseColorCore?.apply) {
+                window.PulseColorCore.apply(merged);
+                return;
+            }
+        } catch { }
 
-        try { window.PulseColorCore?.apply?.(merged); } catch { }
+        window.dispatchEvent(new CustomEvent("pulsecolor:coreSettingsChanged", { detail: { core: merged } }));
     }
 
     /* ========== YM settings list injection ========== */
@@ -444,7 +456,7 @@
         ul.appendChild(
             makeToggleLi(
                 "Recolor: белая база",
-                "Принудительно делает базовый цвет белым (сейчас нет, в следующих версиях будет исправлено).",
+                "Принудительно делает базовый цвет нейтрально-белым без ухода в серый оттенок.",
                 !!core.forceWhiteRecolor,
                 (v) => setCore({ forceWhiteRecolor: !!v })
             )

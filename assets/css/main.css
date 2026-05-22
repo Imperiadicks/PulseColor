@@ -134,12 +134,59 @@
   z-index:5;
   pointer-events:none;
   contain:layout paint;
-  opacity: var(--osu-alpha, .055);
-  filter: brightness(var(--osu-bright, 1));
+  opacity: var(--osu-alpha, .068);
+  filter: brightness(var(--osu-bright, 1.10));
   transform: translate3d(-50%, -50%, 0);
   will-change: opacity, filter;
   isolation: isolate;
   transition: none;
+}
+
+
+.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"],
+.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"]{
+  isolation:isolate;
+  overflow:hidden;
+}
+
+#osu-pulse.pcw-wave-fullscreen-disabled{
+  display:none !important;
+}
+
+#osu-pulse.pcw-wave-fullscreen{
+  position:absolute !important;
+  inset:0 !important;
+  left:0 !important;
+  top:0 !important;
+  width:100% !important;
+  height:100% !important;
+  z-index:1 !important;
+  transform:none !important;
+  opacity:var(--osu-alpha, .074);
+  filter:brightness(var(--osu-bright, 1.16));
+  contain:layout paint;
+  mix-blend-mode:screen;
+}
+
+#osu-pulse.pcw-wave-fullscreen #osu-pulse-outer,
+#osu-pulse.pcw-wave-fullscreen #osu-pulse-inner,
+#osu-pulse.pcw-wave-fullscreen #osu-pulse-rings,
+#osu-pulse.pcw-wave-fullscreen #osu-pulse-center-rings,
+#osu-pulse.pcw-wave-fullscreen #osu-pulse-glow{
+  left:0 !important;
+  right:0 !important;
+  top:0 !important;
+  bottom:0 !important;
+}
+
+.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > header,
+.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > [class*="FullscreenPlayerDesktopContent_root"],
+.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > [class*="FullscreenPlayerDesktop_modalContent"],
+.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > header,
+.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > [class*="FullscreenPlayerDesktopContent_root"],
+.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > [class*="FullscreenPlayerDesktop_modalContent"]{
+  position:relative;
+  z-index:2;
 }
 
 #osu-pulse-outer,
@@ -164,26 +211,26 @@
   transform: scale(var(--osu-scale,1));
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 34%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.09)) 16%, transparent) 34%,
-      transparent 68%);
-  opacity: var(--osu-outer-opacity, .90);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.16)) 44%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 24%, transparent) 36%,
+      transparent 72%);
+  opacity: var(--osu-outer-opacity, .96);
 }
 #osu-pulse-outer::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.18)) 34%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 10%, transparent) 26%,
-      transparent 66%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.22)) 44%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.17)) 18%, transparent) 28%,
+      transparent 70%);
   opacity:0; transform:scale(.88);
 }
-#osu-pulse-outer.pulse::after{ animation: osuRing 520ms cubic-bezier(.22,.61,.36,1); }
+#osu-pulse-outer.pulse::after{ animation: osuRing 860ms cubic-bezier(.16,1,.3,1); }
 @keyframes osuRing{
-  0%   { opacity:0;    transform:scale(.88); }
-  18%  { opacity:.145; transform:scale(.95); }
-  52%  { opacity:.082; transform:scale(1.02); }
-  100% { opacity:0;    transform:scale(1.09); }
+  0%   { opacity:0;    transform:scale(.90); }
+  30%  { opacity:.165; transform:scale(.98); }
+  64%  { opacity:.096; transform:scale(1.035); }
+  100% { opacity:0;    transform:scale(1.105); }
 }
 
 #osu-pulse-inner{
@@ -290,24 +337,24 @@
 }
 
 .ym-light-theme #osu-pulse{
-  opacity: var(--osu-alpha, .06);
-  filter: brightness(var(--osu-bright, .92));
+  opacity: var(--osu-alpha, .064);
+  filter: brightness(var(--osu-bright, .96));
 }
 
 .ym-light-theme #osu-pulse-outer{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.055)) 22%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.045)) 9%, transparent) 34%,
-      transparent 68%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 24%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.048)) 10%, transparent) 36%,
+      transparent 72%);
 }
 
 .ym-light-theme #osu-pulse-outer::after{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.075)) 30%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 8%, transparent) 26%,
-      transparent 66%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.080)) 32%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.064)) 10%, transparent) 28%,
+      transparent 70%);
 }
 
 .ym-light-theme #osu-pulse-inner{
@@ -326,3 +373,55 @@
     var(--ym-background-color-secondary-enabled-blur) 82%) !important;
 }
 
+/* Theme-specific shell surfaces for the two app modes. */
+.ym-light-theme .CommonLayout_root__WC_W1 {
+  border: 1px solid color-mix(in hsl, var(--color-dark-10) 42%, transparent);
+  background:
+    radial-gradient(130% 120% at 4% 2%,
+      color-mix(in hsl, var(--color-light-10) 48%, var(--ym-background-color-primary-enabled-content)) 0%,
+      transparent 44%),
+    radial-gradient(92% 110% at 80% 76%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 88%, var(--ym-background-color-primary-enabled-basic)) 0%,
+      transparent 70%),
+    linear-gradient(132deg,
+      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 74%, var(--color-light-10)) 0%,
+      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 78%, var(--ym-background-color-secondary-enabled-blur)) 55%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 34%, transparent),
+    inset 0 -34px 72px color-mix(in hsl, var(--ym-background-color-primary-enabled-basic) 22%, transparent) !important;
+}
+
+.ym-dark-theme .CommonLayout_root__WC_W1 {
+  border: 1px solid color-mix(in hsl, var(--color-light-10) 12%, transparent);
+  background:
+    radial-gradient(92% 126% at 66% 20%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 82%, var(--color-light-4)) 0%,
+      transparent 55%),
+    radial-gradient(96% 104% at 10% 100%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 32%, transparent) 0%,
+      transparent 68%),
+    linear-gradient(132deg,
+      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 88%, var(--ym-background-color-primary-enabled-basic)) 0%,
+      var(--ym-background-color-primary-enabled-content) 48%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 7%, transparent),
+    inset 0 -40px 88px color-mix(in hsl, var(--color-dark-10) 52%, transparent) !important;
+}
+
+.ym-light-theme .Content_main__8_wIa,
+.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
+  border-color: color-mix(in hsl, var(--color-dark-10) 40%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in hsl, var(--color-light-10) 18%, transparent) inset,
+    0 1px 0 color-mix(in hsl, var(--color-light-10) 16%, transparent) !important;
+}
+
+.ym-dark-theme .Content_main__8_wIa,
+.ym-dark-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
+  border-color: color-mix(in hsl, var(--color-light-10) 14%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in hsl, var(--color-dark-10) 44%, transparent) inset,
+    0 1px 0 color-mix(in hsl, var(--color-light-10) 6%, transparent) !important;
+}

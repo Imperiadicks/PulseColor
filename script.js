@@ -56,6 +56,7 @@
       await injectCss("main.css");
       await injectCss("osu.css");
 
+      await loadJs("Main.js");
       await loadJs("colorize.js");
       await loadJs("OnlineOsuBPM.js");
       await loadJs("MainOsu.js");

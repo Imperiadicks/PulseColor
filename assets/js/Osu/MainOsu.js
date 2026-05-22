@@ -1486,8 +1486,97 @@ function __pcwSettingsOpen() {
 
   // ── DOM ──────────────────────────────────────────────────────────────
   let root = document.getElementById('osu-pulse');
-  if (!root) { root = document.createElement('div'); root.id = 'osu-pulse'; document.body.appendChild(root); }
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'osu-pulse';
+    document.body.appendChild(root);
+  }
+  root.setAttribute('aria-hidden', 'true');
   root.style.removeProperty('transform');
+
+  const FULLSCREEN_PLAYER_SELECTOR = '[data-test-id="FULLSCREEN_PLAYER_MODAL"], [class*="FullscreenPlayerDesktop_root"]';
+  const BEAT_CFG_STORAGE_KEY = 'PulseColor.BeatDriverConfig.v1';
+
+  const getStoredBooleanCfg = (key, fallback = true) => {
+    const cfg = window.BeatDriverConfig;
+    if (cfg && Object.prototype.hasOwnProperty.call(cfg, key)) return !!cfg[key];
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(BEAT_CFG_STORAGE_KEY) || '{}');
+      if (saved && Object.prototype.hasOwnProperty.call(saved, key)) return !!saved[key];
+    } catch { }
+
+    return !!fallback;
+  };
+
+  const isFullscreenWaveAllowed = () => {
+    return getStoredBooleanCfg('ENABLE_CUSTOM_WAVE', true) &&
+      getStoredBooleanCfg('ENABLE_FULLSCREEN_WAVE', true);
+  };
+
+  let fullscreenWaveActive = false;
+  let lastWaveHostSyncTs = 0;
+
+  const isVisibleNode = (node) => {
+    if (!node || !node.isConnected) return false;
+    if (node.closest('[hidden], [aria-hidden="true"]')) return false;
+
+    const rects = node.getClientRects?.();
+    const rect = node.getBoundingClientRect?.();
+    if (!rects?.length || !rect || rect.width <= 10 || rect.height <= 10) return false;
+    if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= innerWidth || rect.top >= innerHeight) return false;
+
+    for (let current = node; current && current !== document.documentElement; current = current.parentElement) {
+      const style = getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    }
+
+    return true;
+  };
+
+  const findFullscreenPlayerHost = () => {
+    const nodes = [...document.querySelectorAll(FULLSCREEN_PLAYER_SELECTOR)];
+    return nodes.find(isVisibleNode) || null;
+  };
+
+  const syncWaveHost = (force = false) => {
+    const t = now();
+    if (!force && t - lastWaveHostSyncTs < 220) return;
+    lastWaveHostSyncTs = t;
+
+    const fullscreenHost = findFullscreenPlayerHost();
+    const fullscreenAllowed = isFullscreenWaveAllowed();
+    const targetHost = fullscreenHost && fullscreenAllowed ? fullscreenHost : document.body;
+    if (!targetHost) return;
+
+    if (root.parentElement !== targetHost) {
+      targetHost.insertBefore(root, targetHost.firstElementChild || null);
+    }
+
+    const nextFullscreenActive = !!fullscreenHost && fullscreenAllowed;
+    const nextFullscreenDisabled = !!fullscreenHost && !fullscreenAllowed;
+
+    root.classList.toggle('pcw-wave-fullscreen-disabled', nextFullscreenDisabled);
+    document.documentElement.classList.toggle('pcw-fullscreen-wave-disabled', nextFullscreenDisabled);
+
+    if (fullscreenWaveActive !== nextFullscreenActive || force) {
+      fullscreenWaveActive = nextFullscreenActive;
+      root.classList.toggle('pcw-wave-fullscreen', nextFullscreenActive);
+      document.documentElement.classList.toggle('pcw-fullscreen-wave-active', nextFullscreenActive);
+    }
+  };
+
+  syncWaveHost(true);
+
+  window.addEventListener('pulsecolor:beatDriverConfigChanged', () => syncWaveHost(true));
+
+  const waveHostObserver = new MutationObserver(() => syncWaveHost());
+  waveHostObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-test-id', 'aria-hidden']
+  });
 
   const applyViewportWaveLayerBounds = (node) => {
     if (!node?.style) return;
@@ -1568,9 +1657,11 @@ function __pcwSettingsOpen() {
   const rings = [];
   const centerRings = [];
   const MAX_RINGS = 4;
-  const MAX_CENTER_RINGS = 5;
-  const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
-  const easeOutQuad = x => 1 - (1 - x) * (1 - x);
+  const MAX_CENTER_RINGS = 4;
+  const easeSmooth = x => {
+    const v = clamp(x, 0, 1);
+    return v * v * v * (v * (v * 6 - 15) + 10);
+  };
 
   function spawnRing(detail) {
     const bpm = window.OsuBeat?.bpm?.();
@@ -1580,29 +1671,39 @@ function __pcwSettingsOpen() {
     while (rings.length >= MAX_RINGS) { const r = rings.shift(); r?.el?.remove(); }
     const conf = +(window.OsuBeat?.confidence?.() ?? 0);
     const period = clamp(60000 / Math.max(50, Math.min(210, bpm)), 285, 900);
-    const dur = clamp(period * (0.95 + (1 - conf) * 0.25), 260, 1000);
+    const dur = clamp(period * (1.18 + (1 - conf) * 0.30), 420, 1320);
 
     const down = !!detail?.downbeat;
     const energyState = window.PulseColorWaveEnergy?.getState?.() || {};
     const energy = clamp(energyState.energy || 0, 0, 1);
     const heavy = clamp(energyState.heavy || 0, 0, 1);
-    const baseScale = down ? 1.035 : 1.015;
-    const endScale = down ? 1.26 : 1.18;
-    const startAlpha = clamp(0.052 + conf * 0.060 + heavy * 0.045 + energy * 0.026, 0.045, 0.185);
+    const baseScale = down ? 1.045 : 1.025;
+    const midScale = down ? 1.135 : 1.095;
+    const endScale = down ? 1.31 : 1.22;
+    const peakAlpha = clamp(0.064 + conf * 0.066 + heavy * 0.050 + energy * 0.034, 0.055, 0.210);
+    const attack = down ? 0.34 : 0.40;
 
     const el = document.createElement('div');
     el.className = 'osu-ring';
     el.style.cssText = `
       position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;border-radius:50%;
-      transform:scale(${baseScale});opacity:${startAlpha};transition:none;filter:blur(${down ? 0.6 : 0.4}px);
+      transform:scale(${baseScale});opacity:0;transition:none;filter:blur(${down ? 0.9 : 0.7}px);
       background:
         radial-gradient(circle at 50% 55%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 38%, transparent) 0%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.16)) 18%, transparent) 30%,
-          transparent 68%);
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.24)) 48%, transparent) 0%,
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 25%, transparent) 30%,
+          transparent 72%);
       will-change:transform,opacity,filter;`;
     ringHost.appendChild(el);
-    rings.push({ el, t0: now(), dur, start: { s: baseScale, a: startAlpha }, end: { s: endScale, a: 0 } });
+    rings.push({
+      el,
+      t0: now(),
+      dur,
+      attack,
+      start: { s: baseScale, a: 0 },
+      mid: { s: midScale, a: peakAlpha },
+      end: { s: endScale, a: 0 }
+    });
   }
 
   function spawnCenterRing(options = {}) {
@@ -1614,27 +1715,29 @@ function __pcwSettingsOpen() {
     const heavy = clamp(Number.isFinite(+options.heavy) ? +options.heavy : 0, 0, 1);
     const strong = !!options.strong;
     const energetic = clamp(strength * 0.56 + energy * 0.24 + heavy * 0.20 + (strong ? 0.16 : 0), 0, 1);
-    const dur = clamp(options.dur || lerp(1840, 700, energetic), 680, 2000);
-    const attack = lerp(0.44, 0.18, energetic);
+    const dur = clamp(options.dur || lerp(2400, 1120, energetic), 980, 2600);
+    const attack = lerp(0.58, 0.34, energetic);
+    const enforcedGap = clamp(options.minGap || lerp(820, 500, energetic), 430, 920);
+    if (t0 - (S.__lastCenterRingTs || 0) < enforcedGap) return;
 
     while (centerRings.length >= MAX_CENTER_RINGS) { const r = centerRings.shift(); r?.el?.remove(); }
 
     const startScale = clamp(0.045 + strength * 0.045, 0.045, 0.15);
     const midScale = clamp(0.24 + strength * 0.18 + heavy * 0.08, 0.22, 0.58);
     const endScale = clamp(0.84 + strength * 0.30 + heavy * 0.10, 0.76, 1.30);
-    const peakAlpha = clamp(0.046 + strength * 0.086 + heavy * 0.036 + (strong ? 0.018 : 0), 0.040, 0.185);
+    const peakAlpha = clamp(0.058 + strength * 0.104 + heavy * 0.044 + (strong ? 0.020 : 0), 0.050, 0.220);
 
     const el = document.createElement('div');
     el.className = 'osu-ring osu-center-ring';
     el.style.cssText = `
       position:absolute; inset:22%; pointer-events:none; mix-blend-mode:screen; border-radius:50%;
-      transform:scale(${startScale}); opacity:0; filter:blur(24px);
+      transform:scale(${startScale}); opacity:0; filter:blur(28px);
       background:
         radial-gradient(circle at 50% 50%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 50%, transparent) 0%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.17)) 24%, transparent) 24%,
-          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.13)) 12%, transparent) 48%,
-          transparent 76%);
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.26)) 64%, transparent) 0%,
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.21)) 34%, transparent) 24%,
+          color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.16)) 18%, transparent) 50%,
+          transparent 80%);
       will-change:transform,opacity,filter;`;
 
     centerRingHost.appendChild(el);
@@ -1643,9 +1746,9 @@ function __pcwSettingsOpen() {
       t0,
       dur,
       attack,
-      start: { s: startScale, b: 24 },
-      mid: { s: midScale, a: peakAlpha, b: strong ? 9 : 12 },
-      end: { s: endScale, a: 0, b: strong ? 15 : 18 }
+      start: { s: startScale, b: 28 },
+      mid: { s: midScale, a: peakAlpha, b: strong ? 10 : 14 },
+      end: { s: endScale, a: 0, b: strong ? 20 : 24 }
     });
     S.__lastCenterRingTs = t0;
   }
@@ -1662,8 +1765,8 @@ function __pcwSettingsOpen() {
     const since = t0 - (S.__lastCenterRingTs || 0);
     const energyMix = clamp(energy * 0.44 + heavy * 0.42 + motion * 0.14, 0, 1);
     const minGap = bpmDrive
-      ? lerp(1020, 330, Math.pow(clamp(heavy * 0.72 + motion * 0.28, 0, 1), 1.10))
-      : lerp(2200, 360, Math.pow(energyMix, 1.12));
+      ? lerp(1180, 440, Math.pow(clamp(heavy * 0.72 + motion * 0.28, 0, 1), 1.10))
+      : lerp(2500, 470, Math.pow(energyMix, 1.12));
 
     const energyDelta = Math.max(0, energy - (S.__lastEnergyRingEnergy || 0));
     const riseGate = bpmDrive ? 0.44 : 0.215;
@@ -1744,7 +1847,8 @@ function __pcwSettingsOpen() {
         energy: energy.energy || 0,
         heavy: energy.heavy || 0,
         strong: strongMix > 0.55,
-        dur: lerp(1320, 820, strongMix)
+        dur: lerp(1780, 1160, strongMix),
+        minGap: 520
       });
     }
   });
@@ -1778,6 +1882,7 @@ function __pcwSettingsOpen() {
 
   (function frame() {
     const tNow = performance.now();
+    syncWaveHost();
     const interactionActive = !!window.PulseColorPerformance?.isInteracting?.();
     const targetFrameMs = interactionActive ? 66 : 16;
 
@@ -1825,14 +1930,14 @@ function __pcwSettingsOpen() {
     const scaleLift = Math.max(scales.outer, scales.inner) - 1;
     const bassFlash = clamp((heavyMotion - 0.48) * 1.75 + (energyState.rise || 0) * 0.28, 0, 1);
     const baseBright = waveActive
-      ? (1 + scaleLift * 0.56 + energyMotion * 0.050 + bassFlash * 0.155)
+      ? (1.07 + scaleLift * 0.48 + energyMotion * 0.080 + bassFlash * 0.175)
       : 1;
-    const brightRaw = baseBright * Math.min(cfg.BRIGHTNESS_BASE || 1, 1.26);
-    const bright = Math.min(brightRaw, 1.74);
+    const brightRaw = baseBright * Math.min(cfg.BRIGHTNESS_BASE || 1, 1.30);
+    const bright = Math.min(brightRaw, 1.86);
     const rmsUi = bpmDrive
       ? clamp(scaleLift * 2.25 + conf * 0.08 + energyMotion * 0.16 + bassFlash * 0.18, 0, 1)
       : clamp((window.__OSU__?.rms || 0) * 1.70 + energyMotion * 0.14 + bassFlash * 0.22, 0, 1);
-    const alpha = waveActive ? clamp(0.046 + 0.104 * clamp(rmsUi * 0.58 + energyMotion * 0.24 + bassFlash * 0.22, 0, 1), 0.046, 0.158) : 0.040;
+    const alpha = waveActive ? clamp(0.058 + 0.122 * clamp(rmsUi * 0.56 + energyMotion * 0.25 + bassFlash * 0.24, 0, 1), 0.058, 0.188) : 0.044;
     const renderBright = interactionActive ? 1 : bright;
     const renderAlpha = alpha;
 
@@ -1843,8 +1948,8 @@ function __pcwSettingsOpen() {
       setStyleCached(glow, 'opacity', '0');
       setStyleCached(glow, 'filter', 'none');
     } else {
-      const glowAlpha = clamp(0.018 + bassFlash * 0.180 + heavyMotion * 0.040, 0.018, 0.255);
-      const glowBlur = 18 + bassFlash * 42 + heavyMotion * 12;
+      const glowAlpha = clamp(0.028 + bassFlash * 0.198 + heavyMotion * 0.048, 0.026, 0.285);
+      const glowBlur = 22 + bassFlash * 46 + heavyMotion * 14;
       setStyleCached(glow, 'opacity', glowAlpha.toFixed(3));
       setStyleCached(glow, 'filter', `blur(${glowBlur.toFixed(1)}px)`);
     }
@@ -1928,11 +2033,15 @@ function __pcwSettingsOpen() {
     const moveX = motionAllowed ? S.dx : 0;
     const moveY = motionAllowed ? (S.dy + (S.breath || 0)) : 0;
     const moveTransform = `translate3d(${moveX.toFixed(2)}px, ${moveY.toFixed(2)}px, 0)`;
+    const outerMoveTransform = `translate3d(${(moveX * 0.26).toFixed(2)}px, ${(moveY * 0.22).toFixed(2)}px, 0)`;
     const visibleScaleBase = Math.max(scales.outer || 1, scales.inner || 1);
+    const outerScaleBase = 1 + (visibleScaleBase - 1) * 0.68;
     const energyLift = motionAllowed ? (1 + energyMotion * 0.018 + bassFlash * 0.032) : 1;
+    const outerEnergyLift = motionAllowed ? (1 + energyMotion * 0.010 + bassFlash * 0.020) : 1;
     const visibleScale = visibleScaleBase * energyLift;
+    const outerVisibleScale = outerScaleBase * outerEnergyLift * 1.075;
 
-    setStyleCached(outer, 'transform', `${moveTransform} scale(${visibleScale.toFixed(4)})`);
+    setStyleCached(outer, 'transform', `${outerMoveTransform} scale(${outerVisibleScale.toFixed(4)})`);
     setStyleCached(ringHost, 'transform', moveTransform);
     setStyleCached(centerRingHost, 'transform', moveTransform);
     setStyleCached(glow, 'transform', moveTransform);
@@ -1947,9 +2056,22 @@ function __pcwSettingsOpen() {
       for (let i = 0; i < rings.length; i++) {
         const r = rings[i];
         const p = clamp((tt - r.t0) / r.dur, 0, 1);
-        const k = easeOutCubic(p);
-        setStyleCached(r.el, 'transform', `scale(${(r.start.s + (r.end.s - r.start.s) * k).toFixed(4)})`);
-        setStyleCached(r.el, 'opacity', (r.start.a + (r.end.a - r.start.a) * k).toFixed(3));
+        const attack = clamp(r.attack || 0.38, 0.24, 0.54);
+        let scale = r.end.s;
+        let alphaRing = 0;
+
+        if (p < attack) {
+          const q = easeSmooth(p / attack);
+          scale = lerp(r.start.s, r.mid.s, q);
+          alphaRing = lerp(0, r.mid.a, q);
+        } else {
+          const q = easeSmooth((p - attack) / Math.max(0.001, 1 - attack));
+          scale = lerp(r.mid.s, r.end.s, q);
+          alphaRing = lerp(r.mid.a, r.end.a, q);
+        }
+
+        setStyleCached(r.el, 'transform', `scale(${scale.toFixed(4)})`);
+        setStyleCached(r.el, 'opacity', alphaRing.toFixed(3));
         if (p >= 1) toRemove.push(i);
       }
       for (let i = toRemove.length - 1; i >= 0; i--) { const r = rings.splice(toRemove[i], 1)[0]; r?.el?.remove(); }
@@ -1965,15 +2087,15 @@ function __pcwSettingsOpen() {
         let alphaRing = r.end.a;
         let blur = r.end.b;
 
-        const attack = clamp(r.attack || 0.34, 0.18, 0.48);
+        const attack = clamp(r.attack || 0.48, 0.30, 0.64);
 
         if (p < attack) {
-          const q = easeOutQuad(p / attack);
+          const q = easeSmooth(p / attack);
           scale = lerp(r.start.s, r.mid.s, q);
           alphaRing = lerp(0, r.mid.a, q);
           blur = lerp(r.start.b, r.mid.b, q);
         } else {
-          const q = easeOutCubic((p - attack) / Math.max(0.001, 1 - attack));
+          const q = easeSmooth((p - attack) / Math.max(0.001, 1 - attack));
           scale = lerp(r.mid.s, r.end.s, q);
           alphaRing = lerp(r.mid.a, r.end.a, q);
           blur = lerp(r.mid.b, r.end.b, q);
