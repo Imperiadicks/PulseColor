@@ -63,7 +63,10 @@
 
   const coverSrcFromImg = (img) => {
     if (!img) return '';
-    return img.currentSrc || img.src || (img.getAttribute && (img.getAttribute('src') || '')) || '';
+    const src = img.currentSrc || img.src || (img.getAttribute && (img.getAttribute('src') || '')) || '';
+    if (src) return src;
+    const srcset = img.getAttribute?.('srcset') || '';
+    return srcset.split(',')[0]?.trim().split(/\s+/)[0] || '';
   };
 
   const coverScore = (img) => {
@@ -258,25 +261,22 @@
   };
 
   /*──────────────────────── palette & vars ────────────────*/
-  const isForcedWhiteBase = (base) => (+base.s || 0) <= 1 && (+base.l || 0) >= 99;
-
   const tuneBaseForTheme = (base, mode = 'dark') => {
     const neutral = (+base.s || 0) <= 2;
-    const forcedWhite = isForcedWhiteBase(base);
 
     if (neutral) {
       if (mode === 'light') {
         return {
           h: 0,
           s: 0,
-          l: forcedWhite ? 100 : +clamp(base.l * 0.94, 78, 92).toFixed(1)
+          l: +clamp(base.l * 0.94, 78, 92).toFixed(1)
         };
       }
 
       return {
         h: 0,
         s: 0,
-        l: forcedWhite ? 50 : +clamp(base.l * 0.46, 34, 48).toFixed(1)
+        l: +clamp(base.l * 0.46, 34, 48).toFixed(1)
       };
     }
 
@@ -299,10 +299,8 @@
     const tuned = tuneBaseForTheme(base, mode);
     const vars = {};
     const neutral = (+tuned.s || 0) <= 2;
-    const forcedWhite = isForcedWhiteBase(base);
     const minSat = neutral ? 0 : 8;
     const maxSat = neutral ? 0 : 72;
-    const lightLimit = forcedWhite ? 100 : 98;
 
     for (let i = 1; i <= 10; i++) {
       const p = i / 10;
@@ -310,7 +308,7 @@
       const lightColor = {
         h: neutral ? 0 : tuned.h,
         s: clamp(tuned.s - p * (mode === 'light' ? 5 : 4), minSat, maxSat),
-        l: clamp(tuned.l + (lightLimit - tuned.l) * p, 4, lightLimit)
+        l: clamp(tuned.l + (98 - tuned.l) * p, 4, 98)
       };
 
       const darkColor = {
@@ -338,7 +336,7 @@
     const gradTo = {
       h: neutral ? 0 : tuned.h,
       s: neutral ? 0 : clamp(tuned.s - (mode === 'light' ? 4 : 2), 4, 76),
-      l: clamp(tuned.l + (mode === 'light' ? 8 : 16), 4, lightLimit)
+      l: clamp(tuned.l + (mode === 'light' ? 8 : 16), 4, 98)
     };
 
     vars['--grad-main-from'] = H(gradFrom);
@@ -419,7 +417,41 @@ ${buildPaletteAliasBlock()}
 `;
   })();
 
+  const COLORIZE_WAVE_CROSSFADE_CSS = `
+html.pcw-color-transitioning #osu-pulse-outer {
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
+      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
+      transparent 75%) !important;
+}
 
+html.pcw-color-transitioning #osu-pulse-outer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 55%,
+      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
+      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
+      transparent 75%);
+  opacity: var(--pc-wave-crossfade-opacity, 0);
+  mix-blend-mode: screen;
+  will-change: opacity;
+}
+
+html.pcw-color-transitioning #osu-pulse-outer::after {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+html.pcw-color-transitioning #osu-pulse-glow,
+html.pcw-color-transitioning .osu-ring {
+  opacity: 0 !important;
+  filter: none !important;
+}
+`;
 
 
   /*──────────────────────── YM MAPS ───────────────────────*/
@@ -537,22 +569,6 @@ ${buildPaletteAliasBlock()}
 
     --pc-glass-border: var(--color-light-10-1);
     --pc-glass-border-strong: var(--color-light-10-2);
-    --pc-shell-background:
-      linear-gradient(180deg, color-mix(in hsl, var(--color-light-10) 5%, transparent) 0%, transparent 11%),
-      linear-gradient(126deg,
-        color-mix(in hsl, var(--color-dark-8) 92%, var(--color-dark-10)) 0%,
-        color-mix(in hsl, var(--color-dark-7) 72%, var(--color-dark-10)) 38%,
-        color-mix(in hsl, var(--color-dark-10) 88%, var(--color-dark-7)) 73%,
-        var(--color-dark-10) 100%);
-    --pc-shell-border: color-mix(in hsl, var(--color-light-10) 13%, transparent);
-    --pc-shell-frame-shadow:
-      inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 7%, transparent),
-      inset 0 -40px 92px color-mix(in hsl, var(--color-dark-10) 34%, transparent);
-    --pc-panel-surface: color-mix(in hsl, var(--color-dark-9) 22%, transparent);
-    --pc-panel-border: color-mix(in hsl, var(--color-light-10) 15%, transparent);
-    --pc-panel-shadow:
-      inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 5%, transparent),
-      0 0 0 1px color-mix(in hsl, var(--color-dark-10) 24%, transparent);
     --pc-card-bg: color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 72%, transparent);
     --pc-card-bg-strong: color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 84%, var(--ym-background-color-primary-enabled-basic));
     --pc-hover-bg: color-mix(in hsl, var(--ym-controls-color-secondary-default-hovered) 78%, transparent);
@@ -678,21 +694,6 @@ ${buildPaletteAliasBlock()}
 
     --pc-glass-border: var(--color-dark-8-1);
     --pc-glass-border-strong: var(--color-dark-8-2);
-    --pc-shell-background:
-      linear-gradient(180deg, color-mix(in hsl, var(--color-light-10) 24%, transparent) 0%, transparent 10%),
-      linear-gradient(128deg,
-        color-mix(in hsl, var(--color-light-7) 88%, var(--color-light-10)) 0%,
-        color-mix(in hsl, var(--color-light-5) 78%, var(--color-light-8)) 48%,
-        color-mix(in hsl, var(--color-light-3) 84%, var(--color-light-6)) 100%);
-    --pc-shell-border: color-mix(in hsl, var(--color-dark-10) 40%, transparent);
-    --pc-shell-frame-shadow:
-      inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 38%, transparent),
-      inset 0 -34px 74px color-mix(in hsl, var(--color-light-2) 22%, transparent);
-    --pc-panel-surface: color-mix(in hsl, var(--color-light-8) 14%, transparent);
-    --pc-panel-border: color-mix(in hsl, var(--color-dark-10) 40%, transparent);
-    --pc-panel-shadow:
-      inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 22%, transparent),
-      0 0 0 1px color-mix(in hsl, var(--color-light-10) 12%, transparent);
     --pc-card-bg: color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 72%, transparent);
     --pc-card-bg-strong: color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 84%, var(--ym-background-color-primary-enabled-basic));
     --pc-hover-bg: color-mix(in hsl, var(--ym-controls-color-secondary-default-hovered) 62%, transparent);
@@ -704,7 +705,281 @@ ${buildPaletteAliasBlock()}
     --pc-pulse-alpha: .68;
   `;
 
+  const THEME_CSS_SHARED = `
+    .DefaultLayout_root__*, .CommonLayout_root__* {
+      background: transparent !important;
+    }
 
+    .Root {
+      background: var(--ym-background-color-primary-enabled-content) !important;
+    }
+
+    body.sc-has-grad::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: var(--grad-main);
+      opacity: .14;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    [class*="MainPage_vibe"] {
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+      transition: height 1.5s ease;
+    }
+
+    .CommonLayout_root__WC_W1,
+    .WithTopBanner_root__P__x3,
+    .Navbar_root__chfAR,
+    .EntitySidebar_root__D1fGh,
+    .Divider_root__99zZ {
+      background:
+        radial-gradient(circle at 72% 22%, var(--ym-background-color-secondary-enabled-blur) 0%, transparent 34%),
+        radial-gradient(circle at 20% 80%, var(--ym-background-color-secondary-enabled-blur) 0%, transparent 28%),
+        linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0%, var(--ym-background-color-primary-enabled-basic) 100%) !important;
+      box-shadow:
+        inset 0 1px 0 var(--pc-glass-border),
+        inset 0 -24px 48px var(--pc-shell-shadow-soft),
+        0 18px 44px rgba(0, 0, 0, 0.10) !important;
+    }
+
+    .CommonLayout_root__WC_W1,
+    .WithTopBanner_root__P__x3 {
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .PageHeaderPlaylist_root__yJBii,
+    .CommonAlbumPage_averageColorBackground__hs1_3,
+    .PlaylistPage_averageColorBackground__3wEkw,
+    .ArtistPage_averageColorBackground__wXTSY {
+      background:
+        linear-gradient(180deg, var(--ym-controls-color-secondary-default-enabled, var(--ym-background-color-secondary-enabled-blur)) 0%, transparent 100%) !important;
+    }
+
+    .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs,
+    .Content_rootOld__g85_m,
+    .Content_main__8_wIa,
+    .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
+    .LikesAndHistory_historyIconContainer__KPPbS,
+    .LikesAndHistoryItem_root__oI1gk {
+      background: unset;
+    }
+
+    .Content_main__8_wIa,
+    .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
+      border: 1px solid var(--pc-glass-border) !important;
+      box-shadow: var(--pc-shell-shadow) !important;
+      border-radius: 18px;
+    }
+
+    .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs {
+      border-top: 1px solid var(--pc-glass-border) !important;
+    }
+
+    .rWukOKAJh5Ga7JuIp62L,
+    .LikesAndHistory_historyIconContainer__KPPbS,
+    .LikesAndHistoryItem_root__oI1gk,
+    .VibeContext_context__Z_82k,
+    .VibeSettings_toggleSettingsButton__j6fIU,
+    .VibeContext_pinButton__b6SNF {
+      background: var(--pc-backdrop) !important;
+      border: 1px solid var(--pc-glass-border) !important;
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.10);
+    }
+
+    .rWukOKAJh5Ga7JuIp62L:hover,
+    .LikesAndHistory_historyIconContainer__KPPbS:hover,
+    .LikesAndHistoryItem_root__oI1gk:hover {
+      background: var(--pc-hover-bg) !important;
+    }
+
+    .SonataFullscreenControlsDesktop_sonataButton__69FFc,
+    .iJVAJMgccD4vj4E4o068,
+    .WsKeF73pWotx9W1tWdYY,
+    .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
+    .vqAVPWFJlhAOleK_SLk4,
+    .wy8tgXoSb23KtiD3EFWg,
+    .Meta_title__GGBnH {
+      color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+    }
+
+    .JjlbHZ4FaP9EAcR_1DxF:active {
+      color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+    }
+
+    .JjlbHZ4FaP9EAcR_1DxF:hover,
+    .ChangeVolume_icon__5Zv2a:hover {
+      color: var(--ym-controls-color-primary-default-hovered) !important;
+    }
+
+    .PlaylistFilters_filter_selected__y3GuB {
+      border-color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+      background: var(--pc-backdrop) !important;
+    }
+
+    .ChangeVolume_root__HDxtA {
+      max-width: 160px;
+    }
+
+    .DefaultLayout_content__md70Z .MainPage_root__STXqc::-webkit-scrollbar,
+    .By12CU9obvaH0jYtauNw::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
+
+    .By12CU9obvaH0jYtauNw {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .MainPage_landing___FGNm {
+      padding-right: 24px;
+    }
+
+    .SyncLyrics_content__lbkWP::after,
+    .SyncLyrics_content__lbkWP::before {
+      display: none;
+    }
+
+    .FullscreenPlayerDesktop_poster_withSyncLyricsAnimation__bPO0o.FullscreenPlayerDesktop_important__dGfiL,
+    .SyncLyricsCard_root__92qn_ {
+      inset-block-end: 35px !important;
+    }
+
+    .NavbarDesktop_logoLink__KR0Dk {
+      margin-top: 15px;
+    }
+
+    .CollectionPage_collectionColor__M5l1f,
+    .ygfy3HHHNs5lMz5mm4ON,
+    .yvGpKZBZLwidMfMcVMR3,
+    .PSBpanel {
+      color: var(--ym-logo-color-primary-variant) !important;
+    }
+
+    .PSBpanel {
+      left: 0;
+      right: 0 !important;
+      display: flex;
+      justify-content: center;
+      font-weight: 500 !important;
+    }
+
+    .mdbxU6IWInQTsVjwnapn {
+      background: var(--color-light-5) !important;
+    }
+
+    .xZzTMqgg0qtV5vqUIrkK {
+      background-color: var(--color-dark-3-6) !important;
+    }
+
+    .kc5CjvU5hT9KEj0iTt3C {
+      backdrop-filter: none;
+      transition: backdrop-filter .24s ease, background-color .24s ease, border-color .24s ease;
+    }
+
+    .kc5CjvU5hT9KEj0iTt3C:hover,
+    .kc5CjvU5hT9KEj0iTt3C:focus {
+      backdrop-filter: saturate(180%) blur(18px);
+      background: var(--pc-backdrop) !important;
+      border-color: var(--pc-glass-border-strong) !important;
+    }
+
+    ::placeholder {
+      color: var(--pc-text-soft) !important;
+    }
+
+    canvas {
+      opacity: .18 !important;
+      filter: blur(280px) !important;
+    }
+
+    .VibeBlock_vibeAnimation__XVEE6::after,
+    .VibeAnimation_enter_active__j0jOl,
+    .VibeAnimation_enter_done__Oi2Kz,
+    .VibeAnimation_exit__ioGXk,
+    [class*="VibeAnimation_enter_active__"],
+    [class*="VibeAnimation_enter_done__"],
+    [class*="VibeAnimation_exit__"] {
+      opacity: 0 !important;
+      background: transparent !important;
+    }
+
+    .VibeBlock_controls__BpDFL {
+      z-index: 2;
+    }
+
+    .MsLY_qiKofQrwKAr98EC:after,
+    .PlayQueue_root__ponhw:after,
+    .PlayQueue_root__ponhw:before,
+    .PinsList_root_hasPins__3LXlo:after,
+    .PinsList_root_hasPins__3LXlo:before,
+    .NavbarDesktop_scrollableContainer__HLc9D:before,
+    .NavbarDesktop_scrollableContainer__HLc9D:after,
+    .SearchPage_skeletonStickyHeader__SQqeV.SearchPage_important__z3aCa{
+    background:
+      linear-gradient(
+        ◯turn  /* браузер-фикс от YM */
+        var(--fade-background-color,
+        var(--ym-background-color-secondary-enabled-blur)) 0,
+        hsla(0 0% 5% / .90) 100%);
+    }
+
+    body.ym-light-theme.sc-has-grad::before,
+    .ym-light-theme body.sc-has-grad::before {
+      opacity: .08;
+      filter: saturate(.82) brightness(1.01);
+    }
+
+
+    .ym-light-theme .CommonLayout_root__WC_W1,
+    .ym-light-theme .WithTopBanner_root__P__x3,
+    .ym-light-theme .Navbar_root__chfAR,
+    .ym-light-theme .EntitySidebar_root__D1fGh,
+    .ym-light-theme .Divider_root__99zZ {
+      box-shadow:
+        inset 0 1px 0 var(--pc-glass-border),
+        inset 0 -18px 36px var(--pc-shell-shadow-soft),
+        0 14px 30px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs,
+    .ym-light-theme .Content_rootOld__g85_m,
+    .ym-light-theme .Content_main__8_wIa,
+    .ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
+    .ym-light-theme .LikesAndHistory_historyIconContainer__KPPbS,
+    .ym-light-theme .LikesAndHistoryItem_root__oI1gk,
+    .ym-light-theme .rWukOKAJh5Ga7JuIp62L,
+    .ym-light-theme .VibeContext_context__Z_82k,
+    .ym-light-theme .VibeSettings_toggleSettingsButton__j6fIU,
+    .ym-light-theme .VibeContext_pinButton__b6SNF {
+      backdrop-filter: unset;
+      -webkit-backdrop-filter: unset;
+    }
+
+    .ym-light-theme .rWukOKAJh5Ga7JuIp62L:hover,
+    .ym-light-theme .LikesAndHistory_historyIconContainer__KPPbS:hover,
+    .ym-light-theme .LikesAndHistoryItem_root__oI1gk:hover {
+      background: color-mix(in hsl, var(--pc-hover-bg) 84%, transparent) !important;
+    }
+
+    .ym-light-theme canvas {
+      opacity: .12 !important;
+      filter: blur(240px) saturate(.82) !important;
+    }
+
+    .ym-light-theme .VibeWidget_root__Chpsm {
+      background:
+        linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0%, var(--color-light-3-3) 82%) !important;
+    }
+  `;
 
   const buildThemeMapBlock = (selector, map) => `${selector}{\n${map}\n}\n`;
 
@@ -718,8 +993,10 @@ ${buildPaletteAliasBlock()}
 
     const css =
       COLORIZE_TRANSITION_CSS + '\n' +
+      COLORIZE_WAVE_CROSSFADE_CSS + '\n' +
       buildThemeMapBlock('.ym-dark-theme', YM_DARK_MAP) +
-      buildThemeMapBlock('.ym-light-theme', YM_LIGHT_MAP);
+      buildThemeMapBlock('.ym-light-theme', YM_LIGHT_MAP) +
+      THEME_CSS_SHARED;
 
     if (st.textContent !== css) st.textContent = css;
 
@@ -764,17 +1041,55 @@ ${buildPaletteAliasBlock()}
     return null;
   };
 
-  const emitPaletteTransition = (phase, node, detail = {}) => {
-    window.dispatchEvent(new CustomEvent('pulsecolor:paletteTransition', {
-      detail: Object.assign({
-        phase,
-        mode: getThemeModeFromNode(node)
-      }, detail)
-    }));
+  const getActiveThemeMode = () => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (root?.classList?.contains('ym-light-theme') || body?.classList?.contains('ym-light-theme')) return 'light';
+    if (root?.classList?.contains('ym-dark-theme') || body?.classList?.contains('ym-dark-theme')) return 'dark';
+
+    const activeRoot = document.querySelector('.ym-light-theme, .ym-dark-theme');
+    return activeRoot?.classList?.contains('ym-light-theme') ? 'light' : 'dark';
   };
 
-  const emitPaletteApplied = (detail = {}) => {
-    window.dispatchEvent(new CustomEvent('pulsecolor:paletteApplied', { detail }));
+  const getWavePaletteKeyForMode = (mode) => mode === 'light' ? '--color-light-3' : '--color-dark-5';
+
+  const isWaveThemeNode = (node) => {
+    const nodeMode = getThemeModeFromNode(node);
+    return !!nodeMode && nodeMode === getActiveThemeMode();
+  };
+
+  const syncWaveCrossfadeVars = (node, fromVars, toVars, progress) => {
+    if (!isWaveThemeNode(node)) return;
+
+    const mode = getThemeModeFromNode(node) || getActiveThemeMode();
+    const key = getWavePaletteKeyForMode(mode);
+    const fallbackKey = mode === 'light' ? '--color-light-3' : '--color-dark-5';
+    const fromValue = fromVars?.[key] || fromVars?.[fallbackKey] || fromVars?.['--color-dark-5'] || fromVars?.['--color-light-3'];
+    const toValue = toVars?.[key] || toVars?.[fallbackKey] || toVars?.['--color-dark-5'] || toVars?.['--color-light-3'];
+    const rootStyle = document.documentElement.style;
+
+    if (fromValue) rootStyle.setProperty('--pc-wave-blur-from', String(fromValue), 'important');
+    if (toValue) rootStyle.setProperty('--pc-wave-blur-to', String(toValue), 'important');
+    rootStyle.setProperty('--pc-wave-crossfade-opacity', clamp(progress, 0, 1).toFixed(3), 'important');
+    document.documentElement.classList.add('pcw-color-transitioning');
+  };
+
+  const clearWaveCrossfadeVars = (node, vars) => {
+    if (node && !isWaveThemeNode(node)) return;
+
+    const mode = node ? getThemeModeFromNode(node) || getActiveThemeMode() : getActiveThemeMode();
+    const key = getWavePaletteKeyForMode(mode);
+    const value = vars?.[key] || vars?.['--color-dark-5'] || vars?.['--color-light-3'];
+    const rootStyle = document.documentElement.style;
+
+    if (value) {
+      rootStyle.setProperty('--pc-wave-blur-from', String(value), 'important');
+      rootStyle.setProperty('--pc-wave-blur-to', String(value), 'important');
+    }
+
+    rootStyle.setProperty('--pc-wave-crossfade-opacity', '0', 'important');
+    document.documentElement.classList.remove('pcw-color-transitioning');
   };
 
   const parsePaletteColor = (value) => {
@@ -834,7 +1149,7 @@ ${buildPaletteAliasBlock()}
   const stopPaletteTransition = (node) => {
     const active = activePaletteTransitions.get(node);
     if (active?.raf) cancelAnimationFrame(active.raf);
-    if (active?.paletteEvent) emitPaletteTransition('clear', node, { vars: active.toVars || active.fromVars });
+    if (active?.wave) clearWaveCrossfadeVars(node, active.toVars || active.fromVars);
     activePaletteTransitions.delete(node);
   };
 
@@ -853,7 +1168,7 @@ ${buildPaletteAliasBlock()}
       writePaletteEndpoints(node, vars, 'from');
       writePaletteEndpoints(node, vars, 'to');
       setPaletteProgress(node, 1);
-      emitPaletteTransition('clear', node, { vars });
+      clearWaveCrossfadeVars(node, vars);
       node.classList.remove('pc-color-palette-reset');
     });
   };
@@ -866,9 +1181,10 @@ ${buildPaletteAliasBlock()}
     setPaletteProgress(node, 0);
     node.classList.remove('pc-color-palette-reset');
 
-    const paletteEvent = !!getThemeModeFromNode(node);
-    if (paletteEvent) {
-      emitPaletteTransition('start', node, { fromVars, toVars, progress: 0 });
+    const wave = isWaveThemeNode(node);
+    if (wave) {
+      syncWaveCrossfadeVars(node, fromVars, toVars, 0);
+      window.PulseColorPerformance?.markInteraction?.(PALETTE_ANIMATION_MS + 220);
     }
 
     const state = {
@@ -877,7 +1193,7 @@ ${buildPaletteAliasBlock()}
       progress: 0,
       startedAt: 0,
       raf: 0,
-      paletteEvent
+      wave
     };
 
     activePaletteTransitions.set(node, state);
@@ -890,7 +1206,7 @@ ${buildPaletteAliasBlock()}
 
       state.progress = eased;
       setPaletteProgress(node, eased);
-      if (state.paletteEvent) emitPaletteTransition('progress', node, { fromVars, toVars, progress: eased });
+      if (state.wave) syncWaveCrossfadeVars(node, fromVars, toVars, eased);
 
       if (raw < 1) {
         state.raf = requestAnimationFrame(step);
@@ -901,7 +1217,7 @@ ${buildPaletteAliasBlock()}
       writePaletteEndpoints(node, toVars, 'from');
       writePaletteEndpoints(node, toVars, 'to');
       setPaletteProgress(node, 1);
-      if (state.paletteEvent) emitPaletteTransition('clear', node, { vars: toVars });
+      if (state.wave) clearWaveCrossfadeVars(node, toVars);
       activePaletteTransitions.delete(node);
     };
 
@@ -1010,19 +1326,277 @@ ${buildPaletteAliasBlock()}
     });
   };
 
+  function ensureGradientOverlay() {
+    if (document.getElementById('sc-grad-overlay')) return;
+    const st = document.createElement('style');
+    st.id = 'sc-grad-overlay';
+    st.textContent = '';
+    document.head.appendChild(st);
+    document.body.classList.add('sc-has-grad');
+  }
 
+  const cover = document.querySelector('[class*="FullscreenPlayerDesktopPoster_cover"]');
+  if (cover) {
+    cover.style.width = '600px';
+    cover.style.height = '600px';
+    cover.style.transition = 'all 0.3s ease';
+  }
 
-  /*──────────────────────── recolor state ─────────────────────*/
+  /*──────────────────────── effects / background ─────────────────────*/
   let SETTINGS = {};
   let lastSETTINGS_JSON = '';
   let lastSrc = '';
   let lastHex = '';
+  let lastBackgroundURL = '';
   let lastPageURL = location.href;
+
+  const OLD_VIBE_SELECTOR = '[class*="MainPage_vibe"], [data-test-id="VIBE_BLOCK"]';
+  const NEW_WAVE_SELECTOR = '[class*="VibePage_root"], [class*="DefaultLayout_rootNewWave"]';
+
+  async function getHiResCover() {
+    const src = coverSrcFromImg(getCoverNode());
+    return src ? normalizeCoverURL(src, '1000x1000') : null;
+  }
+
+  function getNewWaveNode() {
+    return document.querySelector('[class*="VibePage_root"]') ||
+      document.querySelector('[class*="DefaultLayout_rootNewWave"]') ||
+      null;
+  }
+
+  function isNewWavePage() {
+    return !!document.querySelector(NEW_WAVE_SELECTOR);
+  }
+
+  function getVibeNode() {
+    const newWave = getNewWaveNode();
+    if (newWave) return newWave;
+
+    const nodes = [...document.querySelectorAll(OLD_VIBE_SELECTOR)]
+      .filter(node => node && node.nodeType === 1 && node.isConnected);
+
+    if (!nodes.length) return null;
+
+    return nodes.find(hasLegacyVibeMarkers) || nodes.find(node => {
+      const rect = node.getBoundingClientRect?.();
+      const style = getComputedStyle(node);
+      return rect && rect.width > 0 && rect.height >= 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    }) || nodes[0];
+  }
+
+  function hasLegacyVibeMarkers(vibe) {
+    if (!vibe || !vibe.querySelector) return false;
+    if (vibe.matches?.(NEW_WAVE_SELECTOR)) return false;
+
+    const legacySelectors = [
+      '[class*="VibeBlock_"]',
+      '[class*="VibeAnimation_"]',
+      '[data-test-id="MY_VIBE_PLAY_BUTTON"]',
+      '[data-test-id*="VIBE"]',
+      '[aria-label*="Моя волна"]',
+      '[aria-label*="волна" i]'
+    ];
+
+    for (const selector of legacySelectors) {
+      try {
+        if (vibe.querySelector(selector)) return true;
+      } catch {}
+    }
+
+    return false;
+  }
+
+  function syncVibeModeClass(vibe) {
+    const isLegacy = hasLegacyVibeMarkers(vibe);
+    const newWave = isNewWavePage();
+    document.documentElement?.classList.toggle('colorize-new-wave-page', newWave);
+    document.body?.classList.toggle('pulsecolor-legacy-vibe', !!isLegacy);
+    document.body?.classList.toggle('pulsecolor-modern-vibe', !!vibe && !isLegacy);
+    document.documentElement?.classList.toggle('pulsecolor-legacy-vibe', !!isLegacy);
+    document.documentElement?.classList.toggle('pulsecolor-modern-vibe', !!vibe && !isLegacy);
+    return isLegacy;
+  }
+
+  function resetFullVibeHeight(vibe = getVibeNode()) {
+    if (!vibe) {
+      syncVibeModeClass(null);
+      return;
+    }
+    vibe.style.removeProperty('height');
+    vibe.style.removeProperty('min-height');
+    vibe.style.removeProperty('max-height');
+    delete vibe.dataset.pulsecolorFullVibe;
+  }
+
+  function cleanupForeignBackgroundLayers(target) {
+    document.querySelectorAll('.bg-layer').forEach(layer => {
+      if (target && target.contains(layer)) return;
+      layer.remove();
+    });
+  }
+
+  function backgroundReplace(imageURL) {
+    const target = getVibeNode();
+    cleanupForeignBackgroundLayers(target);
+    if (!target || !imageURL) return;
+
+    const hasCurrentLayer = !!target.querySelector('.bg-layer .bg-cover');
+    if ((imageURL === lastBackgroundURL || target.dataset.pulsecolorBgUrl === imageURL) && hasCurrentLayer) {
+      lastBackgroundURL = imageURL;
+      target.dataset.pulsecolorBgUrl = imageURL;
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = imageURL;
+
+    img.onload = () => {
+      if (!target.isConnected) return;
+
+      lastBackgroundURL = imageURL;
+      target.dataset.pulsecolorBgUrl = imageURL;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bg-layer';
+      wrapper.style.cssText = 'position:absolute; inset:0; z-index:0; pointer-events:none;';
+
+      const imageLayer = document.createElement('div');
+      imageLayer.className = 'bg-cover';
+      imageLayer.style.cssText = `
+        position:absolute;
+        inset:0;
+        background-image:url("${imageURL}");
+        background-size:cover;
+        background-position:center;
+        background-repeat:no-repeat;
+        opacity:0;
+        transition:opacity 1s ease;
+        pointer-events:none;
+      `;
+
+      const gradient = document.createElement('div');
+      gradient.className = 'bg-gradient';
+      gradient.style.cssText = `
+        position:absolute;
+        inset:0;
+        background:
+          radial-gradient(circle at 70% 70%,
+            var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,0)) 0%,
+            var(--ym-background-color-primary-enabled-content, rgba(0,0,0,0.2)) 70%,
+            var(--ym-background-color-primary-enabled-basic, rgba(0,0,0,0.3)) 100%);
+        opacity:.72;
+        pointer-events:none;
+        z-index:1;
+      `;
+
+      [...target.querySelectorAll('.bg-layer')].forEach(layer => {
+        layer.style.opacity = '0';
+        layer.style.transition = 'opacity .6s ease';
+        setTimeout(() => layer.remove(), 700);
+      });
+
+      wrapper.appendChild(imageLayer);
+      wrapper.appendChild(gradient);
+      target.appendChild(wrapper);
+
+      requestAnimationFrame(() => {
+        imageLayer.offsetHeight;
+        imageLayer.style.opacity = '1';
+      });
+    };
+  }
+
+  function removeBackgroundImage() {
+    document.querySelectorAll('.bg-layer').forEach(layer => {
+      try { delete layer.closest?.(`${OLD_VIBE_SELECTOR}, ${NEW_WAVE_SELECTOR}`)?.dataset?.pulsecolorBgUrl; } catch {}
+      layer.style.opacity = '0';
+      layer.style.transition = 'opacity .6s ease';
+      setTimeout(() => layer.remove(), 700);
+    });
+    lastBackgroundURL = '';
+  }
+
+  function FullVibe() {
+    const v = getVibeNode();
+    if (!v) {
+      syncVibeModeClass(null);
+      return;
+    }
+
+    const isLegacy = syncVibeModeClass(v);
+
+    if (!isLegacy) {
+      resetFullVibeHeight(v);
+      v.dataset.pulsecolorFullVibe = 'modern-skip';
+      return;
+    }
+
+    v.dataset.pulsecolorFullVibe = 'legacy-full';
+    v.style.setProperty('height', '88.35vh', 'important');
+  }
+
+  function RemoveFullVibe() {
+    const v = getVibeNode();
+    if (!v) {
+      syncVibeModeClass(null);
+      return;
+    }
+
+    syncVibeModeClass(v);
+    resetFullVibeHeight(v);
+  }
+
+  const CORE_KEY = 'PulseColor.CoreSettings.v1';
+  const CORE_DEFAULT = {
+    enableBackgroundImage: true,
+    enableFullVibe: true,
+    forceWhiteRecolor: false
+  };
+
+  function getCoreSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(CORE_KEY) || 'null');
+      return Object.assign({}, CORE_DEFAULT, (s && typeof s === 'object') ? s : {});
+    } catch {
+      return Object.assign({}, CORE_DEFAULT);
+    }
+  }
+
+  let CORE = getCoreSettings();
+
+  function applyCoreSettings(next = null) {
+    CORE = next && typeof next === 'object'
+      ? Object.assign({}, CORE_DEFAULT, next)
+      : getCoreSettings();
+
+    try {
+      if (CORE.enableFullVibe) FullVibe();
+      else RemoveFullVibe();
+    } catch {}
+
+    try {
+      if (!CORE.enableBackgroundImage) removeBackgroundImage();
+      else scheduleSync?.({ bg: true });
+    } catch {}
+  }
+
+  window.PulseColorCore = window.PulseColorCore || {};
+  window.PulseColorCore.get = () => CORE;
+  window.PulseColorCore.apply = applyCoreSettings;
+
+  window.addEventListener('pulsecolor:coreSettingsChanged', (e) => {
+    const core = e?.detail?.core;
+    applyCoreSettings(core);
+    try {
+      scheduleSync?.({ force: true, bg: true });
+    } catch {}
+  });
 
   /*──────────────────────── recolor ─────────────────────*/
   const recolor = async (force = false) => {
     const src = coverURL();
-    const core = window.PulseColorCore?.get?.() || {};
+    const core = (typeof CORE === 'object' && CORE) ? CORE : getCoreSettings();
 
     const useHex = core.forceWhiteRecolor ? true : !!SETTINGS['Тема']?.useCustomColor;
     const hex = core.forceWhiteRecolor ? '#ffffff' : (SETTINGS['Тема']?.baseColor || '');
@@ -1031,10 +1605,7 @@ ${buildPaletteAliasBlock()}
 
     if (useHex) {
       if (!force && hex === lastHex) return;
-      const parsedHex = parseHEX(hex);
-      gradC1 = gradC2 = base = (core.forceWhiteRecolor || isForcedWhiteBase(parsedHex))
-        ? { h: 0, s: 0, l: 100 }
-        : normL(parsedHex);
+      gradC1 = gradC2 = base = normL(parseHEX(hex));
       lastHex = hex;
     } else {
       if (!force && src === lastSrc) return;
@@ -1050,20 +1621,35 @@ ${buildPaletteAliasBlock()}
       lastSrc = src;
     }
 
-    const pureWhitePalette = isForcedWhiteBase(base);
-    document.documentElement?.classList.toggle('pcw-pure-white-palette', pureWhitePalette);
-    document.body?.classList.toggle('pcw-pure-white-palette', pureWhitePalette);
-
     animateBasePalette(base, { immediate: force && !paletteCurrentBase });
 
+    ensureGradientOverlay();
 
-    emitPaletteApplied({ base: cloneHSL(base), source: useHex ? 'custom' : 'cover' });
+    window.OsuBeat?.retune?.({ presetBpm: window.OsuBeat?.bpm?.() || 120 });
+
+    const image = await getHiResCover();
+
+    const backgroundImageNow = !!core.enableBackgroundImage;
+    if (backgroundImageNow !== (window.__LAST_BG_ENABLED || null) || force) {
+      window.__LAST_BG_ENABLED = backgroundImageNow;
+      if (backgroundImageNow) backgroundReplace(image);
+      else removeBackgroundImage();
+    }
+
+    const fullVibeNow = !!core.enableFullVibe;
+    if (fullVibeNow !== (window.__LAST_FULLVIBE || null) || force) {
+      window.__LAST_FULLVIBE = fullVibeNow;
+      if (fullVibeNow) FullVibe();
+      else RemoveFullVibe();
+    }
   };
 
   let syncFrame = 0;
   let syncForce = false;
+  let syncNeedBg = false;
   let syncRunning = false;
   let coverObserver = null;
+  let vibeObserver = null;
   let treeObserver = null;
 
   function runWhenIdle(fn, timeout = 900) {
@@ -1075,8 +1661,9 @@ ${buildPaletteAliasBlock()}
     window.setTimeout(fn, 0);
   }
 
-  function scheduleSync({ force = false, delay = 160 } = {}) {
+  function scheduleSync({ force = false, bg = false, delay = 160 } = {}) {
     syncForce = syncForce || !!force;
+    syncNeedBg = syncNeedBg || !!bg;
     if (syncFrame) return;
 
     syncFrame = window.setTimeout(() => {
@@ -1084,21 +1671,24 @@ ${buildPaletteAliasBlock()}
 
       runWhenIdle(async () => {
         if (syncRunning) {
-          scheduleSync({ force: syncForce, delay: 120 });
+          scheduleSync({ force: syncForce, bg: syncNeedBg, delay: 120 });
           return;
         }
 
         const runForce = syncForce;
+        const runBg = syncNeedBg;
         syncForce = false;
+        syncNeedBg = false;
         syncRunning = true;
 
         try {
-          await recolor(runForce);
+          if (runBg) await tryInjectBackground();
+          await recolor(runForce || runBg);
         } catch (e) {
           LOG('sync error', e);
         } finally {
           syncRunning = false;
-          if (syncForce) scheduleSync({ force: syncForce, delay: 120 });
+          if (syncForce || syncNeedBg) scheduleSync({ force: syncForce, bg: syncNeedBg, delay: 120 });
         }
       });
     }, delay);
@@ -1114,7 +1704,7 @@ ${buildPaletteAliasBlock()}
     coverObserver = new MutationObserver((muts) => {
       for (const m of muts) {
         if (m.type === 'attributes' && (m.attributeName === 'src' || m.attributeName === 'srcset')) {
-          scheduleSync({ force: true });
+          scheduleSync({ force: true, bg: true });
           break;
         }
       }
@@ -1123,9 +1713,24 @@ ${buildPaletteAliasBlock()}
     coverObserver.observe(node, { attributes: true, attributeFilter: ['src', 'srcset'] });
   }
 
+  function bindVibeObserver() {
+    const vibe = getVibeNode();
+    if (vibeObserver?.__node === vibe) return;
+    if (vibeObserver) vibeObserver.disconnect();
+    vibeObserver = null;
+    if (!vibe) return;
+
+    vibeObserver = new MutationObserver(() => {
+      const hasBgLayer = !!vibe.querySelector('.bg-layer');
+      if (!hasBgLayer) scheduleSync({ bg: true });
+    });
+    vibeObserver.__node = vibe;
+    vibeObserver.observe(vibe, { childList: true });
+  }
+
   function isRelevantNode(node) {
     if (!node || node.nodeType !== 1) return false;
-    const relevantSelector = 'img[data-test-id="ENTITY_COVER_IMAGE"], img[class*="AlbumCover_cover__"], img[src*="avatars.yandex.net/get-music-content"], img[srcset*="avatars.yandex.net/get-music-content"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]';
+    const relevantSelector = `${OLD_VIBE_SELECTOR}, ${NEW_WAVE_SELECTOR}, img[data-test-id="ENTITY_COVER_IMAGE"], img[class*="AlbumCover_cover__"], img[src*="avatars.yandex.net/get-music-content"], img[srcset*="avatars.yandex.net/get-music-content"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]`;
     if (node.matches?.(relevantSelector)) return true;
     return !!node.querySelector?.(relevantSelector);
   }
@@ -1140,11 +1745,13 @@ ${buildPaletteAliasBlock()}
       bindTimer = window.setTimeout(() => {
         bindTimer = 0;
         bindCoverObserver();
+        bindVibeObserver();
       }, delay);
     };
 
     treeObserver = new MutationObserver((muts) => {
       let shouldSync = false;
+      let shouldBg = false;
 
       for (const m of muts) {
         if (m.type !== 'childList') continue;
@@ -1152,6 +1759,7 @@ ${buildPaletteAliasBlock()}
         for (const n of m.addedNodes || []) {
           if (isRelevantNode(n)) {
             shouldSync = true;
+            shouldBg = true;
             break;
           }
         }
@@ -1160,6 +1768,7 @@ ${buildPaletteAliasBlock()}
         for (const n of m.removedNodes || []) {
           if (isRelevantNode(n)) {
             shouldSync = true;
+            shouldBg = true;
             break;
           }
         }
@@ -1169,7 +1778,7 @@ ${buildPaletteAliasBlock()}
       if (!shouldSync) return;
 
       scheduleObserverBind(120);
-      scheduleSync({ force: true, delay: 180 });
+      scheduleSync({ force: true, bg: shouldBg, delay: 180 });
     });
 
     treeObserver.observe(document.documentElement, { childList: true, subtree: true });
@@ -1182,23 +1791,55 @@ ${buildPaletteAliasBlock()}
 
     window.setTimeout(() => {
       bindCoverObserver();
-      scheduleSync({ force: true, delay: 220 });
+      bindVibeObserver();
+      scheduleSync({ force: true, bg: true, delay: 220 });
     }, 80);
   }
 
-  function bindSyncEvents() {
-    window.addEventListener('pulsecolor:routeChanged', handleRouteChange);
-    window.addEventListener('pulsecolor:coreSettingsChanged', () => {
-      scheduleSync({ force: true });
-    });
+  function bindHistoryObserver() {
+    if (window.__PulseColorHistoryHooked) return;
+    window.__PulseColorHistoryHooked = true;
+
+    const { pushState, replaceState } = history;
+    history.pushState = function (...args) {
+      const out = pushState.apply(this, args);
+      queueMicrotask(handleRouteChange);
+      return out;
+    };
+    history.replaceState = function (...args) {
+      const out = replaceState.apply(this, args);
+      queueMicrotask(handleRouteChange);
+      return out;
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('hashchange', handleRouteChange);
     window.addEventListener('visibilitychange', () => {
-      if (!document.hidden) scheduleSync({ force: true, delay: 220 });
+      if (!document.hidden) scheduleSync({ force: true, bg: true, delay: 220 });
     });
   }
 
+  async function tryInjectBackground() {
+    const core = (typeof CORE === 'object' && CORE) ? CORE : getCoreSettings();
+    if (!core.enableBackgroundImage) {
+      removeBackgroundImage();
+      return;
+    }
+
+    const image = await getHiResCover();
+    if (!image) return;
+
+    backgroundReplace(image);
+  }
+
   const init = async () => {
-    bindSyncEvents();
+    try {
+      applyCoreSettings();
+    } catch {}
+
+    bindHistoryObserver();
     bindCoverObserver();
+    bindVibeObserver();
     bindTreeObserver();
 
     await recolor(true);

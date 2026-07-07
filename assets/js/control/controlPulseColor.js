@@ -1,10 +1,14 @@
 // controlPulseColor.js — Core settings for PulseColor (BackgroundImage / FullVibe / Recolor White)
-// ВАЖНО: этот файл только управляет настройками. Применение делает Main.js.
+// ВАЖНО: этот файл только управляет настройками. Реальное применение делает colorize.js (см. патч ниже).
 
 (() => {
     "use strict";
 
     const ITEM_ID = "pulsecolor-core-settings-item";
+    const CATEGORY_ID = "pulsecolor-settings-category";
+    const CUSTOM_ITEM_ID = "pulsecolor-custom-wave-settings-item";
+    const WAVE_VARIANT_ITEM_ID = "pulsecolor-wave-variant-settings-item";
+    const WAVE_ITEM_ID = "pulsecolor-wave-settings-item";
     const PORTAL_ID = "pulsecolor-core-settings-portal";
 
     const ARROW_HREF = "/icons/sprite.svg#arrowRight_xs";
@@ -144,13 +148,6 @@
     function safeParseJson(s) { try { return JSON.parse(s); } catch { return null; } }
 
     function getCore() {
-        try {
-            const shared = window.PulseColorCore?.get?.();
-            if (shared && typeof shared === "object") {
-                return Object.assign({}, DEFAULT_CORE, shared);
-            }
-        } catch { }
-
         const saved = safeParseJson(localStorage.getItem(KEY_CORE) || "");
         const obj = (saved && typeof saved === "object") ? saved : {};
         return Object.assign({}, DEFAULT_CORE, obj);
@@ -161,14 +158,9 @@
         const merged = Object.assign({}, cur, next);
         localStorage.setItem(KEY_CORE, JSON.stringify(merged));
 
-        try {
-            if (window.PulseColorCore?.apply) {
-                window.PulseColorCore.apply(merged);
-                return;
-            }
-        } catch { }
-
         window.dispatchEvent(new CustomEvent("pulsecolor:coreSettingsChanged", { detail: { core: merged } }));
+
+        try { window.PulseColorCore?.apply?.(merged); } catch { }
     }
 
     /* ========== YM settings list injection ========== */
@@ -223,6 +215,67 @@
         use.setAttribute("href", ARROW_HREF);
     }
 
+    function makePulseColorCategoryLi() {
+        const li = document.createElement("li");
+        li.id = CATEGORY_ID;
+        li.className = "Settings_item__Ksa9h";
+        li.style.paddingBlockEnd = "var(--ym-spacer-size-m)";
+
+        const root = document.createElement("div");
+        root.setAttribute("role", "separator");
+        root.setAttribute("aria-label", "PulseColor");
+        root.style.cssText = "display:flex;align-items:center;gap:var(--ym-spacer-size-xs);width:100%;padding-block:var(--ym-spacer-size-xxs);";
+
+        const left = document.createElement("div");
+        left.style.cssText = "height:1px;flex:1 1 auto;background:var(--ym-controls-color-secondary-outline-enabled_stroke);opacity:.6;";
+
+        const title = document.createElement("div");
+        title.className = "_MWOVuZRvUQdXKTMcOPx SehSa7OyRpC2nzYTVb2Q _3_Mxw7Si7j2g4kWjlpR";
+        title.style.cssText = "color:var(--ym-controls-color-secondary-text-enabled);opacity:.72;white-space:nowrap;";
+        title.textContent = "PulseColor";
+
+        const right = document.createElement("div");
+        right.style.cssText = left.style.cssText;
+
+        root.append(left, title, right);
+        li.appendChild(root);
+        return li;
+    }
+
+    function findMiscSettingsItem(ul) {
+        return Array.from(ul.querySelectorAll("li")).find((x) => getTitleText(x) === "Прочие настройки мода") || null;
+    }
+
+    function ensurePulseColorCategory(ul) {
+        let category = ul.querySelector("#" + CATEGORY_ID);
+        if (category) return category;
+
+        category = makePulseColorCategoryLi();
+        const after = findMiscSettingsItem(ul);
+        if (after && after.parentElement === ul) ul.insertBefore(category, after.nextSibling);
+        else ul.appendChild(category);
+        return category;
+    }
+
+    function pulseColorItemOrder(id) {
+        return [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, ITEM_ID, WAVE_ITEM_ID].indexOf(id);
+    }
+
+    function placePulseColorItem(ul, li) {
+        const category = ensurePulseColorCategory(ul);
+        const order = pulseColorItemOrder(li.id);
+        let anchor = category;
+
+        [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, ITEM_ID, WAVE_ITEM_ID].forEach((id) => {
+            const item = ul.querySelector("#" + id);
+            if (!item || item === li) return;
+            const itemOrder = pulseColorItemOrder(id);
+            if (itemOrder >= 0 && itemOrder < order) anchor = item;
+        });
+
+        if (anchor.nextSibling !== li) ul.insertBefore(li, anchor.nextSibling);
+    }
+
     function findTemplateLi(ul) {
         const items = Array.from(ul.querySelectorAll("li"));
         const exact = items.find(
@@ -235,7 +288,12 @@
     function injectSettingsButton() {
         const ul = findSettingsUl();
         if (!ul) return;
-        if (ul.querySelector("#" + ITEM_ID)) return;
+        ensurePulseColorCategory(ul);
+        const existing = ul.querySelector("#" + ITEM_ID);
+        if (existing) {
+            placePulseColorItem(ul, existing);
+            return;
+        }
 
         const tpl = findTemplateLi(ul);
         if (!tpl) return;
@@ -256,9 +314,7 @@
             openModal();
         });
 
-        const after = Array.from(ul.querySelectorAll("li")).find((x) => getTitleText(x) === "Прочие настройки мода");
-        if (after && after.parentElement === ul) ul.insertBefore(li, after.nextSibling);
-        else ul.appendChild(li);
+        placePulseColorItem(ul, li);
     }
 
     /* ========== Modal ========== */
@@ -456,7 +512,7 @@
         ul.appendChild(
             makeToggleLi(
                 "Recolor: белая база",
-                "Принудительно делает базовый цвет нейтрально-белым без ухода в серый оттенок.",
+                "Принудительно делает базовый цвет белым (сейчас нет, в следующих версиях будет исправлено).",
                 !!core.forceWhiteRecolor,
                 (v) => setCore({ forceWhiteRecolor: !!v })
             )

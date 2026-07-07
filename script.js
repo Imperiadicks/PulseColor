@@ -56,12 +56,13 @@
       await injectCss("main.css");
       await injectCss("osu.css");
 
-      await loadJs("Main.js");
       await loadJs("colorize.js");
       await loadJs("OnlineOsuBPM.js");
+      await loadJs("WaveVariants.js");
       await loadJs("MainOsu.js");
       await loadJs("ControlPanelOsu.js");
       await loadJs("controlPulseColor.js");
+      await loadJs("MainFunction.js");
       await loadJs("index.js");
 
       console.log("[PulseColor] All assets loaded successfully.");

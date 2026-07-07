@@ -113,9 +113,12 @@
   const PLAYBACK_RESUME_MAX_ATTEMPTS = 8;
   const PLAYBACK_LOCK_LOOP_MS = 90;
   const PLAYBACK_LOCK_PAUSE_DELAYS = [0, 35, 90, 180, 360];
-  const PLAYBACK_TOGGLE_SELECTOR = [
+  const STRICT_PLAYERBAR_PLAY_SELECTOR = [
     '[data-test-id="PLAYERBAR_DESKTOP_PLAY_BUTTON"]',
-    '[data-test-id="PLAYERBAR_PLAY_BUTTON"]',
+    '[data-test-id="PLAYERBAR_PLAY_BUTTON"]'
+  ].join(',');
+  const PLAYBACK_TOGGLE_SELECTOR = [
+    STRICT_PLAYERBAR_PLAY_SELECTOR,
     '[data-test-id="MY_VIBE_PLAY_BUTTON"]',
     '[data-test-id="PLAY_BUTTON"]',
     'button[aria-label*="Воспроизвести"]',
@@ -130,7 +133,8 @@
     reason: '',
     resumeTimer: 0,
     internalResume: false,
-    resumeAllowedUntil: 0
+    resumeAllowedUntil: 0,
+    lastButtonResumeAt: 0
   };
 
   const gate = {
@@ -144,6 +148,7 @@
   const isBpmPlaybackLocked = () => (
     getConfiguredDriveMode() === DRIVE_MODE_BPM &&
     gate.selectedMode === DRIVE_MODE_BPM &&
+    gate.effectiveMode === DRIVE_MODE_BPM &&
     gate.status !== 'bpm-active'
   );
 
@@ -178,6 +183,8 @@
 
   const shouldBlockPlaybackNow = (meta = null) => (
     getConfiguredDriveMode() === DRIVE_MODE_BPM &&
+    gate.selectedMode === DRIVE_MODE_BPM &&
+    gate.effectiveMode === DRIVE_MODE_BPM &&
     !isBpmReadyForCurrentTrack(meta)
   );
 
@@ -198,8 +205,8 @@
       api.getSelectedMode = () => snapshot.selectedMode;
       api.getEffectiveMode = () => snapshot.effectiveMode;
       api.isPlaybackBlocked = () => snapshot.blocked;
-      api.canUseTapTempo = () => snapshot.effectiveMode === DRIVE_MODE_RAW;
-      api.canUseLocalBpm = () => snapshot.effectiveMode === DRIVE_MODE_RAW;
+      api.canUseTapTempo = () => snapshot.effectiveMode === DRIVE_MODE_BPM;
+      api.canUseLocalBpm = () => snapshot.effectiveMode === DRIVE_MODE_BPM;
       api.hasBpmApiProvider = () => hasAnyBpmApiProvider();
       api.retryBpmApi = () => beginWaitingForTrack(getTrackMeta(), { reason: 'manual-retry', forceResume: isAudioPlaying() });
       api.clearBpmApiCache = () => { try { localStorage.removeItem(CACHE_KEY); } catch {} };
@@ -311,6 +318,34 @@
     return Math.hypot(ca.x - cb.x, ca.y - cb.y);
   };
 
+  const getElementSearchText = (node) => {
+    if (!node || node.nodeType !== 1) return '';
+    try {
+      return [
+        node.getAttribute?.('data-test-id') || '',
+        node.getAttribute?.('aria-label') || '',
+        node.getAttribute?.('title') || '',
+        node.getAttribute?.('class') || '',
+        node.textContent || ''
+      ].join(' ').toLowerCase();
+    } catch {
+      return '';
+    }
+  };
+
+  const isQueueLikeButton = (button) => {
+    let node = button;
+    for (let i = 0; node && i < 4; i += 1, node = node.parentElement) {
+      const text = getElementSearchText(node);
+      if (
+        text.includes('queue') ||
+        text.includes('playqueue') ||
+        text.includes('\u043e\u0447\u0435\u0440\u0435\u0434')
+      ) return true;
+    }
+    return false;
+  };
+
   const PLAYERBAR_ROOT_SELECTOR = [
     '[data-test-id="PLAYERBAR"]',
     '[data-test-id="PLAYERBAR_DESKTOP"]',
@@ -339,11 +374,12 @@
   ].join(',');
 
   const TRANSPORT_PLAY_SELECTOR = [
-    'button[data-test-id="PLAY_BUTTON"]',
-    '[data-test-id="PLAY_BUTTON"]',
+    STRICT_PLAYERBAR_PLAY_SELECTOR,
     '[data-test-id="PLAYERBAR_DESKTOP_PLAY_BUTTON"]',
     '[data-test-id="PLAYERBAR_PLAY_BUTTON"]',
-    '[data-test-id="MY_VIBE_PLAY_BUTTON"]'
+    '[data-test-id="MY_VIBE_PLAY_BUTTON"]',
+    'button[data-test-id="PLAY_BUTTON"]',
+    '[data-test-id="PLAY_BUTTON"]'
   ].join(',');
 
   const isListOrCardPlayButton = (button) => {
@@ -400,6 +436,7 @@
 
   const isSafeTransportPlayCandidate = (button) => {
     if (!button || !isVisibleElement(button) || !isPlayButtonState(button)) return false;
+    if (isQueueLikeButton(button)) return false;
     if (isListOrCardPlayButton(button)) return false;
 
     const root = getPlayerbarLikeRoot(button);
@@ -411,7 +448,11 @@
       const bottomRoot = rootRect.bottom >= window.innerHeight - 220;
       const insideRoot = root.contains(button);
       const notHugeOffset = buttonRect.top >= rootRect.top - 8 && buttonRect.bottom <= rootRect.bottom + 8;
-      return insideRoot && bottomRoot && notHugeOffset;
+      const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+      const relativeX = rootRect.width > 0 ? (buttonCenterX - rootRect.left) / rootRect.width : 0.5;
+      const strictPlayerbarButton = !!button.matches?.(STRICT_PLAYERBAR_PLAY_SELECTOR);
+      const centeredLikeTransport = relativeX >= 0.20 && relativeX <= 0.80;
+      return insideRoot && bottomRoot && notHugeOffset && (strictPlayerbarButton || centeredLikeTransport);
     } catch {
       return true;
     }
@@ -500,6 +541,17 @@
     if (!button || !isPlayButtonState(button)) {
       return false;
     }
+
+    const ts = Date.now();
+    if (ts - (playbackGate.lastButtonResumeAt || 0) < 6000) {
+      logApi('bpm-playback-resume-click-skip', {
+        reason,
+        attempt,
+        why: 'button-resume-cooldown'
+      });
+      return false;
+    }
+    playbackGate.lastButtonResumeAt = ts;
 
     try {
       playbackGate.internalResume = true;
@@ -623,23 +675,27 @@
     const retry = () => {
       if (attempt >= PLAYBACK_RESUME_MAX_ATTEMPTS) {
         const button = getPlaybackToggleButton();
-        if (!clickPlaybackToggleButton(reason, attempt)) {
-          logApi('bpm-playback-resume-give-up', {
-            reason,
-            attempt,
-            audioFound: !!audio,
-            buttonFound: !!button,
-            dataTestId: button?.getAttribute?.('data-test-id') || '',
-            ariaLabel: button?.getAttribute?.('aria-label') || ''
-          });
-        }
+        logApi('bpm-playback-resume-give-up', {
+          reason,
+          attempt,
+          audioFound: !!audio,
+          buttonFound: !!button,
+          dataTestId: button?.getAttribute?.('data-test-id') || '',
+          ariaLabel: button?.getAttribute?.('aria-label') || ''
+        });
         return;
       }
 
       playbackGate.resumeTimer = setTimeout(() => tryResumePlayback(reason, attempt + 1), PLAYBACK_RESUME_RETRY_MS);
     };
 
-    if (clickPlaybackToggleButton(reason, attempt)) {
+    const fallbackToButton = () => {
+      const button = getPlaybackToggleButton();
+      if (!button || !clickPlaybackToggleButton(reason, attempt)) {
+        retry();
+        return;
+      }
+
       playbackGate.resumeTimer = setTimeout(() => {
         if (isAudioPlaying()) {
           logApi('bpm-playback-resume-done', { reason, attempt, via: 'play-button' });
@@ -648,11 +704,10 @@
 
         tryResumePlayback(reason, attempt + 1);
       }, PLAYBACK_RESUME_RETRY_MS);
-      return;
-    }
+    };
 
     if (!audio) {
-      retry();
+      fallbackToButton();
       return;
     }
 
@@ -683,7 +738,7 @@
               name: error?.name || 'Error',
               message: error?.message || String(error)
             });
-            retry();
+            fallbackToButton();
           });
       } else {
         clearInternalResume();
@@ -698,7 +753,7 @@
         name: error?.name || 'Error',
         message: error?.message || String(error)
       });
-      retry();
+      fallbackToButton();
     }
   };
 
@@ -713,6 +768,7 @@
     playbackGate.trackKey = '';
     playbackGate.reason = '';
     playbackGate.resumeAllowedUntil = Date.now() + 5000;
+    publishMode();
 
     logApi('bpm-playback-release', {
       reason,
@@ -2130,13 +2186,9 @@
     clearWaitTimer();
     cancelPendingLookup();
     setGate({ selectedMode: DRIVE_MODE_BPM, effectiveMode: DRIVE_MODE_RAW, status: reason, trackKey: curTrackKey || '', trackSig: curTrackSig || '' });
-    if (playbackGate.blocked) {
-      logApi('bpm-playback-keep-blocked', {
-        reason,
-        trackKey: playbackGate.trackKey || curTrackKey || '',
-        message: 'BPM mode keeps playback paused until a BPM value is applied or mode is switched to RAW'
-      });
-    }
+    try { window.OsuBeat?.resync?.(`bpm-${reason}`); } catch {}
+    try { window.PulseColorAudioTap?.resync?.(`bpm-${reason}`); } catch {}
+    releasePlaybackAfterBpmGate(reason);
   };
 
   const applyBpmActive = (meta, bpm, src = 'getsongbpm') => {
@@ -2369,12 +2421,13 @@
     try {
       const button = target.closest?.(PLAYBACK_TOGGLE_SELECTOR);
       if (!button) return null;
+      if (isQueueLikeButton(button)) return null;
 
       if (button.matches?.('[data-test-id="PLAYERBAR_DESKTOP_PLAY_BUTTON"], [data-test-id="PLAYERBAR_PLAY_BUTTON"], [data-test-id="MY_VIBE_PLAY_BUTTON"], [data-test-id="PLAY_BUTTON"]')) {
         return isSafeTransportPlayCandidate(button) ? button : null;
       }
 
-      return isPlayButtonState(button) ? button : null;
+      return isSafeTransportPlayCandidate(button) ? button : null;
     } catch {
       return null;
     }

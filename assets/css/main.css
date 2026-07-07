@@ -4,6 +4,74 @@
   overflow: hidden;
 }
 
+html.colorize-new-wave-page {
+  --colorize-wave-radius: 12px;
+}
+
+html.colorize-new-wave-page [class*="Content_main"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [class*="Content_rootOld_newVibe"],
+html.colorize-new-wave-page [class*="Content_rootOld"][class*="newVibe"] {
+  margin-block-end: calc(var(--ym-spacer-size-m, 8px) * -7) !important;
+  margin-block-start: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [data-test-id="MAIN_PAGE"],
+html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [class*="VibePage_root"] {
+  position: relative !important;
+  isolation: isolate !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: calc(100% - 0.25vh) !important;
+  min-height: calc(100vh - 0.25vh) !important;
+  min-height: calc(100dvh - 0.25vh) !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+  transform: translateY(0.25vh) !important;
+}
+
+html.colorize-new-wave-page .bg-layer,
+html.colorize-new-wave-page .bg-cover,
+html.colorize-new-wave-page .bg-gradient {
+  border-radius: inherit !important;
+  overflow: hidden !important;
+}
+
+html.colorize-new-wave-page .bg-layer {
+  z-index: 0 !important;
+}
+
+html.colorize-new-wave-page [class*="VibePage_root"] > :not(.bg-layer),
+html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-layer) {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
 @keyframes backgroundMovement {
   0% {
     background-position: 20% 20%;
@@ -29,7 +97,7 @@
 [class*="bg-cover"] {
   animation: backgroundMovement 15s infinite
     cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
-  margin-bottom:10px;
+  margin: 0 !important;
 }
 .avatar-zoom {
   cursor: zoom-in;
@@ -116,6 +184,40 @@
   color: var(--ym-controls-color-primary-default-hovered) !important;
 } 
 
+.bg-static-mode [class*="bg-cover"] {
+  animation: none !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+.cover-download-button,
+.cover-download-button:focus {
+  background-color: var(--ym-controls-color-secondary-card-enabled);
+  color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+.cover-download-button svg {
+  fill: var(--ym-controls-color-secondary-text-enabled);
+}
+
+:is(button, [role="button"]):is(:disabled, [disabled], [aria-disabled="true"]) {
+  color: var(--ym-controls-color-secondary-text-disabled) !important;
+}
+
+:is(button, [role="button"]):is(:disabled, [disabled], [aria-disabled="true"]) :is(svg, use, path) {
+  color: var(--ym-controls-color-secondary-text-disabled) !important;
+  fill: currentColor !important;
+}
+
+:is(button, [role="button"]):not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(svg, use, path) {
+  color: var(--ym-controls-color-secondary-text-enabled) !important;
+  fill: currentColor !important;
+}
+
+.customButton.bordered {
+  border-color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
 .VibeAnimation_enter_active__j0jOl,
 .VibeAnimation_enter_done__Oi2Kz,
 .VibeAnimation_exit__ioGXk { opacity:0 !important; }
@@ -127,66 +229,20 @@
 
 #osu-pulse{
   position:fixed;
-  left:50%;
-  top:50%;
-  width:150vw;
-  height:150vh;
+  left:0;
+  top:0;
+  width:100vw;
+  height:100vh;
   z-index:5;
   pointer-events:none;
   contain:layout paint;
-  opacity: var(--osu-alpha, .068);
-  filter: brightness(var(--osu-bright, 1.10));
-  transform: translate3d(-50%, -50%, 0);
+  opacity: var(--osu-alpha, .12);
+  filter: brightness(var(--osu-bright, 1));
+  transform: none;
+  overflow: hidden;
   will-change: opacity, filter;
   isolation: isolate;
   transition: none;
-}
-
-
-.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"],
-.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"]{
-  isolation:isolate;
-  overflow:hidden;
-}
-
-#osu-pulse.pcw-wave-fullscreen-disabled{
-  display:none !important;
-}
-
-#osu-pulse.pcw-wave-fullscreen{
-  position:absolute !important;
-  inset:0 !important;
-  left:0 !important;
-  top:0 !important;
-  width:100% !important;
-  height:100% !important;
-  z-index:1 !important;
-  transform:none !important;
-  opacity:var(--osu-alpha, .074);
-  filter:brightness(var(--osu-bright, 1.16));
-  contain:layout paint;
-  mix-blend-mode:screen;
-}
-
-#osu-pulse.pcw-wave-fullscreen #osu-pulse-outer,
-#osu-pulse.pcw-wave-fullscreen #osu-pulse-inner,
-#osu-pulse.pcw-wave-fullscreen #osu-pulse-rings,
-#osu-pulse.pcw-wave-fullscreen #osu-pulse-center-rings,
-#osu-pulse.pcw-wave-fullscreen #osu-pulse-glow{
-  left:0 !important;
-  right:0 !important;
-  top:0 !important;
-  bottom:0 !important;
-}
-
-.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > header,
-.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > [class*="FullscreenPlayerDesktopContent_root"],
-.pcw-fullscreen-wave-active [data-test-id="FULLSCREEN_PLAYER_MODAL"] > [class*="FullscreenPlayerDesktop_modalContent"],
-.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > header,
-.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > [class*="FullscreenPlayerDesktopContent_root"],
-.pcw-fullscreen-wave-active [class*="FullscreenPlayerDesktop_root"] > [class*="FullscreenPlayerDesktop_modalContent"]{
-  position:relative;
-  z-index:2;
 }
 
 #osu-pulse-outer,
@@ -195,11 +251,13 @@
 #osu-pulse-center-rings,
 #osu-pulse-glow{
   position:absolute;
-  inset:auto !important;
-  left:25vw !important;
-  right:25vw !important;
-  top:25vh !important;
-  bottom:25vh !important;
+  inset:0 !important;
+  left:0 !important;
+  top:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  width:100% !important;
+  height:100% !important;
   pointer-events:none;
   will-change: transform, opacity;
   transform: translate3d(0, 0, 0);
@@ -211,26 +269,30 @@
   transform: scale(var(--osu-scale,1));
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.16)) 44%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 24%, transparent) 36%,
-      transparent 72%);
-  opacity: var(--osu-outer-opacity, .96);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.10)) 8%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.10)) 7%, transparent) 16%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.16)) 18%, transparent) 26%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.18)) 44%, transparent) 36%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 20%, transparent) 46%,
+      transparent 60%,
+      transparent 100%);
+  opacity: var(--osu-outer-opacity, .88);
+  filter: blur(14px);
 }
 #osu-pulse-outer::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.22)) 44%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.17)) 18%, transparent) 28%,
-      transparent 70%);
-  opacity:0; transform:scale(.88);
+    radial-gradient(ellipse at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 18%, transparent) 0%,
+      transparent 82%);
+  opacity:0; transform:scale(.88); display:none;
 }
-#osu-pulse-outer.pulse::after{ animation: osuRing 860ms cubic-bezier(.16,1,.3,1); }
+#osu-pulse-outer.pulse::after{ animation: none; }
 @keyframes osuRing{
-  0%   { opacity:0;    transform:scale(.90); }
-  30%  { opacity:.165; transform:scale(.98); }
-  64%  { opacity:.096; transform:scale(1.035); }
-  100% { opacity:0;    transform:scale(1.105); }
+  0%   { opacity:0;    transform:scale(.88); }
+  18%  { opacity:.145; transform:scale(.95); }
+  52%  { opacity:.082; transform:scale(1.02); }
+  100% { opacity:0;    transform:scale(1.09); }
 }
 
 #osu-pulse-inner{
@@ -337,31 +399,34 @@
 }
 
 .ym-light-theme #osu-pulse{
-  opacity: var(--osu-alpha, .064);
-  filter: brightness(var(--osu-bright, .96));
+  opacity: var(--osu-alpha, .10);
+  filter: brightness(var(--osu-bright, .92));
 }
 
 .ym-light-theme #osu-pulse-outer{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 24%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.048)) 10%, transparent) 36%,
-      transparent 72%);
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 7%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 6%, transparent) 2%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.070)) 16%, transparent) 10%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.070)) 38%, transparent) 20%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.055)) 18%, transparent) 30%,
+      transparent 20%,
+      transparent 100%);
 }
 
 .ym-light-theme #osu-pulse-outer::after{
   background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.080)) 32%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.064)) 10%, transparent) 28%,
-      transparent 70%);
+    radial-gradient(ellipse at 50% 55%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.075)) 12%, transparent) 0%,
+      transparent 82%);
 }
 
 .ym-light-theme #osu-pulse-inner{
   background:
     radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 32%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 16%, transparent) 32%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 28%, transparent) 0%,
+      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 16%, transparent) 28%,
       transparent 70%);
   mix-blend-mode: multiply;
   opacity: .72;
@@ -373,55 +438,6 @@
     var(--ym-background-color-secondary-enabled-blur) 82%) !important;
 }
 
-/* Theme-specific shell surfaces for the two app modes. */
-.ym-light-theme .CommonLayout_root__WC_W1 {
-  border: 1px solid color-mix(in hsl, var(--color-dark-10) 42%, transparent);
-  background:
-    radial-gradient(130% 120% at 4% 2%,
-      color-mix(in hsl, var(--color-light-10) 48%, var(--ym-background-color-primary-enabled-content)) 0%,
-      transparent 44%),
-    radial-gradient(92% 110% at 80% 76%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 88%, var(--ym-background-color-primary-enabled-basic)) 0%,
-      transparent 70%),
-    linear-gradient(132deg,
-      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 74%, var(--color-light-10)) 0%,
-      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 78%, var(--ym-background-color-secondary-enabled-blur)) 55%,
-      var(--ym-background-color-primary-enabled-basic) 100%) !important;
-  box-shadow:
-    inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 34%, transparent),
-    inset 0 -34px 72px color-mix(in hsl, var(--ym-background-color-primary-enabled-basic) 22%, transparent) !important;
-}
-
-.ym-dark-theme .CommonLayout_root__WC_W1 {
-  border: 1px solid color-mix(in hsl, var(--color-light-10) 12%, transparent);
-  background:
-    radial-gradient(92% 126% at 66% 20%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 82%, var(--color-light-4)) 0%,
-      transparent 55%),
-    radial-gradient(96% 104% at 10% 100%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur) 32%, transparent) 0%,
-      transparent 68%),
-    linear-gradient(132deg,
-      color-mix(in hsl, var(--ym-background-color-primary-enabled-content) 88%, var(--ym-background-color-primary-enabled-basic)) 0%,
-      var(--ym-background-color-primary-enabled-content) 48%,
-      var(--ym-background-color-primary-enabled-basic) 100%) !important;
-  box-shadow:
-    inset 0 1px 0 color-mix(in hsl, var(--color-light-10) 7%, transparent),
-    inset 0 -40px 88px color-mix(in hsl, var(--color-dark-10) 52%, transparent) !important;
-}
-
-.ym-light-theme .Content_main__8_wIa,
-.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
-  border-color: color-mix(in hsl, var(--color-dark-10) 40%, transparent) !important;
-  box-shadow:
-    0 0 0 1px color-mix(in hsl, var(--color-light-10) 18%, transparent) inset,
-    0 1px 0 color-mix(in hsl, var(--color-light-10) 16%, transparent) !important;
-}
-
-.ym-dark-theme .Content_main__8_wIa,
-.ym-dark-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
-  border-color: color-mix(in hsl, var(--color-light-10) 14%, transparent) !important;
-  box-shadow:
-    0 0 0 1px color-mix(in hsl, var(--color-dark-10) 44%, transparent) inset,
-    0 1px 0 color-mix(in hsl, var(--color-light-10) 6%, transparent) !important;
+.VibeWidgetAnimation_root__7fpeP{
+  opacity: 0;
 }
