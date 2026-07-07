@@ -1,6 +1,14 @@
 /* ========================== PulseColor fixed smooth energy tuning ========================== */
 (() => {
   const DEFAULT_WAVE_VARIANT_ID = 'variant1';
+
+  window.PulseColorIsThirdPartyVisualActive = function PulseColorIsThirdPartyVisualActive() {
+    try {
+      if (window.PulseColorAddonSupport?.isAnyActive?.()) return true;
+    } catch {}
+    return window.__PULSECOLOR_THIRD_PARTY_VISUAL_ACTIVE__ === true;
+  };
+
   const FIXED = Object.freeze({
     DECAY_MS: 220,
     DECAY_MS_VOICE: 260,
@@ -329,6 +337,16 @@ function __pcwSettingsOpen() {
     return __loopHandle;
   }
 
+  function __scheduleAfter(delayMs) {
+    __cancelScheduled();
+    if (!__loopRunning) return 0;
+
+    __loopType = 'to';
+    __loopHandle = setTimeout(loop, Math.max(24, delayMs || 0));
+    OSU.__tapRaf = __loopHandle;
+    return __loopHandle;
+  }
+
   function __resumeCtxIfNeeded() {
     try {
       const ctx = ctxMain || OSU?.ctx;
@@ -629,9 +647,11 @@ function __pcwSettingsOpen() {
     const tickTs = performance.now();
     __lastTick = tickTs;
 
-    const interactionThrottleMs = window.PulseColorPerformance?.isInteracting?.() ? 48 : 0;
-    if (interactionThrottleMs && (tickTs - (loop.__lastAnalysisTs || 0)) < interactionThrottleMs) {
-      __scheduleNext();
+    const thirdPartyThrottleMs = window.PulseColorIsThirdPartyVisualActive?.() ? 120 : 0;
+    const interactionThrottleMs = thirdPartyThrottleMs || (window.PulseColorPerformance?.isInteracting?.() ? 48 : 0);
+    const sinceAnalysis = tickTs - (loop.__lastAnalysisTs || 0);
+    if (interactionThrottleMs && sinceAnalysis < interactionThrottleMs) {
+      __scheduleAfter(interactionThrottleMs - sinceAnalysis);
       return;
     }
     loop.__lastAnalysisTs = tickTs;
@@ -1004,9 +1024,14 @@ function __pcwSettingsOpen() {
     const t = now();
     if (!analyser) { requestAnimationFrame(loop); return; }
 
-    const interactionThrottleMs = window.PulseColorPerformance?.isInteracting?.() ? 50 : 0;
-    if (interactionThrottleMs && (t - (loop.__lastAnalysisTs || 0)) < interactionThrottleMs) {
-      requestAnimationFrame(loop);
+    const bpmDrive = isBpmWaveDrive();
+    const thirdPartyThrottleMs = window.PulseColorIsThirdPartyVisualActive?.()
+      ? (bpmDrive ? 140 : 320)
+      : 0;
+    const interactionThrottleMs = thirdPartyThrottleMs || (window.PulseColorPerformance?.isInteracting?.() ? 50 : 0);
+    const sinceAnalysis = t - (loop.__lastAnalysisTs || 0);
+    if (interactionThrottleMs && sinceAnalysis < interactionThrottleMs) {
+      setTimeout(() => requestAnimationFrame(loop), Math.max(24, interactionThrottleMs - sinceAnalysis));
       return;
     }
     loop.__lastAnalysisTs = t;
@@ -1018,7 +1043,6 @@ function __pcwSettingsOpen() {
     const prevFlux = fluxBuf.length > 1 ? fluxBuf[fluxBuf.length - 2] : 0;
     const isPeak = f > thr && (f - prevFlux) > 0;
     const audible = (__audioOn?.() ?? true);
-    const bpmDrive = isBpmWaveDrive();
     let strongBeatDetail = null;
 
     if (bpmDrive && isStrongBeatCandidate({
@@ -1681,6 +1705,17 @@ function __pcwSettingsOpen() {
   const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
   const easeOutQuad = x => 1 - (1 - x) * (1 - x);
   const easeInOutSine = x => -(Math.cos(Math.PI * x) - 1) / 2;
+  let thirdPartyVisualCached = false;
+  let thirdPartyVisualScanAt = 0;
+
+  function isThirdPartyVisualActive(force = false) {
+    const t0 = now();
+    if (!force && (t0 - thirdPartyVisualScanAt) < 250) return thirdPartyVisualCached;
+    thirdPartyVisualScanAt = t0;
+
+    thirdPartyVisualCached = !!window.PulseColorIsThirdPartyVisualActive?.();
+    return thirdPartyVisualCached;
+  }
 
   function spawnRing(detail) {
     return;
@@ -1718,6 +1753,7 @@ function __pcwSettingsOpen() {
   }
 
   function spawnCenterRing(options = {}) {
+    if (isThirdPartyVisualActive()) return;
     if (window.PulseColorPerformance?.isInteracting?.()) return;
 
     const cfg = window.BeatDriverConfig || {};
@@ -2256,9 +2292,49 @@ function __pcwSettingsOpen() {
   }
 
   const shaderRenderer = createPulseShaderRenderer(shaderCanvas);
+  let waveSuppressedByThirdParty = false;
+
+  function clearSpawnedWaveRings() {
+    while (rings.length) rings.pop()?.el?.remove();
+    while (centerRings.length) centerRings.pop()?.el?.remove();
+  }
+
+  function setThirdPartyWaveSuppressed(active) {
+    const suppressed = !!active;
+    if (waveSuppressedByThirdParty === suppressed) return;
+    waveSuppressedByThirdParty = suppressed;
+
+    if (suppressed) {
+      root.dataset.pulsecolorSuppressedBy = 'third-party';
+      setStyleCached(root, 'display', 'none');
+      setStyleCached(root, 'opacity', '0');
+      setStyleCached(root, 'filter', 'none');
+      setStyleCached(shaderCanvas, 'display', 'none');
+      setStyleCached(shaderCanvas, 'opacity', '0');
+      setStyleCached(outer, 'display', 'none');
+      setStyleCached(ringHost, 'display', 'none');
+      setStyleCached(centerRingHost, 'display', 'none');
+      setStyleCached(glow, 'display', 'none');
+      shaderRenderer.clear();
+      clearSpawnedWaveRings();
+      return;
+    }
+
+    delete root.dataset.pulsecolorSuppressedBy;
+    const customWaveEnabled = window.BeatDriverConfig?.ENABLE_CUSTOM_WAVE !== false;
+    setStyleCached(root, 'display', customWaveEnabled ? '' : 'none');
+  }
 
   (function frame() {
     const tNow = performance.now();
+    if (isThirdPartyVisualActive()) {
+      setThirdPartyWaveSuppressed(true);
+      lastVisualFrameTs = tNow;
+      setTimeout(() => requestAnimationFrame(frame), 250);
+      return;
+    }
+    setThirdPartyWaveSuppressed(false);
+
     const interactionActive = !!window.PulseColorPerformance?.isInteracting?.();
     const targetFrameMs = interactionActive ? 66 : 16;
 

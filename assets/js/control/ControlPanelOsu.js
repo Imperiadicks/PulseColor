@@ -7,6 +7,7 @@
   const CUSTOM_ITEM_ID = "pulsecolor-custom-wave-settings-item";
   const WAVE_VARIANT_ITEM_ID = "pulsecolor-wave-variant-settings-item";
   const CORE_ITEM_ID = "pulsecolor-core-settings-item";
+  const ADDON_SUPPORT_ITEM_ID = "pulsecolor-addon-support-settings-item";
   const PORTAL_ID = "pulsecolor-wave-settings-portal";
 
   const ARROW_HREF = "/icons/sprite.svg#arrowRight_xs";
@@ -642,7 +643,7 @@
   }
 
   function pulseColorItemOrder(id) {
-    return [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ITEM_ID].indexOf(id);
+    return [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ADDON_SUPPORT_ITEM_ID, ITEM_ID].indexOf(id);
   }
 
   function placePulseColorItem(ul, li) {
@@ -650,7 +651,7 @@
     const order = pulseColorItemOrder(li.id);
     let anchor = category;
 
-    [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ITEM_ID].forEach((id) => {
+    [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ADDON_SUPPORT_ITEM_ID, ITEM_ID].forEach((id) => {
       const item = ul.querySelector("#" + id);
       if (!item || item === li) return;
       const itemOrder = pulseColorItemOrder(id);

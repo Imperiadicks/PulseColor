@@ -60,8 +60,13 @@
       await loadJs("OnlineOsuBPM.js");
       await loadJs("WaveVariants.js");
       await loadJs("MainOsu.js");
+      await loadJs("PulseColorAudioApi.js");
+      await loadJs("ThirdPartyMusicAdapters.js");
+      await loadJs("TweakedYmDesignSupport.js");
+      await loadJs("Cover2AnimSupport.js");
       await loadJs("ControlPanelOsu.js");
       await loadJs("controlPulseColor.js");
+      await loadJs("AddonSupportSettings.js");
       await loadJs("MainFunction.js");
       await loadJs("index.js");
 
