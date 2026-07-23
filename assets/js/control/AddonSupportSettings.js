@@ -1,7 +1,10 @@
 (() => {
   "use strict";
 
-  const ITEM_ID = "pulsecolor-addon-support-settings-item";
+  const LEGACY_ITEM_ID = "pulsecolor-addon-support-settings-item";
+  const ITEM_ID = LEGACY_ITEM_ID;
+  const TWEAKED_ITEM_ID = "pulsecolor-tweaked-support-settings-item";
+  const COVER2ANIM_ITEM_ID = "pulsecolor-cover2anim-support-settings-item";
   const CATEGORY_ID = "pulsecolor-settings-category";
   const CUSTOM_ITEM_ID = "pulsecolor-custom-wave-settings-item";
   const WAVE_VARIANT_ITEM_ID = "pulsecolor-wave-variant-settings-item";
@@ -12,7 +15,7 @@
   const ARROW_HREF = "/icons/sprite.svg#arrowRight_xs";
   const CLOSE_HREF = "/icons/sprite.svg#close_xxs";
   const XLINK_NS = "http://www.w3.org/1999/xlink";
-  const ORDER = [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ITEM_ID, WAVE_ITEM_ID];
+  const ORDER = [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, TWEAKED_ITEM_ID, COVER2ANIM_ITEM_ID, WAVE_ITEM_ID];
 
   const TITLE_CLASS =
     "_MWOVuZRvUQdXKTMcOPx LezmJlldtbHWqU7l1950 oyQL2RSmoNbNQf3Vc6YI V3WU123oO65AxsprotU9 Vi7Rd0SZWqD17F0872TB SettingsListToggleItem_title__Xz8_Q";
@@ -25,8 +28,28 @@
 
   const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
   const MODAL_ANIM_MS = 220;
+  const pendingUiTimeouts = new Set();
+  const pendingUiFrames = new Set();
+  let removeOpenModalSettings = null;
+  const scheduleUiTimeout = (callback, delay) => {
+    const id = window.setTimeout(() => {
+      pendingUiTimeouts.delete(id);
+      callback();
+    }, delay);
+    pendingUiTimeouts.add(id);
+    return id;
+  };
+  const scheduleUiFrame = (callback) => {
+    const id = requestAnimationFrame(() => {
+      pendingUiFrames.delete(id);
+      callback();
+    });
+    pendingUiFrames.add(id);
+    return id;
+  };
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const numberOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
   function coordinator() {
     return window.PulseColorAddonSupport || null;
@@ -36,18 +59,34 @@
     const api = coordinator();
     return api?.getSettings?.() || api?.DEFAULT_SETTINGS || {
       tweakedYmDesign: {
-        enabled: true,
-        musicGlow: true,
-        glowStrength: 0.22,
-        optimizeBlur: true,
-        blurPx: 22
+        enabled: false,
+        lyricsBlur: true,
+        lyricsMaxBlur: 8,
+        lyricsBlurStep: 2.2,
+        lyricsMinOpacity: 0.35,
+        lyricsOpacityStep: 0.12,
+        lyricsTransitionMs: 250,
+        coverBackground: true,
+        coverBlur: 28,
+        coverSaturate: 1.2,
+        coverOverlay: 0.55,
+        coverCrossfadeMs: 900,
+        coverMotion: true,
+        coverMotionDuration: 26
       },
       cover2Anim: {
         enabled: true,
-        musicReactive: true,
-        reactionStrength: 0.25,
-        beatStrength: 0.16,
-        efficientMode: false
+        colorMode: "pulsecolor",
+        blobCount: 16,
+        blobSpeed: 0.5,
+        paletteBlendSpeed: 0.8,
+        backgroundLightness: 0,
+        showFps: false,
+        warp: 0.14,
+        flow: 0.53,
+        saturation: 1.5,
+        highlight: 0.99,
+        paletteFadeMs: 500
       }
     };
   }
@@ -145,7 +184,7 @@
   }
 
   function animateModalIn(dialog, backdrop) {
-    requestAnimationFrame(() => {
+    scheduleUiFrame(() => {
       if (backdrop) backdrop.style.opacity = "1";
       if (dialog) {
         dialog.style.opacity = "1";
@@ -162,7 +201,7 @@
       dialog.style.opacity = "0";
       dialog.style.transform = "translate(-50%, calc(-50% + 16px)) scale(.965)";
     }
-    window.setTimeout(() => {
+    scheduleUiTimeout(() => {
       try { done && done(); } catch {}
     }, MODAL_ANIM_MS + 40);
   }
@@ -326,32 +365,41 @@
     return li;
   }
 
+  function ensureAddonSettingsItem(ul, id, title, desc, kind) {
+    let li = ul.querySelector("#" + id);
+    if (!li) {
+      const tpl = findTemplateLi(ul);
+      li = tpl ? tpl.cloneNode(true) : makeFallbackSettingsItem();
+      li.id = id;
+
+      const btn = li.querySelector(":scope > button") || li.querySelector("button");
+      if (!btn) return null;
+
+      btn.type = "button";
+      btn.setAttribute("aria-label", title);
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openModal(kind);
+      });
+    }
+
+    setTitleAndDesc(li, title, desc);
+    ensureArrowHref(li);
+    placePulseColorItem(ul, li);
+    return li;
+  }
+
   function injectSettingsButton() {
     const ul = findSettingsUl();
     if (!ul) return;
     ensurePulseColorCategory(ul);
 
-    let li = ul.querySelector("#" + ITEM_ID);
-    if (!li) {
-      const tpl = findTemplateLi(ul);
-      li = tpl ? tpl.cloneNode(true) : makeFallbackSettingsItem();
-      li.id = ITEM_ID;
+    const legacy = ul.querySelector("#" + LEGACY_ITEM_ID);
+    if (legacy) legacy.remove();
 
-      const btn = li.querySelector(":scope > button") || li.querySelector("button");
-      if (!btn) return;
-
-      btn.type = "button";
-      btn.setAttribute("aria-label", "Поддержка аддонов");
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        openModal();
-      });
-    }
-
-    setTitleAndDesc(li, "Поддержка аддонов", "Tweaked YM Design / Cover2Anim");
-    ensureArrowHref(li);
-    placePulseColorItem(ul, li);
+    ensureAddonSettingsItem(ul, TWEAKED_ITEM_ID, "Tweaked YM Design", "Встроенный дизайн fullscreen и текста.", "tweakedYmDesign");
+    ensureAddonSettingsItem(ul, COVER2ANIM_ITEM_ID, "Cover2Anim", "Встроенный WebGL-фон / расцветка / биты.", "cover2Anim");
   }
 
   function makeId(key) {
@@ -398,6 +446,7 @@
       btn.setAttribute("aria-checked", value ? "true" : "false");
       knob.classList.toggle("KC8t9NStVmQ1_VY54KH4", !!value);
     };
+    btn.__pulseColorApplyChecked = apply;
 
     apply(!!checked);
     btn.addEventListener("click", (e) => {
@@ -475,6 +524,118 @@
     return li;
   }
 
+  function makeTextLi(title, desc, value, placeholder, onChange) {
+    const li = document.createElement("li");
+    li.className = "Settings_item__Ksa9h";
+
+    const root = document.createElement("div");
+    root.className = "SettingsListToggleItem_root__yEEYT";
+    root.style.alignItems = "center";
+    root.style.gap = "14px";
+
+    const titleId = makeId(title);
+    const text = makeTextContainer(titleId, title, desc);
+    text.style.flex = "1 1 auto";
+    text.style.minWidth = "0";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = String(value || "");
+    input.placeholder = placeholder;
+    input.setAttribute("aria-describedby", titleId);
+    input.style.cssText = [
+      "width:190px",
+      "min-width:0",
+      "padding:8px 10px",
+      "border-radius:6px",
+      "border:1px solid var(--ym-controls-color-secondary-outline-enabled_stroke)",
+      "background:var(--ym-controls-color-secondary-default-enabled)",
+      "color:var(--ym-controls-color-primary-text-enabled)",
+      "font:inherit"
+    ].join(";");
+    input.addEventListener("change", () => {
+      try { onChange(input.value.trim()); } catch {}
+    });
+
+    root.append(text, input);
+    li.appendChild(root);
+    return li;
+  }
+
+  function makeChoiceLi(title, desc, value, options, onChange) {
+    const li = document.createElement("li");
+    li.className = "Settings_item__Ksa9h";
+
+    const root = document.createElement("div");
+    root.className = "SettingsListToggleItem_root__yEEYT";
+    root.style.alignItems = "center";
+    root.style.gap = "14px";
+
+    const titleId = makeId(title);
+    const text = makeTextContainer(titleId, title, desc);
+    text.style.flex = "1 1 auto";
+    text.style.minWidth = "0";
+
+    const wrap = document.createElement("div");
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-describedby", titleId);
+    wrap.style.cssText = [
+      "display:flex",
+      "align-items:center",
+      "gap:4px",
+      "padding:2px",
+      "border-radius:8px",
+      "background:var(--ym-controls-color-secondary-default-enabled)",
+      "box-shadow:0 0 0 1px var(--ym-controls-color-secondary-outline-enabled_stroke) inset"
+    ].join(";");
+
+    const apply = (nextValue) => {
+      wrap.dataset.value = String(nextValue);
+      wrap.querySelectorAll("button[data-choice-value]").forEach((btn) => {
+        const activeChoice = btn.getAttribute("data-choice-value") === String(nextValue);
+        btn.dataset.active = activeChoice ? "1" : "0";
+        btn.setAttribute("aria-pressed", activeChoice ? "true" : "false");
+        btn.style.background = activeChoice ? "var(--ym-controls-color-primary-default-enabled)" : "transparent";
+        btn.style.color = activeChoice ? "var(--ym-controls-color-primary-on_default-enabled)" : "var(--ym-controls-color-secondary-text-enabled)";
+        btn.style.opacity = activeChoice ? "1" : ".72";
+      });
+    };
+
+    options.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-choice-value", String(opt.value));
+      btn.textContent = opt.label;
+      btn.style.cssText = [
+        "min-width:86px",
+        "height:32px",
+        "padding:0 10px",
+        "border:0",
+        "border-radius:6px",
+        "font:inherit",
+        "font-size:12px",
+        "font-weight:700",
+        "white-space:nowrap",
+        "cursor:pointer",
+        "transition:background-color .18s ease,color .18s ease,opacity .18s ease"
+      ].join(";");
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = String(opt.value);
+        if (wrap.dataset.value === next) return;
+        apply(next);
+        try { onChange(next); } catch {}
+      });
+      wrap.appendChild(btn);
+    });
+
+    apply(String(value ?? options?.[0]?.value ?? ""));
+    root.append(text, wrap);
+    li.appendChild(root);
+    return li;
+  }
+
   function makeGroupSeparator(title) {
     const li = document.createElement("li");
     li.className = "Settings_item__Ksa9h";
@@ -506,6 +667,8 @@
     const backdrop = portal?.querySelector('div[data-floating-ui-inert][aria-hidden="true"]');
 
     document.removeEventListener("keydown", onEsc, true);
+    removeOpenModalSettings?.();
+    removeOpenModalSettings = null;
 
     if (!portal) {
       unlockPageInteraction();
@@ -522,9 +685,11 @@
     if (e.key === "Escape") closeModal();
   }
 
-  function openModal() {
+  function openModal(kind = "tweakedYmDesign") {
     if (document.getElementById(PORTAL_ID)) return;
 
+    const modalKind = kind === "cover2Anim" ? "cover2Anim" : "tweakedYmDesign";
+    const modalTitle = modalKind === "cover2Anim" ? "Cover2Anim" : "Tweaked YM Design";
     const all = getSettings();
     const tweaked = all.tweakedYmDesign || {};
     const cover2Anim = all.cover2Anim || {};
@@ -542,7 +707,7 @@
     style="max-width: 34.375rem; height: auto; --header-height: 93px;">
 
     <header class="wEOFUiLOfluq86BrDUfg ShortcutsModal_modalHeader__IYJ9m">
-      <h3 class="_MWOVuZRvUQdXKTMcOPx _sd8Q9d_Ttn0Ufe4ISWS nSU6fV9y80WrZEfafvww xuw9gha2dQiGgdRcHNgU">Поддержка аддонов</h3>
+      <h3 class="_MWOVuZRvUQdXKTMcOPx _sd8Q9d_Ttn0Ufe4ISWS nSU6fV9y80WrZEfafvww xuw9gha2dQiGgdRcHNgU">Интеграции PulseColor</h3>
       <button class="cpeagBA1_PblpJn8Xgtv iJVAJMgccD4vj4E4o068 uwk3hfWzB2VT7kE13SQk IlG7b1K0AD7E7AMx6F5p nHWc2sto1C6Gm0Dpw_l0 oR11LfCBVqMbUJiAgknd qU2apWBO1yyEK0lZ3lPO undefined YUY9QjXr1E4DQfQdMjGt"
         type="button" aria-label="Закрыть" aria-live="off" aria-busy="false">
         <span class="JjlbHZ4FaP9EAcR_1DxF">
@@ -567,6 +732,8 @@
 
     const dialog = portal.querySelector("#_pc_addon_support_modal_");
     const backdrop = portal.querySelector('div[data-floating-ui-inert][aria-hidden="true"]');
+    const title = portal.querySelector("h3");
+    if (title) title.textContent = modalTitle;
     primeModalShell(portal, dialog, backdrop);
     blockOutsideInteraction(portal, dialog);
     lockPageInteraction();
@@ -579,86 +746,84 @@
       ul.style.webkitOverflowScrolling = "touch";
       ul.style.overscrollBehavior = "contain";
 
+      if (modalKind === "tweakedYmDesign") {
       ul.appendChild(makeGroupSeparator("Tweaked YM Design"));
-      ul.appendChild(makeToggleLi(
+      const modeToggle = makeToggleLi(
         "Поддержка Tweaked YM Design",
-        "Включает поведение PulseColor для fullscreen Tweaked.",
-        tweaked.enabled !== false,
+        "Включает встроенный fullscreen-дизайн Tweaked YM Design.",
+        tweaked.enabled === true,
         (value) => setTweaked({ enabled: !!value })
-      ));
+      );
+      modeToggle.querySelector('button[role="switch"]')?.setAttribute("data-pulsecolor-mode-toggle", "tweakedYmDesign");
+      ul.appendChild(modeToggle);
+      ul.appendChild(makeGroupSeparator("Текст песен"));
       ul.appendChild(makeToggleLi(
-        "Расширение blur под музыку",
-        "Громкость и бит увеличивают сам blur без отдельных fullscreen-слоёв.",
-        tweaked.musicGlow !== false,
-        (value) => setTweaked({ musicGlow: !!value })
+        "Плавный blur текста",
+        "Размывает неактивные строки относительно текущей строки.",
+        tweaked.lyricsBlur !== false,
+        (value) => setTweaked({ lyricsBlur: !!value })
       ));
-      ul.appendChild(makeRangeLi(
-        "Сила расширения",
-        "Насколько сильно blur реагирует на музыку.",
-        Number.isFinite(+tweaked.glowStrength) ? +tweaked.glowStrength : 0.22,
-        0,
-        0.5,
-        0.01,
-        "",
-        (value) => setTweaked({ glowStrength: value })
-      ));
+      ul.appendChild(makeRangeLi("Максимальный blur", "Предел размытия удалённых строк.", numberOr(tweaked.lyricsMaxBlur, 8), 0, 24, 1, "px", (value) => setTweaked({ lyricsMaxBlur: value })));
+      ul.appendChild(makeRangeLi("Шаг blur", "Нарастание размытия на одну строку.", numberOr(tweaked.lyricsBlurStep, 2.2), 0, 8, 0.1, "px", (value) => setTweaked({ lyricsBlurStep: value })));
+      ul.appendChild(makeRangeLi("Мин. прозрачность", "Минимальная видимость удалённых строк.", numberOr(tweaked.lyricsMinOpacity, 0.35), 0.1, 1, 0.01, "", (value) => setTweaked({ lyricsMinOpacity: value })));
+      ul.appendChild(makeRangeLi("Шаг прозрачности", "Уменьшение прозрачности на одну строку.", numberOr(tweaked.lyricsOpacityStep, 0.12), 0, 0.4, 0.01, "", (value) => setTweaked({ lyricsOpacityStep: value })));
+      ul.appendChild(makeRangeLi("Переход текста", "Длительность плавного перехода строк.", numberOr(tweaked.lyricsTransitionMs, 250), 0, 1200, 10, "ms", (value) => setTweaked({ lyricsTransitionMs: Math.round(value) })));
+      ul.appendChild(makeGroupSeparator("Fullscreen-обложка"));
       ul.appendChild(makeToggleLi(
-        "Оптимизация blur Tweaked",
-        "Снижает тяжёлый backdrop blur у крупных элементов Tweaked.",
-        tweaked.optimizeBlur !== false,
-        (value) => setTweaked({ optimizeBlur: !!value })
+        "Фон из обложки",
+        "Рисует размытую обложку общим WebGL-проходом Tweaked.",
+        tweaked.coverBackground !== false,
+        (value) => setTweaked({ coverBackground: !!value })
       ));
-      ul.appendChild(makeRangeLi(
-        "Blur Tweaked",
-        "Размер оптимизированного blur.",
-        Number.isFinite(+tweaked.blurPx) ? +tweaked.blurPx : 22,
-        8,
-        50,
-        1,
-        "px",
-        (value) => setTweaked({ blurPx: Math.round(value) })
-      ));
+      ul.appendChild(makeRangeLi("Blur fullscreen-обложки", "Радиус двухпроходного GPU-размытия.", numberOr(tweaked.coverBlur, 28), 0, 64, 1, "px", (value) => setTweaked({ coverBlur: Math.round(value) })));
+      ul.appendChild(makeRangeLi("Насыщенность обложки", "Насыщенность fullscreen-фона.", numberOr(tweaked.coverSaturate, 1.2), 0.5, 2.5, 0.05, "", (value) => setTweaked({ coverSaturate: value })));
+      ul.appendChild(makeRangeLi("Затемнение", "Сила vignette поверх обложки.", numberOr(tweaked.coverOverlay, 0.55), 0, 0.9, 0.01, "", (value) => setTweaked({ coverOverlay: value })));
+      ul.appendChild(makeRangeLi("Crossfade", "Переход между обложками.", numberOr(tweaked.coverCrossfadeMs, 900), 0, 3000, 50, "ms", (value) => setTweaked({ coverCrossfadeMs: Math.round(value) })));
+      ul.appendChild(makeToggleLi("Drift обложки", "Медленное движение WebGL-текстуры.", tweaked.coverMotion !== false, (value) => setTweaked({ coverMotion: !!value })));
+      ul.appendChild(makeRangeLi("Скорость drift", "Длительность полного цикла движения.", +tweaked.coverMotionDuration || 26, 4, 90, 1, "s", (value) => setTweaked({ coverMotionDuration: value })));
 
+      }
+
+      if (modalKind === "cover2Anim") {
       ul.appendChild(makeGroupSeparator("Cover2Anim"));
-      ul.appendChild(makeToggleLi(
+      const modeToggle = makeToggleLi(
         "Поддержка Cover2Anim",
-        "Включает поведение PulseColor для fullscreen Cover2Anim.",
-        cover2Anim.enabled !== false,
+        "Включает встроенный WebGL-режим Cover2Anim.",
+        cover2Anim.enabled === true,
         (value) => setCover2Anim({ enabled: !!value })
+      );
+      modeToggle.querySelector('button[role="switch"]')?.setAttribute("data-pulsecolor-mode-toggle", "cover2Anim");
+      ul.appendChild(modeToggle);
+      ul.appendChild(makeChoiceLi(
+        "Расцветка Cover2Anim",
+        "Моя расцветка использует палитру PulseColor, оригинал оставляет цвета самого Cover2Anim.",
+        ["original", "mixed"].includes(cover2Anim.colorMode) ? cover2Anim.colorMode : "pulsecolor",
+        [
+          { value: "pulsecolor", label: "Моя" },
+          { value: "original", label: "Обложка" },
+          { value: "mixed", label: "Смешанная" }
+        ],
+        (value) => setCover2Anim({ colorMode: value })
       ));
-      ul.appendChild(makeToggleLi(
-        "Реакция на музыку",
-        "Добавляет бит-акценты существующему canvas Cover2Anim.",
-        cover2Anim.musicReactive !== false,
-        (value) => setCover2Anim({ musicReactive: !!value })
-      ));
-      ul.appendChild(makeRangeLi(
-        "Сила реакции",
-        "Общая сила движения и яркости Cover2Anim.",
-        Number.isFinite(+cover2Anim.reactionStrength) ? +cover2Anim.reactionStrength : 0.25,
-        0,
-        0.8,
-        0.01,
-        "",
-        (value) => setCover2Anim({ reactionStrength: value })
-      ));
-      ul.appendChild(makeRangeLi(
-        "Сила бита",
-        "Короткий импульс на сильных ударах.",
-        Number.isFinite(+cover2Anim.beatStrength) ? +cover2Anim.beatStrength : 0.16,
-        0,
-        0.7,
-        0.01,
-        "",
-        (value) => setCover2Anim({ beatStrength: value })
-      ));
-      ul.appendChild(makeToggleLi(
-        "Экономный режим",
-        "Ограничивает частоту обновления и делает сглаживание сильнее.",
-        cover2Anim.efficientMode === true,
-        (value) => setCover2Anim({ efficientMode: !!value })
-      ));
+      ul.appendChild(makeGroupSeparator("Динамика Cover2Anim"));
+      ul.appendChild(makeRangeLi("Минимум blob", "Минимальное количество процедурных цветовых пятен.", numberOr(cover2Anim.blobCount, 16), 16, 256, 1, "", (value) => setCover2Anim({ blobCount: Math.round(value) })));
+      ul.appendChild(makeRangeLi("Скорость blob", "Скорость движения пятен.", numberOr(cover2Anim.blobSpeed, 0.5), 0.25, 4, 0.05, "", (value) => setCover2Anim({ blobSpeed: value })));
+      ul.appendChild(makeRangeLi("Warp", "Нелинейное смещение траекторий.", numberOr(cover2Anim.warp, 0.14), 0, 1, 0.01, "", (value) => setCover2Anim({ warp: value })));
+      ul.appendChild(makeRangeLi("Flow", "Размах движения по fullscreen.", numberOr(cover2Anim.flow, 0.53), 0, 1, 0.01, "", (value) => setCover2Anim({ flow: value })));
+      ul.appendChild(makeRangeLi("Насыщенность", "Насыщенность палитры Cover2Anim.", numberOr(cover2Anim.saturation, 1.5), 0.8, 1.5, 0.01, "", (value) => setCover2Anim({ saturation: value })));
+      ul.appendChild(makeRangeLi("Highlight", "Сила светлых участков blob.", numberOr(cover2Anim.highlight, 0.99), 0, 1, 0.01, "", (value) => setCover2Anim({ highlight: value })));
+      ul.appendChild(makeRangeLi("Переход палитры", "Интерполяция между цветами треков.", numberOr(cover2Anim.paletteFadeMs, 500), 0, 5000, 50, "ms", (value) => setCover2Anim({ paletteFadeMs: Math.round(value) })));
+      ul.appendChild(makeRangeLi("Скорость смешивания", "Скорость перехода отдельных blob к новой палитре.", numberOr(cover2Anim.paletteBlendSpeed, 0.8), 0.1, 3, 0.05, "", (value) => setCover2Anim({ paletteBlendSpeed: value })));
+      ul.appendChild(makeRangeLi("Светлота фона", "Поднимает базовую яркость фона под blob.", numberOr(cover2Anim.backgroundLightness, 0), 0, 1, 0.01, "", (value) => setCover2Anim({ backgroundLightness: value })));
+      ul.appendChild(makeTextLi("CSS-фильтр canvas", "Фильтр исходного Cover2Anim; пустое значение использует blur(100px).", cover2Anim.canvasFilter, "blur(100px)", (value) => setCover2Anim({ canvasFilter: value })));
+      ul.appendChild(makeToggleLi("Счётчик FPS", "Показывает небольшой счётчик производительности Cover2Anim.", cover2Anim.showFps === true, (value) => setCover2Anim({ showFps: !!value })));
+      }
     }
+
+    removeOpenModalSettings = coordinator()?.subscribeSettings?.((next) => {
+      const button = portal.querySelector(`button[data-pulsecolor-mode-toggle="${modalKind}"]`);
+      button?.__pulseColorApplyChecked?.(next?.[modalKind]?.enabled === true);
+    }) || null;
 
     const closeBtn = portal.querySelector('button[aria-label="Закрыть"]');
     if (closeBtn) {
@@ -673,59 +838,55 @@
     try { dialog && dialog.focus(); } catch {}
   }
 
-  const SETTINGS_MUTATION_SELECTOR = '.SettingsPage_content__cR6Ra, [class*="SettingsPage_content"], [class*="SettingsListButtonItem"], [class*="SettingsList"]';
-  let injectTimer = 0;
-
+  let firstSettingsInjection = true;
+  let removeInjector = null;
+  let serviceRunning = false;
   function tickInject() {
+    if (!firstSettingsInjection && document.getElementById(TWEAKED_ITEM_ID) && document.getElementById(COVER2ANIM_ITEM_ID)) return;
+    firstSettingsInjection = false;
     try { injectSettingsButton(); } catch {}
   }
-
-  function scheduleInject(delay = 160) {
-    if (injectTimer) return;
-    injectTimer = window.setTimeout(() => {
-      injectTimer = 0;
-      tickInject();
-    }, delay);
-  }
-
-  function isSettingsMutationNode(node) {
-    if (!node || node.nodeType !== 1) return false;
-    try {
-      if (node.matches?.(SETTINGS_MUTATION_SELECTOR)) return true;
-      const cls = typeof node.className === "string" ? node.className : "";
-      if (cls.includes("SettingsPage") || cls.includes("SettingsList")) return true;
-      return !!node.querySelector?.(SETTINGS_MUTATION_SELECTOR);
-    } catch {
-      return false;
-    }
-  }
-
-  function hasSettingsMutation(muts) {
-    for (const m of muts) {
-      if (isSettingsMutationNode(m.target)) return true;
-      for (const n of m.addedNodes || []) {
-        if (isSettingsMutationNode(n)) return true;
-      }
-    }
-    return false;
-  }
-
-  const mo = new MutationObserver((muts) => {
-    if (hasSettingsMutation(muts)) scheduleInject();
-  });
-
-  mo.observe(document.documentElement, { childList: true, subtree: true });
-  tickInject();
-
-  document.addEventListener("DOMContentLoaded", () => scheduleInject(0), { once: true });
-  window.addEventListener("popstate", () => scheduleInject(220));
-  window.addEventListener("hashchange", () => scheduleInject(220));
-
   window.PulseColorAddonSupportUI = Object.assign(window.PulseColorAddonSupportUI || {}, {
     open: openModal,
+    openTweaked: () => openModal("tweakedYmDesign"),
+    openCover2Anim: () => openModal("cover2Anim"),
     close: closeModal,
     getSettings,
     setTweaked,
     setCover2Anim
   });
+
+  const startService = () => {
+    if (serviceRunning) return;
+    serviceRunning = true;
+    removeInjector = window.PulseColorSettingsUI.register("addon-settings", tickInject);
+  };
+
+  const stopService = () => {
+    if (!serviceRunning) return;
+    serviceRunning = false;
+    removeInjector?.();
+    removeInjector = null;
+    document.removeEventListener("keydown", onEsc, true);
+    removeOpenModalSettings?.();
+    removeOpenModalSettings = null;
+    for (const id of pendingUiTimeouts) clearTimeout(id);
+    pendingUiTimeouts.clear();
+    for (const id of pendingUiFrames) cancelAnimationFrame(id);
+    pendingUiFrames.clear();
+    const portal = document.getElementById(PORTAL_ID);
+    if (portal) {
+      portal.remove();
+      unlockPageInteraction();
+    }
+    document.getElementById(TWEAKED_ITEM_ID)?.remove();
+    document.getElementById(COVER2ANIM_ITEM_ID)?.remove();
+    firstSettingsInjection = true;
+  };
+
+  if (typeof window.PulseColor.runtime.registerService === "function") {
+    window.PulseColor.runtime.registerService("addon-settings-controls", { start: startService, stop: stopService });
+  } else {
+    startService();
+  }
 })();

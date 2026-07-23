@@ -7,7 +7,8 @@
   const CUSTOM_ITEM_ID = "pulsecolor-custom-wave-settings-item";
   const WAVE_VARIANT_ITEM_ID = "pulsecolor-wave-variant-settings-item";
   const CORE_ITEM_ID = "pulsecolor-core-settings-item";
-  const ADDON_SUPPORT_ITEM_ID = "pulsecolor-addon-support-settings-item";
+  const TWEAKED_SUPPORT_ITEM_ID = "pulsecolor-tweaked-support-settings-item";
+  const COVER2ANIM_SUPPORT_ITEM_ID = "pulsecolor-cover2anim-support-settings-item";
   const PORTAL_ID = "pulsecolor-wave-settings-portal";
 
   const ARROW_HREF = "/icons/sprite.svg#arrowRight_xs";
@@ -25,54 +26,7 @@
 
   const KEY_LOG = "osuLogEnabled";
   const KEY_BPM = "osuShowBPM";
-  const KEY_CFG = "PulseColor.BeatDriverConfig.v1";
-
-  const DEFAULT_CFG = {
-    BEAT_IMPULSE_DOWN: 0.92,
-    BEAT_IMPULSE: 0.11,
-    KICK_IMPULSE_BASE: 0.060,
-    DECAY_MS: 220,
-    DECAY_MS_VOICE: 260,
-
-    TH_RMS: 0.000001,
-    MIN_CONF: 0.24,
-    AUDIO_HOLD_MS: 180,
-
-    KICK_COOLDOWN_MS: 70,
-    VOICE_COOLDOWN_MS: 85,
-    BPM_STRONG_BEAT_THR: 0.110,
-    BPM_STRONG_BEAT_RATIO: 1.14,
-    BPM_STRONG_BEAT_MIN_MS: 240,
-    BPM_RESYNC_WINDOW_MS: 180,
-    BPM_MOTION_RESET_GAIN: 1.05,
-
-    VOICE_EVENT_THR: 0.10,
-    VOICE_IMPULSE_GAIN: 1.65,
-    VOICE_ENVELOPE_GAIN: 1.90,
-
-    OUTER_GAIN: 1.00,
-    INNER_GAIN: 1.00,
-
-    BRIGHTNESS_BASE: 1.00,
-
-    OUTER_MIN_SCALE: 1.00,
-    OUTER_MAX_SCALE: 1.18,
-    INNER_MIN_SCALE: 1.01,
-    INNER_MAX_SCALE: 1.27,
-
-    UNIFIED_MODE: false,
-
-    MOTION_ENABLED: true,
-    MOTION_STRENGTH: 14,
-    MOTION_SPEED: 0.36,
-
-    BEAT_LEAD_MS: 20,
-
-    ENABLE_CUSTOM_WAVE: true,
-    WAVE_VARIANT: "variant1",
-    WAVE_DRIVE_MODE: "raw",
-    WAVE_PERFORMANCE_MODE: "efficient"
-  };
+  const DEFAULT_CFG = Object.freeze({ ...window.PulseColor.settings.defaults.wave });
 
   const WAVE_VARIANT_OPTIONS = Object.freeze([
     { value: "variant1", label: "1 \u0432\u0430\u0440\u0438\u0430\u043d\u0442" },
@@ -80,52 +34,31 @@
     { value: "variant3", label: "3 \u0432\u0430\u0440\u0438\u0430\u043d\u0442" }
   ]);
 
-  const FIXED_SMOOTH_ENERGY_TUNING = Object.freeze({
-    DECAY_MS: 220,
-    DECAY_MS_VOICE: 260,
-    KICK_COOLDOWN_MS: 70,
-    VOICE_COOLDOWN_MS: 85,
-    VOICE_IMPULSE_GAIN: 1.65,
-    VOICE_ENVELOPE_GAIN: 1.90
-  });
-
-  const INTERNAL_WAVE_TUNING = Object.freeze({
-    BEAT_IMPULSE_DOWN: 0.92,
-    BEAT_IMPULSE: 0.11,
-    KICK_IMPULSE_BASE: 0.060,
-    TH_RMS: 0.000001,
-    MIN_CONF: 0.24,
-    BPM_STRONG_BEAT_THR: 0.110,
-    BPM_STRONG_BEAT_RATIO: 1.14,
-    BPM_MOTION_RESET_GAIN: 1.05,
-    OUTER_MIN_SCALE: 1.00,
-    OUTER_MAX_SCALE: 1.18,
-    INNER_MIN_SCALE: 1.01,
-    INNER_MAX_SCALE: 1.27,
-    UNIFIED_MODE: false,
-    MOTION_STRENGTH: 14,
-    BEAT_LEAD_MS: 0
-  });
-
-  const DEPRECATED_AUTO_ENERGY_KEYS = Object.freeze([
-    "ENERGY_RESPONSE",
-    "ENERGY_FAST_ALPHA",
-    "ENERGY_SLOW_ALPHA",
-    "ENERGY_SMOOTH_ALPHA",
-    "ENERGY_RISE_GAIN",
-    "ENERGY_RISE_THR",
-    "ENERGY_RISE_COOLDOWN_MS"
-  ]);
-
-  function clearDeprecatedAutoEnergyKeys(cfg) {
-    if (!cfg || typeof cfg !== "object") return cfg;
-    for (const key of DEPRECATED_AUTO_ENERGY_KEYS) delete cfg[key];
-    return cfg;
-  }
-
-
   const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
   const MODAL_ANIM_MS = 220;
+  const pendingUiTimeouts = new Set();
+  const pendingUiFrames = new Set();
+  const scheduleUiTimeout = (callback, delay) => {
+    const id = window.setTimeout(() => {
+      pendingUiTimeouts.delete(id);
+      callback();
+    }, delay);
+    pendingUiTimeouts.add(id);
+    return id;
+  };
+  const cancelUiTimeout = (id) => {
+    if (!id) return;
+    clearTimeout(id);
+    pendingUiTimeouts.delete(id);
+  };
+  const scheduleUiFrame = (callback) => {
+    const id = requestAnimationFrame(() => {
+      pendingUiFrames.delete(id);
+      callback();
+    });
+    pendingUiFrames.add(id);
+    return id;
+  };
 
   function lockPageInteraction() {
     const body = document.body;
@@ -207,7 +140,7 @@
   }
 
   function animateModalIn(dialog, backdrop) {
-    requestAnimationFrame(() => {
+    scheduleUiFrame(() => {
       if (backdrop) backdrop.style.opacity = "1";
       if (dialog) {
         dialog.style.opacity = "1";
@@ -226,7 +159,7 @@
       dialog.style.transform = "translate(-50%, calc(-50% + 16px)) scale(.965)";
     }
 
-    window.setTimeout(() => {
+    scheduleUiTimeout(() => {
       try { done && done(); } catch { }
     }, MODAL_ANIM_MS + 40);
   }
@@ -272,6 +205,22 @@
           ]
         },
 
+        {
+          type: "choice",
+          key: "WEBGL_QUALITY",
+          label: "Качество WebGL",
+          desc: "Качество рендера единого WebGL-движка.",
+          options: [
+            { value: "auto", label: "Авто" },
+            { value: "balanced", label: "Баланс" },
+            { value: "low", label: "Экономия" }
+          ]
+        },
+
+        { key: "WEBGL_DPR_LIMIT", label: "Предел плотности пикселей", step: 0.05, min: 0.75, max: 2.0 },
+        { type: "toggle", key: "USE_COVER_COLORS", label: "Цвета обложки", desc: "Использовать палитру текущей обложки." },
+        { type: "toggle", key: "USE_COVER_TEXTURE", label: "Текстура обложки", desc: "Добавляет текстуру обложки в WebGL-фон." },
+
         { type: "toggle", key: "__LOG_ENABLED__", label: "Показывать логи", desc: "Включает всплывающие сообщения." },
         { type: "toggle", key: "__BPM_HUD__", label: "Показывать BPM", desc: "HUD в правом верхнем углу." },
       ],
@@ -280,8 +229,9 @@
       group: "Усиление и яркость",
       hint: "Мощность пульса и яркость.",
       items: [
-        { key: "OUTER_GAIN", label: "Усиление внешнего", step: 0.01, min: 0.1, max: 10 },
-        { key: "INNER_GAIN", label: "Усиление внутреннего", step: 0.01, min: 0.1, max: 10 },
+        { key: "REACTION_INTENSITY", label: "Интенсивность реакции", step: 0.01, min: 0.1, max: 3 },
+        { key: "SENSITIVITY", label: "Чувствительность", step: 0.01, min: 0.25, max: 3 },
+        { key: "SMOOTHNESS", label: "Плавность", step: 0.01, min: 0, max: 1 },
         { key: "BRIGHTNESS_BASE", label: "Базовая яркость", step: 0.01, min: 1, max: 5 },
       ],
     },
@@ -296,10 +246,6 @@
   ];
 
   /* ===================== cfg persistence ===================== */
-  function safeParseJson(s) {
-    try { return JSON.parse(s); } catch { return null; }
-  }
-
   function ensureBeatConfig() {
     const cfg = (window.BeatDriverConfig && typeof window.BeatDriverConfig === "object")
       ? window.BeatDriverConfig
@@ -307,37 +253,13 @@
     return cfg;
   }
 
-  function applyFixedSmoothEnergyTuning(cfg = ensureBeatConfig()) {
-    for (const k in FIXED_SMOOTH_ENERGY_TUNING) cfg[k] = FIXED_SMOOTH_ENERGY_TUNING[k];
-    window.PulseColorFixedSmoothEnergyTuning = FIXED_SMOOTH_ENERGY_TUNING;
-    return cfg;
-  }
-
-  function applyInternalWaveTuning(cfg = ensureBeatConfig()) {
-    for (const k in INTERNAL_WAVE_TUNING) cfg[k] = INTERNAL_WAVE_TUNING[k];
-    window.PulseColorInternalWaveTuning = INTERNAL_WAVE_TUNING;
-    return cfg;
-  }
-
   function loadBeatConfigIntoCfgOnce() {
     const cfg = ensureBeatConfig();
-
-    if (window.__PCW_INIT_DONE) return cfg;
-    window.__PCW_INIT_DONE = true;
-
-    for (const k in DEFAULT_CFG) {
-      if (!(k in cfg)) cfg[k] = DEFAULT_CFG[k];
+    const current = window.PulseColor.settings.getWave();
+    for (const key of Object.keys(cfg)) {
+      if (!Object.prototype.hasOwnProperty.call(DEFAULT_CFG, key)) delete cfg[key];
     }
-
-    const saved = safeParseJson(localStorage.getItem(KEY_CFG) || "");
-    if (saved && typeof saved === "object") {
-      for (const k in saved) cfg[k] = saved[k];
-    }
-
-    clearDeprecatedAutoEnergyKeys(cfg);
-    applyFixedSmoothEnergyTuning(cfg);
-    applyInternalWaveTuning(cfg);
-
+    Object.assign(cfg, current);
     return cfg;
   }
 
@@ -345,16 +267,19 @@
 
   function flushPersistCfg() {
     if (__pcwPersistTimer) {
-      clearTimeout(__pcwPersistTimer);
+      cancelUiTimeout(__pcwPersistTimer);
       __pcwPersistTimer = 0;
     }
 
     try {
-      const cfg = clearDeprecatedAutoEnergyKeys(applyInternalWaveTuning(applyFixedSmoothEnergyTuning(ensureBeatConfig())));
-      const out = {};
-      for (const k in DEFAULT_CFG) out[k] = cfg[k];
-      localStorage.setItem(KEY_CFG, JSON.stringify(out));
-      window.dispatchEvent(new CustomEvent("pulsecolor:beatDriverConfigChanged", { detail: { cfg } }));
+      const cfg = ensureBeatConfig();
+      const patch = {};
+      for (const key of Object.keys(DEFAULT_CFG)) patch[key] = cfg[key];
+      const normalized = window.PulseColor.settings.updateWave(patch, "wave-settings-ui");
+      for (const key of Object.keys(cfg)) {
+        if (!Object.prototype.hasOwnProperty.call(DEFAULT_CFG, key)) delete cfg[key];
+      }
+      Object.assign(cfg, normalized);
     } catch { }
   }
 
@@ -367,16 +292,16 @@
       return;
     }
 
-    if (__pcwPersistTimer) clearTimeout(__pcwPersistTimer);
-    __pcwPersistTimer = setTimeout(() => {
+    cancelUiTimeout(__pcwPersistTimer);
+    __pcwPersistTimer = scheduleUiTimeout(() => {
       __pcwPersistTimer = 0;
       flushPersistCfg();
     }, delay);
   }
 
   function getCfgValue(key) {
-    const cfg = ensureBeatConfig();
-    if (key in cfg) return cfg[key];
+    const current = window.PulseColor.settings.getWave();
+    if (key in current) return current[key];
     return DEFAULT_CFG[key];
   }
 
@@ -386,6 +311,7 @@
   }
 
   function setCfgValue(key, value, opts = {}) {
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_CFG, key)) return;
     const cfg = ensureBeatConfig();
     cfg[key] = value;
     persistCfg(opts);
@@ -403,44 +329,10 @@
       window.__LAST_CUSTOM_WAVE = customWaveNow;
       const pulse = document.getElementById("osu-pulse");
       if (pulse) {
-        pulse.style.display = customWaveNow ? "" : "none";
+        if (window.PulseColor?.engine?.version >= 2) pulse.style.removeProperty("display");
+        else pulse.style.display = customWaveNow ? "" : "none";
       }
     }
-  }
-
-  function observePulseElement() {
-    let pulseTimer = 0;
-
-    const schedulePulseUpdate = () => {
-      if (pulseTimer) return;
-      pulseTimer = window.setTimeout(() => {
-        pulseTimer = 0;
-        const el = document.getElementById("osu-pulse");
-        if (el) updateCustomWave(true);
-      }, 120);
-    };
-
-    const nodeHasPulse = (node) => {
-      if (!node || node.nodeType !== 1) return false;
-      try {
-        return node.id === "osu-pulse" || !!node.querySelector?.("#osu-pulse");
-      } catch {
-        return false;
-      }
-    };
-
-    const mo = new MutationObserver((muts) => {
-      for (const m of muts) {
-        for (const n of m.addedNodes || []) {
-          if (nodeHasPulse(n)) {
-            schedulePulseUpdate();
-            return;
-          }
-        }
-      }
-    });
-
-    mo.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   /* ===================== LOG + BPM HUD ===================== */
@@ -478,11 +370,11 @@
     close.style.cssText = `cursor:pointer; color:#ccc; font-size:14px;`;
     close.onclick = () => {
       item.style.opacity = "0"; item.style.transform = "scale(.95)";
-      setTimeout(() => item.remove(), 350);
+      scheduleUiTimeout(() => item.remove(), 350);
     };
     item.append(txt, close);
     box.appendChild(item);
-    requestAnimationFrame(() => { item.style.opacity = "1"; item.style.transform = "scale(1)"; });
+    scheduleUiFrame(() => { item.style.opacity = "1"; item.style.transform = "scale(1)"; });
     while (box.children.length > 10) box.firstChild.remove();
   }
 
@@ -523,6 +415,24 @@
     el.textContent = "…";
     document.body.appendChild(el);
     applyBpmHudVisibility();
+  }
+
+  function updateBpmHud(state = window.PulseColor?.bpm?.getState?.()) {
+    const hud = document.getElementById("osu-hud-maxfft");
+    if (!hud || !state) return;
+    const status = String(state.status || "raw");
+    if (status === "loading") hud.textContent = "BPM • поиск…";
+    else if (status === "bpm") {
+      const value = Number(state.bpm);
+      const suffix = state.cacheHit || String(state.source || "").startsWith("cache:") ? " • cache" : "";
+      hud.textContent = `${Number.isFinite(value) ? Math.round(value * 100) / 100 : "—"} BPM${suffix}`;
+    } else if (status === "timeout") hud.textContent = "BPM • тайм-аут → RAW";
+    else if (status === "error") hud.textContent = "BPM • ошибка → RAW";
+    else if (status === "fallback_raw") hud.textContent = "BPM не найден → RAW";
+    else if (status === "cancelled") hud.textContent = "BPM • отменено → RAW";
+    else hud.textContent = "RAW";
+    hud.dataset.status = status;
+    hud.title = state.source ? `Источник: ${state.source}` : "PulseColor BPM";
   }
 
   function setBpmHudEnabled(v) {
@@ -643,7 +553,14 @@
   }
 
   function pulseColorItemOrder(id) {
-    return [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ADDON_SUPPORT_ITEM_ID, ITEM_ID].indexOf(id);
+    return [
+      CUSTOM_ITEM_ID,
+      WAVE_VARIANT_ITEM_ID,
+      CORE_ITEM_ID,
+      TWEAKED_SUPPORT_ITEM_ID,
+      COVER2ANIM_SUPPORT_ITEM_ID,
+      ITEM_ID
+    ].indexOf(id);
   }
 
   function placePulseColorItem(ul, li) {
@@ -651,7 +568,14 @@
     const order = pulseColorItemOrder(li.id);
     let anchor = category;
 
-    [CUSTOM_ITEM_ID, WAVE_VARIANT_ITEM_ID, CORE_ITEM_ID, ADDON_SUPPORT_ITEM_ID, ITEM_ID].forEach((id) => {
+    [
+      CUSTOM_ITEM_ID,
+      WAVE_VARIANT_ITEM_ID,
+      CORE_ITEM_ID,
+      TWEAKED_SUPPORT_ITEM_ID,
+      COVER2ANIM_SUPPORT_ITEM_ID,
+      ITEM_ID
+    ].forEach((id) => {
       const item = ul.querySelector("#" + id);
       if (!item || item === li) return;
       const itemOrder = pulseColorItemOrder(id);
@@ -1186,7 +1110,7 @@
       const scheduleInputCommit = () => {
         lastInputValue = Number(input.value);
         if (inputCommitTimer) return;
-        inputCommitTimer = setTimeout(() => {
+        inputCommitTimer = scheduleUiTimeout(() => {
           inputCommitTimer = 0;
           emitChange("input", lastInputValue);
         }, 50);
@@ -1199,7 +1123,7 @@
 
       input.addEventListener("change", () => {
         if (inputCommitTimer) {
-          clearTimeout(inputCommitTimer);
+          cancelUiTimeout(inputCommitTimer);
           inputCommitTimer = 0;
         }
         emitChange("change", input.value);
@@ -1453,14 +1377,6 @@
     try { dialog && dialog.focus(); } catch { }
   }
 
-  /* ===================== init (NO RESET ON PAGE/TRACK) ===================== */
-  loadBeatConfigIntoCfgOnce();
-  setLogEnabled(getLogEnabled());
-  mountHUD();
-  setBpmHudEnabled(getBpmHudEnabled());
-  updateCustomWave(true);
-  observePulseElement();
-
   window.PulseColorWaveUI = Object.assign(window.PulseColorWaveUI || {}, {
     ensureBeatConfig,
     open: openModal,
@@ -1470,52 +1386,59 @@
   });
 
   /* ===================== lifecycle ===================== */
-  const SETTINGS_MUTATION_SELECTOR = '.SettingsPage_content__cR6Ra, [class*="SettingsPage_content"], [class*="SettingsListButtonItem"], [class*="SettingsList"]';
-  let injectTimer = 0;
-
+  let firstSettingsInjection = true;
+  let removeInjector = null;
+  let removeBpmSubscription = null;
+  let serviceRunning = false;
   function tickInject() {
+    if (!firstSettingsInjection && document.getElementById(ITEM_ID) && document.getElementById(WAVE_VARIANT_ITEM_ID)) return;
+    firstSettingsInjection = false;
     try { injectSettingsButton(); } catch { }
   }
 
-  function scheduleInject(delay = 160) {
-    if (injectTimer) return;
-    injectTimer = window.setTimeout(() => {
-      injectTimer = 0;
-      if (!document.getElementById(ITEM_ID) || !document.getElementById(WAVE_VARIANT_ITEM_ID)) tickInject();
-    }, delay);
-  }
+  const startService = () => {
+    if (serviceRunning) return;
+    serviceRunning = true;
+    loadBeatConfigIntoCfgOnce();
+    setLogEnabled(getLogEnabled());
+    mountHUD();
+    setBpmHudEnabled(getBpmHudEnabled());
+    updateCustomWave(true);
+    removeBpmSubscription = window.PulseColor.bpm?.subscribe?.((state) => updateBpmHud(state)) || null;
+    removeInjector = window.PulseColorSettingsUI.register("wave-settings", tickInject);
+  };
 
-  function isSettingsMutationNode(node) {
-    if (!node || node.nodeType !== 1) return false;
-    try {
-      if (node.matches?.(SETTINGS_MUTATION_SELECTOR)) return true;
-      const cls = typeof node.className === "string" ? node.className : "";
-      if (cls.includes("SettingsPage") || cls.includes("SettingsList")) return true;
-      return !!node.querySelector?.(SETTINGS_MUTATION_SELECTOR);
-    } catch {
-      return false;
+  const stopService = () => {
+    if (!serviceRunning) return;
+    serviceRunning = false;
+    removeInjector?.();
+    removeBpmSubscription?.();
+    removeInjector = null;
+    removeBpmSubscription = null;
+    cancelUiTimeout(__pcwPersistTimer);
+    __pcwPersistTimer = 0;
+    for (const id of pendingUiTimeouts) clearTimeout(id);
+    pendingUiTimeouts.clear();
+    for (const id of pendingUiFrames) cancelAnimationFrame(id);
+    pendingUiFrames.clear();
+    if (__modalOnEsc) document.removeEventListener("keydown", __modalOnEsc, true);
+    __modalOnEsc = null;
+    const portal = document.getElementById(PORTAL_ID);
+    if (portal) {
+      portal.remove();
+      unlockPageInteraction();
     }
+    document.getElementById(ITEM_ID)?.remove();
+    document.getElementById(CUSTOM_ITEM_ID)?.remove();
+    document.getElementById(WAVE_VARIANT_ITEM_ID)?.remove();
+    document.getElementById("osu-hud-maxfft")?.remove();
+    document.getElementById(LOG_BOX_ID)?.remove();
+    firstSettingsInjection = true;
+  };
+
+  if (typeof window.PulseColor.runtime.registerService === "function") {
+    window.PulseColor.runtime.registerService("wave-settings-controls", { start: startService, stop: stopService });
+  } else {
+    startService();
   }
-
-  function hasSettingsMutation(muts) {
-    for (const m of muts) {
-      if (isSettingsMutationNode(m.target)) return true;
-      for (const n of m.addedNodes || []) {
-        if (isSettingsMutationNode(n)) return true;
-      }
-    }
-    return false;
-  }
-
-  const mo = new MutationObserver((muts) => {
-    if (document.getElementById(ITEM_ID) && document.getElementById(WAVE_VARIANT_ITEM_ID)) return;
-    if (hasSettingsMutation(muts)) scheduleInject();
-  });
-
-  mo.observe(document.documentElement, { childList: true, subtree: true });
-
-  tickInject();
-  document.addEventListener("DOMContentLoaded", () => scheduleInject(0), { once: true });
-  window.addEventListener("popstate", () => scheduleInject(220));
-  window.addEventListener("hashchange", () => scheduleInject(220));
 })();
