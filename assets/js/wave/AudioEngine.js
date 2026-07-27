@@ -29,6 +29,8 @@
   let mediaElement = null;
   let audioRefreshTimer = 0;
   let audioRefreshGeneration = 0;
+  let analyserAttempt = null;
+  let nextAnalyserAttemptAt = 0;
   let serviceRunning = false;
   let analyserGeneration = 0;
   let externalSubscriberId = 0;
@@ -39,12 +41,14 @@
   let adaptivePeak = 0.24;
   let beatHold = 0;
   let lastBeatAt = 0;
-  let lastPulseSyncGraphProbeAt = -Infinity;
-  let pulseSyncGraphProbeRunning = false;
   let silentMediaSince = 0;
   let lastForcedMediaRefreshAt = -Infinity;
+  let lastActiveAudioProbeAt = -Infinity;
+  let capturedTrack = null;
+  let capturedTrackEnded = null;
 
-  const PULSESYNC_GRAPH_PROBE_INTERVAL_MS = 2500;
+  const ACTIVE_AUDIO_PROBE_INTERVAL_MS = 500;
+  const ANALYSER_RETRY_MS = 750;
   const SILENT_MEDIA_REBIND_MS = 900;
   const SILENT_MEDIA_REBIND_COOLDOWN_MS = 4000;
 
@@ -101,6 +105,7 @@
     allocateBuffers();
     counters.audioAnalysers = 1;
     counters.audioContexts = 1;
+    uninstallAudioGraphTap();
     PC.logger.info("audio-analyser-ready", {
       mode,
       sampleRate: context.sampleRate,
@@ -122,123 +127,6 @@
       else link.node.disconnect?.(link.destination);
     } catch (error) {
       PC.logger.debug("audio-graph-link-disconnect-failed", { name: error?.name, message: error?.message });
-    }
-  };
-
-  const recoverPulseSyncHostGraph = () => {
-    if (!serviceRunning || consumers.size === 0 || analyser || pulseSyncGraphProbeRunning) return false;
-    const now = performance.now();
-    if (now - lastPulseSyncGraphProbeAt < PULSESYNC_GRAPH_PROBE_INTERVAL_MS) return false;
-    lastPulseSyncGraphProbeAt = now;
-
-    const cast = window.pulseSyncYandexStationCast;
-    const directConnect = window.__pulseSyncYandexStationOriginalAudioNodeConnect;
-    const directDisconnect = window.__pulseSyncYandexStationOriginalAudioNodeDisconnect;
-    if (
-      typeof directConnect !== "function" ||
-      typeof directDisconnect !== "function" ||
-      typeof cast?.startMuteGuard !== "function" ||
-      typeof cast?.stopMuteGuard !== "function"
-    ) return false;
-
-    try {
-      if (cast.isActive?.() || cast.muteTimer) return false;
-    } catch {
-      return false;
-    }
-
-    const connectKey = "__pulseSyncYandexStationOriginalAudioNodeConnect";
-    const candidates = [];
-    const probeConnect = function pulseColorPulseSyncGraphProbe(destination, ...args) {
-      const result = directConnect.call(this, destination, ...args);
-      try {
-        if (
-          this?.context &&
-          !ownedContexts.has(this.context) &&
-          destination === this.context.destination
-        ) candidates.push(this);
-      } catch { }
-      return result;
-    };
-
-    pulseSyncGraphProbeRunning = true;
-    let guardStarted = false;
-    try {
-      window[connectKey] = probeConnect;
-      guardStarted = true;
-      cast.startMuteGuard();
-      cast.stopMuteGuard();
-      guardStarted = false;
-    } catch (error) {
-      PC.logger.warn("audio-pulsesync-graph-probe-failed", { name: error?.name, message: error?.message });
-    } finally {
-      if (guardStarted) {
-        try { cast.stopMuteGuard(); } catch { }
-      }
-      if (window[connectKey] === probeConnect) window[connectKey] = directConnect;
-      pulseSyncGraphProbeRunning = false;
-    }
-
-    const groupedByContext = new Map();
-    for (const node of new Set(candidates)) {
-      const nodeContext = node?.context;
-      if (!nodeContext || nodeContext.state === "closed") continue;
-      if (!groupedByContext.has(nodeContext)) groupedByContext.set(nodeContext, []);
-      groupedByContext.get(nodeContext).push(node);
-    }
-    const selected = Array.from(groupedByContext.entries()).sort((left, right) => {
-      const leftScore = (left[0].state === "running" ? 1000 : 0) + left[1].length;
-      const rightScore = (right[0].state === "running" ? 1000 : 0) + right[1].length;
-      return rightScore - leftScore;
-    })[0];
-    if (!selected) return false;
-
-    const [hostContext, nodes] = selected;
-    let tapAnalyser = null;
-    let tapSilence = null;
-    const links = [];
-    try {
-      tapAnalyser = hostContext.createAnalyser();
-      configureAnalyser(tapAnalyser);
-      tapSilence = hostContext.createGain();
-      tapSilence.gain.value = 0;
-      directConnect.call(tapAnalyser, tapSilence);
-      directConnect.call(tapSilence, hostContext.destination);
-      for (const node of nodes) {
-        try {
-          directConnect.call(node, tapAnalyser);
-          links.push({ node, destination: tapAnalyser, disconnect: directDisconnect });
-        } catch { }
-      }
-      if (links.length === 0) throw new Error("PulseSync graph contains no connectable source nodes");
-
-      source = links[0].node;
-      sourceLinks = links;
-      silenceGain = tapSilence;
-      mediaElement = null;
-      if (!setAnalyser(hostContext, tapAnalyser, "pulsesync-host-graph", false)) {
-        source = null;
-        sourceLinks = [];
-        silenceGain = null;
-        links.forEach(disconnectGraphLink);
-        directDisconnect.call(tapAnalyser, tapSilence);
-        directDisconnect.call(tapSilence, hostContext.destination);
-        return false;
-      }
-      PC.logger.info("audio-pulsesync-graph-recovered", {
-        sources: links.length,
-        sampleRate: hostContext.sampleRate
-      });
-      return true;
-    } catch (error) {
-      links.forEach(disconnectGraphLink);
-      try { tapAnalyser && directDisconnect.call(tapAnalyser); } catch { }
-      try { tapSilence && directDisconnect.call(tapSilence); } catch { }
-      source = null;
-      sourceLinks = [];
-      silenceGain = null;
-      PC.logger.warn("audio-pulsesync-graph-attach-failed", { name: error?.name, message: error?.message });
-      return false;
     }
   };
 
@@ -288,7 +176,7 @@
     const bindings = new Map();
     ["play", "playing", "loadeddata", "loadedmetadata", "canplay"].forEach((eventName) => {
       const handler = () => {
-        if (eventName === "playing" && analyser && audio === mediaElement && sourceMode === "capture-stream") {
+        if ((eventName === "loadeddata" || eventName === "loadedmetadata") && analyser && audio === mediaElement && sourceMode === "capture-stream") {
           scheduleAudioRefresh(audio, 40, true);
         } else if (analyser && audio !== mediaElement) scheduleAudioRefresh(audio, 0);
         else ensureAnalyser(audio);
@@ -310,57 +198,46 @@
     for (const audio of Array.from(audioBindings.keys())) unbindAudioElement(audio);
   };
 
-  const ensureAnalyser = async (preferredAudio = null) => {
+  const createAnalyser = async (preferredAudio = null) => {
     if (!serviceRunning || analyser || !AC || consumers.size === 0) return analyser;
     const generation = analyserGeneration;
-    const audio = preferredAudio || PC.dom.getSnapshot().audio || document.querySelector("audio");
+    const audio = preferredAudio || PC.dom.getAudio?.() || PC.dom.getSnapshot().audio || document.querySelector("audio");
     if (!audio) {
-      recoverPulseSyncHostGraph();
+      installAudioGraphTap();
+      nextAnalyserAttemptAt = performance.now() + ANALYSER_RETRY_MS;
       return analyser;
     }
     bindAudioLifecycle(audio);
 
     let candidateContext = null;
     try {
-      const ctx = candidateContext = new AC();
-      ownedContexts.add(ctx);
-      const tapAnalyser = ctx.createAnalyser();
-      configureAnalyser(tapAnalyser);
-      let tapSource = null;
-      let tapSilence = null;
-      let mode = "capture-stream";
       let stream = null;
       try {
         stream = audio.captureStream?.() || audio.mozCaptureStream?.() || null;
       } catch (error) {
         PC.logger.debug("audio-capture-stream-unavailable", { name: error?.name, message: error?.message });
       }
-      const streamHasAudio = stream && (
-        typeof stream.getAudioTracks !== "function" || stream.getAudioTracks().length > 0
-      );
-      if (streamHasAudio) {
-        try {
-          tapSource = ctx.createMediaStreamSource(stream);
-        } catch (error) {
-          PC.logger.debug("audio-capture-stream-source-failed", { name: error?.name, message: error?.message });
-        }
-      }
-      if (!tapSource) {
-        mode = "media-element";
-        tapSource = ctx.createMediaElementSource(audio);
+      const tracks = typeof stream?.getAudioTracks === "function" ? stream.getAudioTracks() : [];
+      const liveTrack = tracks.find((track) => track?.readyState !== "ended") || null;
+      if (!stream || !liveTrack) {
+        installAudioGraphTap();
+        nextAnalyserAttemptAt = performance.now() + ANALYSER_RETRY_MS;
+        PC.logger.debug("audio-capture-stream-pending", { hasStream: !!stream, audioTracks: tracks.length });
+        return null;
       }
 
+      const ctx = candidateContext = new AC();
+      ownedContexts.add(ctx);
+      const tapAnalyser = ctx.createAnalyser();
+      configureAnalyser(tapAnalyser);
+      const tapSource = ctx.createMediaStreamSource(stream);
+      const tapSilence = ctx.createGain();
+      tapSilence.gain.value = 0;
+
       const graph = getDirectGraphMethods();
-      if (mode === "capture-stream") {
-        tapSilence = ctx.createGain();
-        tapSilence.gain.value = 0;
-        graph.connect.call(tapSource, tapAnalyser);
-        graph.connect.call(tapAnalyser, tapSilence);
-        graph.connect.call(tapSilence, ctx.destination);
-      } else {
-        graph.connect.call(tapSource, tapAnalyser);
-        graph.connect.call(tapAnalyser, ctx.destination);
-      }
+      graph.connect.call(tapSource, tapAnalyser);
+      graph.connect.call(tapAnalyser, tapSilence);
+      graph.connect.call(tapSilence, ctx.destination);
 
       if (!serviceRunning || consumers.size === 0 || generation !== analyserGeneration || analyser) {
         tapSource.disconnect?.();
@@ -374,10 +251,16 @@
       sourceLinks = [];
       silenceGain = tapSilence;
       mediaElement = audio;
-      if (!setAnalyser(ctx, tapAnalyser, mode, true)) {
+      capturedTrack = liveTrack;
+      capturedTrackEnded = () => scheduleAudioRefresh(audio, 0, true);
+      capturedTrack.addEventListener?.("ended", capturedTrackEnded, { once: true });
+      if (!setAnalyser(ctx, tapAnalyser, "capture-stream", true)) {
         source = null;
         silenceGain = null;
         mediaElement = null;
+        capturedTrack.removeEventListener?.("ended", capturedTrackEnded);
+        capturedTrack = null;
+        capturedTrackEnded = null;
         tapSource.disconnect?.();
         tapAnalyser.disconnect?.();
         tapSilence?.disconnect?.();
@@ -386,8 +269,12 @@
         return analyser;
       }
       if (ctx.state === "suspended") await ctx.resume();
+      nextAnalyserAttemptAt = 0;
     } catch (error) {
       PC.logger.warn("audio-media-tap-failed", { name: error?.name, message: error?.message });
+      if (capturedTrack && capturedTrackEnded) capturedTrack.removeEventListener?.("ended", capturedTrackEnded);
+      capturedTrack = null;
+      capturedTrackEnded = null;
       const failedContext = candidateContext || (ownContext ? context : null);
       if (failedContext && failedContext.state !== "closed") {
         try { await failedContext.close(); } catch (closeError) { PC.logger.warn("audio-context-close-failed", closeError); }
@@ -405,6 +292,14 @@
       counters.audioContexts = 0;
     }
     return analyser;
+  };
+
+  const ensureAnalyser = (preferredAudio = null) => {
+    if (!serviceRunning || analyser || !AC || consumers.size === 0) return Promise.resolve(analyser);
+    if (analyserAttempt) return analyserAttempt;
+    if (performance.now() < nextAnalyserAttemptAt) return Promise.resolve(null);
+    analyserAttempt = createAnalyser(preferredAudio).finally(() => { analyserAttempt = null; });
+    return analyserAttempt;
   };
 
   const averageBand = (fromHz, toHz) => {
@@ -447,6 +342,15 @@
   const sample = (timestamp, dt) => {
     const waveSettings = PC.settings.getWave();
     syncBpmFrame(waveSettings);
+    if (timestamp - lastActiveAudioProbeAt >= ACTIVE_AUDIO_PROBE_INTERVAL_MS) {
+      lastActiveAudioProbeAt = timestamp;
+      const activeAudio = PC.dom.getAudio?.() || PC.dom.getSnapshot().audio || null;
+      if (activeAudio && activeAudio !== mediaElement && sourceMode !== "host-audio-graph") {
+        bindAudioLifecycle(activeAudio);
+        PC.dom.requestScan?.();
+        scheduleAudioRefresh(activeAudio, 0);
+      }
+    }
     if (!analyser) {
       ensureAnalyser();
       clearFrame(timestamp, dt);
@@ -568,6 +472,8 @@
     const closingSilence = silenceGain;
     const closingSourceLinks = sourceLinks;
     const closeContext = ownContext;
+    const closingTrack = capturedTrack;
+    const closingTrackEnded = capturedTrackEnded;
     context = null;
     analyser = null;
     source = null;
@@ -576,6 +482,8 @@
     mediaElement = null;
     ownContext = false;
     sourceMode = "none";
+    capturedTrack = null;
+    capturedTrackEnded = null;
     frequency = new Uint8Array(0);
     timeDomain = new Float32Array(0);
     previousSpectrum = new Uint8Array(0);
@@ -585,6 +493,7 @@
     lastBeatAt = 0;
     counters.audioAnalysers = 0;
     counters.audioContexts = 0;
+    if (closingTrack && closingTrackEnded) closingTrack.removeEventListener?.("ended", closingTrackEnded);
     if (closingSourceLinks.length > 0) closingSourceLinks.forEach(disconnectGraphLink);
     else {
       try {
@@ -614,8 +523,8 @@
     audioRefreshTimer = setTimeout(async () => {
       audioRefreshTimer = 0;
       if (!serviceRunning || consumers.size === 0 || generation !== audioRefreshGeneration) return;
-      const latestAudio = PC.dom.getSnapshot().audio;
-      const targetAudio = latestAudio || preferredAudio || null;
+      const latestAudio = PC.dom.getAudio?.() || PC.dom.getSnapshot().audio;
+      const targetAudio = latestAudio || (preferredAudio && !preferredAudio.ended ? preferredAudio : null);
       const graphSource = sourceMode === "host-audio-graph" || sourceMode === "pulsesync-host-graph";
       const needsReplacement = Boolean(analyser) && (force ||
         (targetAudio && targetAudio !== mediaElement) ||
@@ -629,7 +538,7 @@
       }
       if (!serviceRunning || consumers.size === 0 || generation !== audioRefreshGeneration) return;
       if (!analyser) {
-        if (!targetAudio) lastPulseSyncGraphProbeAt = -Infinity;
+        nextAnalyserAttemptAt = 0;
         await ensureAnalyser(targetAudio);
       }
     }, Math.max(0, Number(delayMs) || 0));
@@ -638,8 +547,8 @@
   const syncFrameLoop = () => {
     if (!serviceRunning) return;
     if (consumers.size > 0 && !removeFrame) {
-      installAudioGraphTap();
-      const audio = PC.dom.getSnapshot().audio;
+      const audio = PC.dom.getAudio?.() || PC.dom.getSnapshot().audio;
+      if (!audio) installAudioGraphTap();
       if (audio) bindAudioLifecycle(audio);
       removeFrame = PC.runtime.addFrameListener(sample, 10);
       ensureAnalyser(audio);
@@ -755,10 +664,11 @@
     unbindAudioLifecycle();
     uninstallAudioGraphTap();
     await releaseAnalyser();
-    lastPulseSyncGraphProbeAt = -Infinity;
-    pulseSyncGraphProbeRunning = false;
+    analyserAttempt = null;
+    nextAnalyserAttemptAt = 0;
     silentMediaSince = 0;
     lastForcedMediaRefreshAt = -Infinity;
+    lastActiveAudioProbeAt = -Infinity;
     clearFrame(performance.now(), 1000);
     window.dispatchEvent(new CustomEvent("pulsecolor:audio-api-stopped"));
   }

@@ -9,6 +9,72 @@
   if (PC.visualModes.get("tweakedYmDesign")) return;
 
   // Runtime-owned adaptation of Tweaked YM Design 1.0.0 by nelifs.
+  const STYLE_ID = "pulsecolor-tweaked-ym-design-style";
+  const SOURCE_STYLE = `
+html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] {
+  transition: filter var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
+    opacity var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
+    transform var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1);
+  transform-origin: 50%;
+  contain: layout style;
+}
+
+html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] > span {
+  display: inline-block;
+}
+
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-tweaked-fullscreen {
+  background: transparent !important;
+}
+
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-tweaked-fullscreen::before,
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-tweaked-fullscreen::after {
+  z-index: -1 !important;
+}
+
+html.pulsecolor-tweaked-vibe [class*="VibePlayerbarMeta_center"],
+html.pulsecolor-tweaked-vibe .tovibe-form,
+html.pulsecolor-tweaked-vibe [class*="AlbumCover_playButton_playing"],
+html.pulsecolor-tweaked-vibe [class*="AlbumCover_button"],
+html.pulsecolor-tweaked-vibe [class*="VibePage_hoveredButton"],
+html.pulsecolor-tweaked-vibe [class*="VibePlayerBar_button"] {
+  backdrop-filter: blur(50px);
+}
+
+html.pulsecolor-tweaked-vibe .tovibe-input {
+  color: #fff;
+}
+
+html.pulsecolor-tweaked-vibe [class*="VibePage_text"],
+html.pulsecolor-tweaked-vibe [class*="MainPage_actionsContainerRight"],
+html.pulsecolor-tweaked-vibe [class*="VibePage_words"] {
+  display: none;
+}
+
+html.pulsecolor-tweaked-vibe [class*="VibePlayerbarMeta_root"] {
+  height: 80%;
+}
+
+html.pulsecolor-tweaked-vibe [class*="NavbarDesktop_logo"] {
+  filter: saturate(0%);
+}
+
+html.pulsecolor-tweaked-vibe [class*="VibePage_meta"] {
+  --player-block-height: 4rem;
+}
+
+html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
+  aspect-ratio: 1;
+  margin-top: 4rem;
+  mask-image: linear-gradient(#000 80%, transparent 93%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] {
+    transition-duration: .01ms;
+  }
+}
+`;
   const LYRICS_LINE_SELECTOR = '[data-test-id="SYNC_LYRICS_LINE"]';
   const LYRICS_DISTANCE_ATTRIBUTE = "data-pulsecolor-lyrics-distance";
   const MAX_BLURRED_LINE_DISTANCE = 8;
@@ -23,6 +89,18 @@
   let lastLyricsContainer = null;
   let lastActiveIndex = -1;
   let lastLineCount = 0;
+
+  const ensureSourceStyle = () => {
+    let style = document.getElementById(STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = STYLE_ID;
+      document.head.appendChild(style);
+    }
+    if (style.textContent !== SOURCE_STYLE) style.textContent = SOURCE_STYLE;
+  };
+
+  const removeSourceStyle = () => document.getElementById(STYLE_ID)?.remove();
 
   const numberOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const isActiveLine = (line) => line.classList.contains("swiper-slide-active") ||
@@ -121,6 +199,7 @@
   const startService = () => {
     if (serviceRunning) return;
     serviceRunning = true;
+    ensureSourceStyle();
     removeDom = PC.dom.subscribe((nextSnapshot) => {
       if (domSnapshot.fullscreen && domSnapshot.fullscreen !== nextSnapshot.fullscreen) {
         domSnapshot.fullscreen.classList.remove("pulsecolor-tweaked-fullscreen");
@@ -145,6 +224,7 @@
     domSnapshot.fullscreen?.classList.remove("pulsecolor-tweaked-fullscreen");
     document.documentElement.classList.remove("pulsecolor-tweaked-enabled", "pulsecolor-tweaked-vibe");
     document.documentElement.style.removeProperty("--pulsecolor-lyrics-transition");
+    removeSourceStyle();
   };
 
   const vertexSource = `

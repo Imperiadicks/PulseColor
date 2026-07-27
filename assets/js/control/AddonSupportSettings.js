@@ -78,15 +78,9 @@
         enabled: true,
         colorMode: "pulsecolor",
         blobCount: 16,
-        blobSpeed: 0.5,
-        paletteBlendSpeed: 0.8,
-        backgroundLightness: 0,
-        showFps: false,
         warp: 0.14,
         flow: 0.53,
-        saturation: 1.5,
-        highlight: 0.99,
-        paletteFadeMs: 500
+        saturation: 1.5
       }
     };
   }
@@ -524,44 +518,6 @@
     return li;
   }
 
-  function makeTextLi(title, desc, value, placeholder, onChange) {
-    const li = document.createElement("li");
-    li.className = "Settings_item__Ksa9h";
-
-    const root = document.createElement("div");
-    root.className = "SettingsListToggleItem_root__yEEYT";
-    root.style.alignItems = "center";
-    root.style.gap = "14px";
-
-    const titleId = makeId(title);
-    const text = makeTextContainer(titleId, title, desc);
-    text.style.flex = "1 1 auto";
-    text.style.minWidth = "0";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = String(value || "");
-    input.placeholder = placeholder;
-    input.setAttribute("aria-describedby", titleId);
-    input.style.cssText = [
-      "width:190px",
-      "min-width:0",
-      "padding:8px 10px",
-      "border-radius:6px",
-      "border:1px solid var(--ym-controls-color-secondary-outline-enabled_stroke)",
-      "background:var(--ym-controls-color-secondary-default-enabled)",
-      "color:var(--ym-controls-color-primary-text-enabled)",
-      "font:inherit"
-    ].join(";");
-    input.addEventListener("change", () => {
-      try { onChange(input.value.trim()); } catch {}
-    });
-
-    root.append(text, input);
-    li.appendChild(root);
-    return li;
-  }
-
   function makeChoiceLi(title, desc, value, options, onChange) {
     const li = document.createElement("li");
     li.className = "Settings_item__Ksa9h";
@@ -807,16 +763,9 @@
       ));
       ul.appendChild(makeGroupSeparator("Динамика Cover2Anim"));
       ul.appendChild(makeRangeLi("Минимум blob", "Минимальное количество процедурных цветовых пятен.", numberOr(cover2Anim.blobCount, 16), 16, 256, 1, "", (value) => setCover2Anim({ blobCount: Math.round(value) })));
-      ul.appendChild(makeRangeLi("Скорость blob", "Скорость движения пятен.", numberOr(cover2Anim.blobSpeed, 0.5), 0.25, 4, 0.05, "", (value) => setCover2Anim({ blobSpeed: value })));
       ul.appendChild(makeRangeLi("Warp", "Нелинейное смещение траекторий.", numberOr(cover2Anim.warp, 0.14), 0, 1, 0.01, "", (value) => setCover2Anim({ warp: value })));
       ul.appendChild(makeRangeLi("Flow", "Размах движения по fullscreen.", numberOr(cover2Anim.flow, 0.53), 0, 1, 0.01, "", (value) => setCover2Anim({ flow: value })));
       ul.appendChild(makeRangeLi("Насыщенность", "Насыщенность палитры Cover2Anim.", numberOr(cover2Anim.saturation, 1.5), 0.8, 1.5, 0.01, "", (value) => setCover2Anim({ saturation: value })));
-      ul.appendChild(makeRangeLi("Highlight", "Сила светлых участков blob.", numberOr(cover2Anim.highlight, 0.99), 0, 1, 0.01, "", (value) => setCover2Anim({ highlight: value })));
-      ul.appendChild(makeRangeLi("Переход палитры", "Интерполяция между цветами треков.", numberOr(cover2Anim.paletteFadeMs, 500), 0, 5000, 50, "ms", (value) => setCover2Anim({ paletteFadeMs: Math.round(value) })));
-      ul.appendChild(makeRangeLi("Скорость смешивания", "Скорость перехода отдельных blob к новой палитре.", numberOr(cover2Anim.paletteBlendSpeed, 0.8), 0.1, 3, 0.05, "", (value) => setCover2Anim({ paletteBlendSpeed: value })));
-      ul.appendChild(makeRangeLi("Светлота фона", "Поднимает базовую яркость фона под blob.", numberOr(cover2Anim.backgroundLightness, 0), 0, 1, 0.01, "", (value) => setCover2Anim({ backgroundLightness: value })));
-      ul.appendChild(makeTextLi("CSS-фильтр canvas", "Фильтр исходного Cover2Anim; пустое значение использует blur(100px).", cover2Anim.canvasFilter, "blur(100px)", (value) => setCover2Anim({ canvasFilter: value })));
-      ul.appendChild(makeToggleLi("Счётчик FPS", "Показывает небольшой счётчик производительности Cover2Anim.", cover2Anim.showFps === true, (value) => setCover2Anim({ showFps: !!value })));
       }
     }
 

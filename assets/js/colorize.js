@@ -1184,13 +1184,27 @@ ${buildPaletteAliasBlock()}
   let paletteAnimationFrame = 0;
   let paletteAnimationToken = 0;
   let paletteCurrentBase = null;
+  let currentThemePalettes = { dark: [], light: [] };
+
+  const surfacePaletteFromVars = (vars, mode) => {
+    const keys = mode === 'light'
+      ? ['--color-light-4', '--color-light-7', '--color-light-3', '--color-light-8', '--color-light-5', '--color-light-9']
+      : ['--color-dark-10', '--color-dark-9', '--color-dark-8', '--color-dark-7', '--color-dark-6', '--color-dark-5'];
+    return keys.map((key) => vars[key]).filter(Boolean);
+  };
 
   const applyBasePalette = (base) => {
     const normalized = cloneHSL(base);
+    const darkVars = buildVars(normalized, 'dark');
+    const lightVars = buildVars(normalized, 'light');
     paletteCurrentBase = normalized;
+    currentThemePalettes = {
+      dark: surfacePaletteFromVars(darkVars, 'dark'),
+      light: surfacePaletteFromVars(lightVars, 'light')
+    };
     applyVars({
-      dark: buildVars(normalized, 'dark'),
-      light: buildVars(normalized, 'light')
+      dark: darkVars,
+      light: lightVars
     });
   };
 
@@ -1807,7 +1821,15 @@ ${buildPaletteAliasBlock()}
     try { removeBackgroundImage(true); } catch {}
   };
 
-  window.PulseColor.colorizer = { version: 2, start: startService, stop: stopService };
+  window.PulseColor.colorizer = {
+    version: 2,
+    start: startService,
+    stop: stopService,
+    getThemePalette(mode = 'dark') {
+      const key = mode === 'light' ? 'light' : 'dark';
+      return currentThemePalettes[key].slice();
+    }
+  };
   if (typeof window.PulseColor.runtime.registerService === 'function') {
     window.PulseColor.runtime.registerService('colorizer', { start: startService, stop: stopService });
   } else {

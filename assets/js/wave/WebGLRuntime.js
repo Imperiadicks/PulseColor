@@ -13,6 +13,7 @@
   const bitmapCache = new Map();
   const pendingBitmapLoads = new Map();
   const BITMAP_CACHE_LIMIT = 12;
+  const COVER2ANIM_PALETTE_FADE_MS = 800;
 
   let root = null;
   let canvas = null;
@@ -39,6 +40,7 @@
   let contextLost = false;
   let lastDrawAt = 0;
   let lastColorAt = 0;
+  let lastObservedCoverKey = "";
   let colorA = [0.74, 0.50, 0.96];
   let colorB = [0.34, 0.62, 1.00];
   let themePalette = [colorA, colorB];
@@ -461,18 +463,34 @@
   const updateColors = (timestamp) => {
     if (timestamp - lastColorAt < 300) return;
     lastColorAt = timestamp;
-    const style = getComputedStyle(document.documentElement);
+    const lightTheme = document.querySelector?.('.ym-light-theme');
+    const darkTheme = document.querySelector?.('.ym-dark-theme');
+    const themeMode = lightTheme && !darkTheme ? "light" : "dark";
+    const publishedPalette = PC.colorizer?.getThemePalette?.(themeMode)
+      ?.map(parseColor)
+      .filter(Boolean) || [];
+    if (publishedPalette.length >= 2) {
+      themePalette = Array.from({ length: 6 }, (_, index) => [
+        ...publishedPalette[index % publishedPalette.length]
+      ]);
+      colorA = [...themePalette[0]];
+      colorB = [...themePalette[themePalette.length - 1]];
+      return;
+    }
+
+    const themeNode = lightTheme || darkTheme || document.documentElement;
+    const style = getComputedStyle(themeNode);
     const nextA = parseColor(style.getPropertyValue("--grad-main-from")) || parseColor(style.getPropertyValue("--ym-background-color-secondary-enabled-blur"));
-    const nextB = parseColor(style.getPropertyValue("--grad-main-to")) || parseColor(style.getPropertyValue("--ym-controls-color-primary-text-enabled"));
+    const nextB = parseColor(style.getPropertyValue("--ym-background-color-primary-enabled-content")) || nextA;
     if (nextA) colorA = nextA;
     if (nextB) colorB = nextB;
     const candidates = [
       colorA,
       colorB,
-      parseColor(style.getPropertyValue("--color-light-7")),
-      parseColor(style.getPropertyValue("--color-dark-7")),
-      parseColor(style.getPropertyValue("--color-light-4")),
-      parseColor(style.getPropertyValue("--color-dark-4"))
+      parseColor(style.getPropertyValue("--ym-background-color-primary-enabled-player")),
+      parseColor(style.getPropertyValue("--ym-background-color-primary-enabled-basic")),
+      parseColor(style.getPropertyValue("--ym-background-color-primary-enabled-header")),
+      parseColor(style.getPropertyValue("--ym-background-color-secondary-enabled-blur"))
     ].filter(Boolean);
     themePalette = Array.from({ length: 6 }, (_, index) => [...candidates[index % candidates.length]]);
   };
@@ -864,7 +882,7 @@
     if (nextTextureReady) {
       const transitionMs = tweakedIntegrationActive && settings.addons.tweakedYmDesign?.coverBackground !== false
         ? U.clamp(numberOr(settings.addons.tweakedYmDesign?.coverCrossfadeMs, 900), 1, 3000)
-        : U.clamp(numberOr(settings.addons.cover2Anim?.paletteFadeMs, 500), 1, 5000);
+        : COVER2ANIM_PALETTE_FADE_MS;
       textureMix = U.clamp((timestamp - textureTransitionAt) / transitionMs, 0, 1);
       if (textureMix >= 1) {
         const previous = currentTexture;
@@ -1013,9 +1031,14 @@
       syncRunning();
     });
     removeDom = PC.dom.subscribe((dom) => {
-      if (dom.fullscreen !== fullscreen) attachRoot(dom.fullscreen);
+      const fullscreenChanged = dom.fullscreen !== fullscreen;
+      const nextCoverKey = String(dom.track?.coverKey || "");
+      const coverChanged = nextCoverKey !== lastObservedCoverKey;
+      lastObservedCoverKey = nextCoverKey;
+      if (fullscreenChanged) attachRoot(dom.fullscreen);
       refreshLayout();
       syncRunning();
+      if (coverChanged && gl && !fullscreenChanged) uploadNextCover(dom.track);
     });
     removeTrack = PC.track.subscribe((track) => {
       Object.assign(waveMotion, presets.createMotionState?.() || { pulse: 0, impact: 0, flow: 0, activity: 0 });
@@ -1035,6 +1058,7 @@
     removeSettings = null;
     removeDom = null;
     removeTrack = null;
+    lastObservedCoverKey = "";
     teardownSurface(true);
   }
 

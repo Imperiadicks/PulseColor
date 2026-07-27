@@ -8,8 +8,7 @@
 
   // Runtime-owned adaptation of Cover2Anim 0.3.5 by karst3nz.
   const FALLBACK_PALETTE = Object.freeze(Array.from({ length: 6 }, () => Object.freeze([0, 0, 0])));
-  const PAUSED_SPEED = 0.25;
-  const SPEED_TRANSITION_MS = 1000;
+  const PALETTE_FADE_MS = 800;
   const COLOR_STAGGER = 0.25;
   const MIN_BLOB_COUNT = 16;
   const MAX_BLOB_COUNT = 256;
@@ -18,8 +17,8 @@
   const MIN_PULSE_SPEED = 0.00020;
   const MAX_PULSE_SPEED = 0.00045;
   const GLOBAL_ROTATION_SPEED = 0.00001;
-  const MUSIC_SPEED_MIN = 0.58;
-  const MUSIC_SPEED_MAX = 1.85;
+  const MUSIC_MOTION_MAX = 2.15;
+  const DEFAULT_CANVAS_FILTER = "blur(100px)";
 
   const vertexSource = `
     precision highp float;
@@ -48,7 +47,6 @@
     uniform vec3 u_prevColor;
     uniform float u_blendT;
     uniform float u_time;
-    uniform float u_aspect;
     uniform float u_warp;
     uniform float u_flow;
     uniform float u_saturation;
@@ -80,9 +78,9 @@
     }
 
     void main() {
-      vec2 p = vec2(v_localPos.x * u_aspect, v_localPos.y);
+      vec2 p = v_localPos;
       float distanceFromCenter = length(p);
-      if (distanceFromCenter > 0.65) discard;
+      if (distanceFromCenter > 1.0) discard;
 
       float breathe = 0.03 * sin(u_time * 0.6 + distanceFromCenter * 4.0);
       float radial = 1.0 - smoothstep(0.45 + breathe, 1.0, distanceFromCenter);
@@ -134,6 +132,15 @@
   const colorsEqual = (left, right) => left?.length === 3 && right?.length === 3 &&
     left.every((channel, index) => Math.abs(channel - right[index]) < 0.0005);
   const paletteKey = (palette) => palette.map((color) => color.map((channel) => channel.toFixed(4)).join(",")).join("|");
+  const transitionProgress = (progress, offset = 0) => {
+    const start = clamp01(offset);
+    return smoothstep((clamp01(progress) - start) / Math.max(0.0001, 1 - start));
+  };
+  const displayedBlobColor = (blob) => mixColor(
+    blob.color,
+    blob.targetColor,
+    colorsEqual(blob.color, blob.targetColor) ? 1 : transitionProgress(blob.colorMix, blob.colorOffset)
+  );
 
   const rgbToHsl = (color) => {
     const [red, green, blue] = normalizeColor(color);
@@ -195,32 +202,24 @@
     });
   };
 
-  const expandDerivedPalette = (palette) => {
-    const source = expandCoverPalette(palette);
-    const derived = source.length >= 4
-      ? source.slice(0, 4)
-      : [source[0], source[1], mixColor(source[0], source[1], 0.35), mixColor(source[0], source[1], 0.68)];
-    return [derived[0], derived[1], derived[2], derived[3], derived[0], derived[1]].map((color) => [...color]);
-  };
-
   const selectPalette = (settings, pulsePalette, coverPalette) => {
-    const derived = expandDerivedPalette(pulsePalette);
+    const pulse = expandCoverPalette(pulsePalette);
     const cover = expandCoverPalette(coverPalette);
     if (settings?.colorMode === "original") return cover;
     if (settings?.colorMode === "mixed") {
-      return derived.map((color, index) => mixHsl(color, cover[index % cover.length]));
+      return pulse.map((color, index) => mixHsl(color, cover[index % cover.length]));
     }
-    return derived;
+    return pulse;
   };
 
-  const deriveBackground = (palette, lightnessSetting) => {
+  const deriveBackground = (palette) => {
     const source = rgbToHsl(palette?.[0] || FALLBACK_PALETTE[0]);
     const edge = 0.12;
     const saturationScale = Math.min(clamp01(source.l / edge), clamp01((1 - source.l) / edge));
     return hslToRgb({
       h: source.h,
       s: source.s * saturationScale,
-      l: clamp01(0.18 + (clamp01(lightnessSetting) - 0.18) * source.l)
+      l: clamp01(0.18 * (1 - source.l))
     });
   };
 
@@ -232,7 +231,7 @@
     return responsive;
   };
 
-  const createBlobs = (count, palette, width, height, random = Math.random, speedScale = 0.5) => {
+  const createBlobs = (count, palette, width, height, random = Math.random) => {
     const colors = expandCoverPalette(palette);
     const orbitRange = MAX_ORBIT_SPEED - MIN_ORBIT_SPEED;
     const pulseRange = MAX_PULSE_SPEED - MIN_PULSE_SPEED;
@@ -249,23 +248,24 @@
         orbitY: 200 + random() * 600,
         phaseX: random() * Math.PI * 2,
         phaseY: random() * Math.PI * 2,
-        speedX: (MIN_ORBIT_SPEED + random() * orbitRange) * speedScale,
-        speedY: (MIN_ORBIT_SPEED + random() * orbitRange) * speedScale,
+        speedX: MIN_ORBIT_SPEED + random() * orbitRange,
+        speedY: MIN_ORBIT_SPEED + random() * orbitRange,
         pulsePhase: random() * Math.PI * 2,
-        pulseSpeed: (MIN_PULSE_SPEED + random() * pulseRange) * speedScale,
+        pulseSpeed: MIN_PULSE_SPEED + random() * pulseRange,
         colorMix: 1,
         colorOffset: index / Math.max(1, count) * COLOR_STAGGER
       };
     });
   };
 
-  const sanitizeFilter = (value) => {
-    const filter = typeof value === "string" ? value.trim() : "";
-    if (!filter || filter.toLowerCase() === "none") return "blur(100px)";
-    if (!/^([a-z-]+\([^()]*\)\s*)+$/i.test(filter)) return "";
-    return /\b(?:blur|saturate|contrast|brightness|hue-rotate|invert|grayscale|sepia|drop-shadow)\s*\(/i.test(filter)
-      ? filter
-      : "";
+  const rescaleBlobPositions = (items, previousWidth, previousHeight, nextWidth, nextHeight) => {
+    if (!(previousWidth > 0) || !(previousHeight > 0)) return;
+    const scaleX = nextWidth / previousWidth;
+    const scaleY = nextHeight / previousHeight;
+    for (const blob of items) {
+      blob.baseX = U.clamp(blob.baseX * scaleX, 0, nextWidth);
+      blob.baseY = U.clamp(blob.baseY * scaleY, 0, nextHeight);
+    }
   };
 
   const createPass = (host) => {
@@ -282,7 +282,6 @@
       previousColor: location("u_prevColor"),
       blend: location("u_blendT"),
       time: location("u_time"),
-      aspect: location("u_aspect"),
       warp: location("u_warp"),
       flow: location("u_flow"),
       saturation: location("u_saturation"),
@@ -297,82 +296,24 @@
     let blobs = [];
     let palette = FALLBACK_PALETTE.map((color) => [...color]);
     let paletteSignature = "";
-    let backgroundColor = deriveBackground(palette, 0);
+    let backgroundColor = deriveBackground(palette);
+    let backgroundStartColor = [...backgroundColor];
     let targetBackgroundColor = [...backgroundColor];
     let backgroundMix = 1;
     let backgroundOffset = 0;
     let animationTime = 0;
     let timestamp = 0;
-    let currentBlobSpeed = 0.5;
-    let speedTransition = null;
     let paused = false;
     let previousSettings = null;
-    let fpsElement = null;
-    let fpsFrames = 0;
-    let fpsSampleAt = 0;
     let lastBackgroundCss = "";
     let musicEnergy = 0;
     let beatLight = 0;
-    let musicSpeedMultiplier = MUSIC_SPEED_MIN;
-
-    const syncFps = (container) => {
-      if (settings.showFps !== true || !container) {
-        fpsElement?.remove();
-        fpsElement = null;
-        return;
-      }
-      if (!fpsElement) {
-        fpsElement = document.createElement("div");
-        fpsElement.className = "pulsecolor-cover2anim-fps";
-        fpsElement.textContent = "-- FPS";
-        container.appendChild(fpsElement);
-      }
-    };
-
-    const startSpeedTransition = (target, duration = SPEED_TRANSITION_MS) => {
-      const next = Math.max(0.001, numberOr(target, currentBlobSpeed));
-      if (Math.abs(next - currentBlobSpeed) < 0.0001) {
-        speedTransition = null;
-        return;
-      }
-      speedTransition = {
-        from: currentBlobSpeed,
-        to: next,
-        elapsed: 0,
-        duration: Math.max(0, numberOr(duration, SPEED_TRANSITION_MS))
-      };
-    };
-
-    const applySpeed = (nextSpeed) => {
-      if (!(currentBlobSpeed > 0) || !(nextSpeed > 0) || currentBlobSpeed === nextSpeed) return;
-      const ratio = nextSpeed / currentBlobSpeed;
-      for (const blob of blobs) {
-        blob.speedX *= ratio;
-        blob.speedY *= ratio;
-        blob.pulseSpeed *= ratio;
-      }
-      currentBlobSpeed = nextSpeed;
-    };
-
-    const advanceSpeedTransition = (dt) => {
-      if (!speedTransition) return;
-      if (speedTransition.duration <= 0) {
-        applySpeed(speedTransition.to);
-        speedTransition = null;
-        return;
-      }
-      speedTransition.elapsed += dt;
-      const progress = clamp01(speedTransition.elapsed / speedTransition.duration);
-      applySpeed(lerp(speedTransition.from, speedTransition.to, smoothstep(progress)));
-      if (progress >= 1) speedTransition = null;
-    };
+    let musicHighlight = 0;
+    let musicSpeedMultiplier = 0;
 
     const recreateBlobs = () => {
       const count = effectiveBlobCount(settings, cssWidth);
-      currentBlobSpeed = U.clamp(numberOr(settings.blobSpeed, 0.5), 0.25, 4);
-      blobs = createBlobs(count, palette, cssWidth, cssHeight, Math.random, currentBlobSpeed);
-      speedTransition = null;
-      if (paused) startSpeedTransition(PAUSED_SPEED);
+      blobs = createBlobs(count, palette, cssWidth, cssHeight, Math.random);
     };
 
     const updatePalette = (nextPalette) => {
@@ -386,21 +327,15 @@
         for (let index = 0; index < blobs.length; index += 1) {
           const blob = blobs[index];
           const nextColor = palette[index % palette.length];
-          if (blob.colorMix < 1) {
-            blob.color = [...blob.targetColor];
-            blob.colorMix = 1;
-          }
-          if (colorsEqual(blob.color, nextColor)) {
-            blob.targetColor = [...nextColor];
-            continue;
-          }
+          if (colorsEqual(blob.targetColor, nextColor)) continue;
+          blob.color = displayedBlobColor(blob);
           blob.targetColor = [...nextColor];
-          blob.colorMix = 0;
+          blob.colorMix = colorsEqual(blob.color, nextColor) ? 1 : 0;
         }
       }
-      const nextBackground = deriveBackground(palette, settings.backgroundLightness);
+      const nextBackground = deriveBackground(palette);
       if (!colorsEqual(nextBackground, targetBackgroundColor)) {
-        backgroundColor = [...targetBackgroundColor];
+        backgroundStartColor = [...backgroundColor];
         targetBackgroundColor = nextBackground;
         backgroundMix = 0;
         backgroundOffset = palette.length > 0 ? (palette.length - 1) / (2 * palette.length) * COLOR_STAGGER : 0;
@@ -414,16 +349,7 @@
         return;
       }
       const countChanged = numberOr(settings.blobCount, MIN_BLOB_COUNT) !== numberOr(previousSettings.blobCount, MIN_BLOB_COUNT);
-      const speedChanged = numberOr(settings.blobSpeed, 0.5) !== numberOr(previousSettings.blobSpeed, 0.5);
-      const lightnessChanged = numberOr(settings.backgroundLightness, 0) !== numberOr(previousSettings.backgroundLightness, 0);
       if (countChanged) recreateBlobs();
-      else if (speedChanged && !paused) startSpeedTransition(U.clamp(numberOr(settings.blobSpeed, 0.5), 0.25, 4));
-      if (lightnessChanged) {
-        backgroundColor = [...targetBackgroundColor];
-        targetBackgroundColor = deriveBackground(palette, settings.backgroundLightness);
-        backgroundMix = 0;
-        backgroundOffset = palette.length > 0 ? (palette.length - 1) / (2 * palette.length) * COLOR_STAGGER : 0;
-      }
       previousSettings = { ...settings };
     };
 
@@ -438,16 +364,17 @@
         : 0;
       musicEnergy = smoothSignal(musicEnergy, energyTarget, dt, 135, 650);
       beatLight = smoothSignal(beatLight, beatTarget, dt, 24, 230);
-      musicSpeedMultiplier = lerp(MUSIC_SPEED_MIN, MUSIC_SPEED_MAX, smoothstep(musicEnergy));
+      const highlightTarget = isReactive ? clamp01(energyTarget * 0.34 + beatTarget * 0.66) : 0;
+      musicHighlight = smoothSignal(musicHighlight, highlightTarget, dt, 42, 340);
+      const motionTarget = isReactive ? smoothstep(musicEnergy) * MUSIC_MOTION_MAX : 0;
+      musicSpeedMultiplier = smoothSignal(musicSpeedMultiplier, motionTarget, dt, 150, 700);
     };
 
     const updateMotion = (dt) => {
-      advanceSpeedTransition(dt);
-      const motionDt = dt * musicSpeedMultiplier;
+      const motionDt = paused ? 0 : dt * musicSpeedMultiplier;
       animationTime += motionDt;
-      const fadeMs = numberOr(settings.paletteFadeMs, 500) <= 0
-        ? 0.001
-        : numberOr(settings.paletteFadeMs, 500) / Math.max(0.01, numberOr(settings.paletteBlendSpeed, 0.8));
+      const musicBlendRate = 0.72 + musicEnergy * 0.78 + beatLight * 0.25;
+      const blobFadeMs = PALETTE_FADE_MS / musicBlendRate;
       for (const blob of blobs) {
         blob.baseX = U.clamp(blob.baseX, 0, cssWidth);
         blob.baseY = U.clamp(blob.baseY, 0, cssHeight);
@@ -456,14 +383,14 @@
         blob.pulsePhase += motionDt * blob.pulseSpeed;
         blob.currentRadius = blob.radius + Math.sin(blob.pulsePhase) * 90;
         if (!colorsEqual(blob.color, blob.targetColor)) {
-          blob.colorMix = Math.min(1, blob.colorMix + dt / fadeMs);
+          blob.colorMix = Math.min(1, blob.colorMix + dt / blobFadeMs);
           if (blob.colorMix >= 1) blob.color = [...blob.targetColor];
         }
       }
       if (!colorsEqual(backgroundColor, targetBackgroundColor)) {
-        backgroundMix = Math.min(1, backgroundMix + dt / fadeMs);
-        const progress = smoothstep(Math.max(0, backgroundMix - backgroundOffset));
-        if (progress > 0) backgroundColor = mixColor(backgroundColor, targetBackgroundColor, progress);
+        backgroundMix = Math.min(1, backgroundMix + dt / PALETTE_FADE_MS);
+        const progress = transitionProgress(backgroundMix, backgroundOffset);
+        backgroundColor = mixColor(backgroundStartColor, targetBackgroundColor, progress);
         if (backgroundMix >= 1) backgroundColor = [...targetBackgroundColor];
       }
     };
@@ -474,19 +401,19 @@
         physicalWidth = Math.max(2, numberOr(nextWidth, 2));
         physicalHeight = Math.max(2, numberOr(nextHeight, 2));
         const previousWidth = cssWidth;
+        const previousHeight = cssHeight;
         cssWidth = Math.max(2, numberOr(viewport.cssWidth, physicalWidth));
         cssHeight = Math.max(2, numberOr(viewport.cssHeight, physicalHeight));
-        if (blobs.length && effectiveBlobCount(settings, previousWidth) !== effectiveBlobCount(settings, cssWidth)) recreateBlobs();
+        if (!blobs.length) return;
+        if (effectiveBlobCount(settings, previousWidth) !== effectiveBlobCount(settings, cssWidth)) recreateBlobs();
+        else rescaleBlobPositions(blobs, previousWidth, previousHeight, cssWidth, cssHeight);
       },
       update(context) {
         syncSettings(context.settings);
         timestamp = numberOr(context.timestamp, timestamp);
         const dt = U.clamp(numberOr(context.dt, 16), 0, 100);
         const nextPaused = context.playback ? context.playback.paused === true : context.frame?.active === false;
-        if (nextPaused !== paused) {
-          paused = nextPaused;
-          startSpeedTransition(paused ? PAUSED_SPEED : U.clamp(numberOr(settings.blobSpeed, 0.5), 0.25, 4));
-        }
+        paused = nextPaused;
         updateMusicReaction(context.frame, dt);
         updatePalette(selectPalette(settings, context.pulsePalette, context.coverPalette));
         if (!blobs.length) recreateBlobs();
@@ -495,17 +422,6 @@
         if (backgroundCss !== lastBackgroundCss) {
           lastBackgroundCss = backgroundCss;
           host.root?.style?.setProperty?.("background-color", backgroundCss);
-        }
-        syncFps(context.container);
-        if (fpsElement) {
-          fpsFrames += 1;
-          if (!fpsSampleAt) fpsSampleAt = timestamp;
-          const sampleDuration = timestamp - fpsSampleAt;
-          if (sampleDuration >= 500) {
-            fpsElement.textContent = `${Math.round(fpsFrames * 1000 / sampleDuration)} FPS`;
-            fpsFrames = 0;
-            fpsSampleAt = timestamp;
-          }
         }
       },
       render() {
@@ -521,11 +437,10 @@
         gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
         gl.uniform2f(uniforms.resolution, cssWidth, cssHeight);
         gl.uniform1f(uniforms.time, animationTime / 1000);
-        gl.uniform1f(uniforms.aspect, cssWidth / Math.max(1, cssHeight));
         gl.uniform1f(uniforms.warp, U.clamp(numberOr(settings.warp, 0.14), 0, 1));
         gl.uniform1f(uniforms.flow, U.clamp(numberOr(settings.flow, 0.53), 0, 1));
         gl.uniform1f(uniforms.saturation, U.clamp(numberOr(settings.saturation, 1.5), 0.8, 1.5));
-        gl.uniform1f(uniforms.highlight, U.clamp(numberOr(settings.highlight, 0.99), 0, 1));
+        gl.uniform1f(uniforms.highlight, musicHighlight);
         gl.uniform1f(uniforms.beat, beatLight);
         const angle = animationTime * GLOBAL_ROTATION_SPEED;
         const cosine = Math.cos(angle);
@@ -540,28 +455,26 @@
           gl.uniform1f(uniforms.radius, blob.currentRadius);
           const blend = colorsEqual(blob.color, blob.targetColor)
             ? 1
-            : smoothstep(Math.max(0, blob.colorMix - blob.colorOffset));
+            : transitionProgress(blob.colorMix, blob.colorOffset);
           gl.uniform3f(uniforms.previousColor, blob.color[0], blob.color[1], blob.color[2]);
           gl.uniform3f(uniforms.color, blob.targetColor[0], blob.targetColor[1], blob.targetColor[2]);
           gl.uniform1f(uniforms.blend, blend);
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
       },
-      getCanvasFilter: () => sanitizeFilter(settings.canvasFilter),
+      getCanvasFilter: () => DEFAULT_CANVAS_FILTER,
       dispose() {
-        fpsElement?.remove();
-        fpsElement = null;
         host.root?.style?.removeProperty?.("background-color");
         lastBackgroundCss = "";
         gl.deleteProgram(program);
       },
       inspect: () => ({
         blobCount: blobs.length,
-        currentBlobSpeed,
-        effectiveBlobSpeed: currentBlobSpeed * musicSpeedMultiplier,
+        effectiveBlobSpeed: musicSpeedMultiplier,
         musicEnergy,
         musicSpeedMultiplier,
         beatLight,
+        musicHighlight,
         paused,
         backgroundColor: [...backgroundColor],
         physicalWidth,
@@ -574,16 +487,17 @@
 
   PC.visualModes.register("cover2Anim", Object.freeze({
     id: "cover2Anim",
-    version: 2,
+    version: 3,
     createPass,
     testing: Object.freeze({
       createBlobs,
       effectiveBlobCount,
       expandCoverPalette,
-      expandDerivedPalette,
       selectPalette,
       deriveBackground,
-      sanitizeFilter
+      transitionProgress,
+      displayedBlobColor,
+      rescaleBlobPositions
     })
   }));
 })();

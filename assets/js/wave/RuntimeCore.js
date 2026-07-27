@@ -56,16 +56,9 @@
       enabled: true,
       colorMode: "pulsecolor",
       blobCount: 16,
-      blobSpeed: 0.5,
-      paletteBlendSpeed: 0.8,
-      backgroundLightness: 0,
-      showFps: false,
-      canvasFilter: "",
       warp: 0.14,
       flow: 0.53,
-      saturation: 1.5,
-      highlight: 0.99,
-      paletteFadeMs: 500
+      saturation: 1.5
     })
   });
 
@@ -121,16 +114,9 @@
     next.enabled = next.enabled !== false;
     next.colorMode = ["original", "mixed"].includes(next.colorMode) ? next.colorMode : "pulsecolor";
     next.blobCount = Math.round(U.clamp(numberOr(next.blobCount, 16), 16, 256));
-    next.blobSpeed = U.clamp(numberOr(next.blobSpeed, 0.5), 0.25, 4);
-    next.paletteBlendSpeed = U.clamp(numberOr(next.paletteBlendSpeed, 0.8), 0.1, 3);
-    next.backgroundLightness = U.clamp(numberOr(next.backgroundLightness, 0), 0, 1);
-    next.showFps = next.showFps === true;
-    next.canvasFilter = typeof next.canvasFilter === "string" ? next.canvasFilter.trim().slice(0, 160) : "";
     next.warp = U.clamp(numberOr(next.warp, 0.14), 0, 1);
     next.flow = U.clamp(numberOr(next.flow, 0.53), 0, 1);
     next.saturation = U.clamp(numberOr(next.saturation, 1.5), 0.8, 1.5);
-    next.highlight = U.clamp(numberOr(next.highlight, 0.99), 0, 1);
-    next.paletteFadeMs = U.clamp(numberOr(next.paletteFadeMs, 500), 0, 5000);
     return next;
   };
 
@@ -536,7 +522,8 @@
   const coverUrl = (image) => {
     if (!image) return "";
     const srcset = String(image.getAttribute("srcset") || "").split(",").map((item) => item.trim().split(/\s+/)[0]).filter(Boolean);
-    return image.currentSrc || srcset[srcset.length - 1] || image.src || "";
+    const attributeSrc = String(image.getAttribute("src") || "").trim();
+    return srcset[srcset.length - 1] || attributeSrc || image.currentSrc || image.src || "";
   };
 
   const readTrackId = () => {
@@ -629,6 +616,15 @@
     }
   };
 
+  const resolveActiveAudio = (domAudios = null) => {
+    const pulseSyncAudio = readPulseSyncAudio();
+    if (pulseSyncAudio) return pulseSyncAudio;
+    const candidates = domAudios || Array.from(document.querySelectorAll("audio"));
+    return candidates.find((audio) => !audio.paused && !audio.ended && audio.readyState >= 2) ||
+      candidates.find((audio) => !audio.ended && Number(audio.currentTime || 0) > 0) ||
+      candidates[0] || null;
+  };
+
   const detachAudioEvents = () => {
     for (const [audio, bindings] of audioBindings) {
       for (const [type, handler] of bindings) audio.removeEventListener?.(type, handler);
@@ -641,7 +637,7 @@
     if (!running) return;
     const cover = readCover();
     const domAudios = Array.from(document.querySelectorAll("audio"));
-    const audio = domAudios.find((node) => !node.paused && !node.ended) || readPulseSyncAudio() || domAudios[0] || null;
+    const audio = resolveActiveAudio(domAudios);
     domAudios.forEach(attachAudioEvents);
     attachAudioEvents(audio);
     const fullscreen = document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"]');
@@ -744,8 +740,9 @@
 
   const dom = {
     getSnapshot: () => domSnapshot,
+    getAudio: () => resolveActiveAudio(),
     getPlayback: () => {
-      const audio = domSnapshot.audio;
+      const audio = domSnapshot.audio || resolveActiveAudio();
       return audio ? readPlayback(audio) : domSnapshot.playback;
     },
     subscribe(listener) {
