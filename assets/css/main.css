@@ -1,7 +1,86 @@
-/* /* ─────────────────── Общие доработки интерфейса ─────────────────── */
+/* ─────────────────── Общие доработки интерфейса ─────────────────── */
 [class*="MainPage_vibe"] {
   transition: height 1.5s ease;
   overflow: hidden;
+}
+
+html.colorize-new-wave-page {
+  --colorize-wave-radius: 12px;
+}
+
+html.colorize-new-wave-page [class*="Content_main"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [class*="CommonLayout_root"] {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.colorize-new-wave-page [class*="CommonLayout_root"] > aside,
+html.colorize-new-wave-page [class*="CommonLayout_root"] > [class*="Content_root"][class*="newVibe"] {
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+  height: calc(100vh - 1vh) !important;
+  height: calc(100dvh - 1vh) !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 1vh) !important;
+  max-height: calc(100dvh - 1vh) !important;
+  margin-block-start: 0 !important;
+  margin-block-end: 1vh !important;
+}
+
+html.colorize-new-wave-page [class*="Content_root"][class*="newVibe"] {
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [data-test-id="MAIN_PAGE"],
+html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+}
+
+html.colorize-new-wave-page [class*="VibePage_root"] {
+  position: relative !important;
+  isolation: isolate !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border-radius: var(--colorize-wave-radius) !important;
+  transform: none !important;
+}
+
+html.colorize-new-wave-page .bg-layer,
+html.colorize-new-wave-page .bg-cover,
+html.colorize-new-wave-page .bg-gradient {
+  border-radius: inherit !important;
+  overflow: hidden !important;
+}
+
+html.colorize-new-wave-page .bg-layer {
+  z-index: 0 !important;
+}
+
+html.colorize-new-wave-page [class*="VibePage_root"] > :not(.bg-layer),
+html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-layer) {
+  position: relative !important;
+  z-index: 2 !important;
 }
 
 @keyframes backgroundMovement {
@@ -29,7 +108,7 @@
 [class*="bg-cover"] {
   animation: backgroundMovement 15s infinite
     cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
-  margin-bottom:10px;
+  margin: 0 !important;
 }
 .avatar-zoom {
   cursor: zoom-in;
@@ -91,11 +170,21 @@
 }
 .VibeAnimation_enter_active__j0jOl, .VibeAnimation_enter_done__Oi2Kz, .VibeAnimation_exit__ioGXk {opacity: 0 !important;}
 
-.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068, 
-.WsKeF73pWotx9W1tWdYY, 
+.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068,
+.WsKeF73pWotx9W1tWdYY, .QYIUcw5hsJgmlwLrB5fw,
 .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
 .vqAVPWFJlhAOleK_SLk4, .wy8tgXoSb23KtiD3EFWg, .Meta_title__GGBnH{
   color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.SonataFullscreenControlsDesktop_sonataPlayButton__QXEEp{
+  background-color: var(--ym-controls-color-secondary-card-enabled)
+}
+.QYIUcw5hsJgmlwLrB5fw{
+  --ym-logo-text-color: var(--ym-logo-color-primary-variant) !important
+}
+.VibePlayerControls_withYellowPlayButton__vnoer, .VibePlayerControls_skipButton__z57B_{
+  background-color: hsl(0, 0%, 100%, 0.08) !important;
+  margin-inline: 0.15rem
 }
 .rWukOKAJh5Ga7JuIp62L{
   background: var(--ym-controls-color-secondary-default-enabled);
@@ -116,6 +205,40 @@
   color: var(--ym-controls-color-primary-default-hovered) !important;
 } 
 
+.bg-static-mode [class*="bg-cover"] {
+  animation: none !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+.cover-download-button,
+.cover-download-button:focus {
+  background-color: var(--ym-controls-color-secondary-card-enabled);
+  color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+.cover-download-button svg {
+  fill: var(--ym-controls-color-secondary-text-enabled);
+}
+
+:is(button, [role="button"]):is(:disabled, [disabled], [aria-disabled="true"]) {
+  color: var(--ym-controls-color-secondary-text-disabled) !important;
+}
+
+:is(button, [role="button"]):is(:disabled, [disabled], [aria-disabled="true"]) :is(svg, use, path) {
+  color: var(--ym-controls-color-secondary-text-disabled) !important;
+  fill: currentColor !important;
+}
+
+:is(button, [role="button"]):not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(svg, use, path) {
+  color: var(--ym-controls-color-secondary-text-enabled) !important;
+  fill: currentColor !important;
+}
+
+.customButton.bordered {
+  border-color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
 .VibeAnimation_enter_active__j0jOl,
 .VibeAnimation_enter_done__Oi2Kz,
 .VibeAnimation_exit__ioGXk { opacity:0 !important; }
@@ -125,82 +248,6 @@
 
 /* ─────────────────── Волна ─────────────────── */
 
-#osu-pulse{
-  position:fixed;
-  left:50%;
-  top:50%;
-  width:150vw;
-  height:150vh;
-  z-index:5;
-  pointer-events:none;
-  contain:layout paint;
-  opacity: var(--osu-alpha, .055);
-  filter: brightness(var(--osu-bright, 1));
-  transform: translate3d(-50%, -50%, 0);
-  will-change: opacity, filter;
-  isolation: isolate;
-  transition: none;
-}
-
-#osu-pulse-outer,
-#osu-pulse-inner,
-#osu-pulse-rings,
-#osu-pulse-center-rings,
-#osu-pulse-glow{
-  position:absolute;
-  inset:auto !important;
-  left:25vw !important;
-  right:25vw !important;
-  top:25vh !important;
-  bottom:25vh !important;
-  pointer-events:none;
-  will-change: transform, opacity;
-  transform: translate3d(0, 0, 0);
-  transform-origin: 50% 50%;
-  transition: none;
-}
-
-#osu-pulse-outer{
-  transform: scale(var(--osu-scale,1));
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.12)) 34%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.09)) 16%, transparent) 34%,
-      transparent 68%);
-  opacity: var(--osu-outer-opacity, .90);
-}
-#osu-pulse-outer::after{
-  content:''; position:absolute; inset:0; pointer-events:none;
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.18)) 34%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14)) 10%, transparent) 26%,
-      transparent 66%);
-  opacity:0; transform:scale(.88);
-}
-#osu-pulse-outer.pulse::after{ animation: osuRing 520ms cubic-bezier(.22,.61,.36,1); }
-@keyframes osuRing{
-  0%   { opacity:0;    transform:scale(.88); }
-  18%  { opacity:.145; transform:scale(.95); }
-  52%  { opacity:.082; transform:scale(1.02); }
-  100% { opacity:0;    transform:scale(1.09); }
-}
-
-#osu-pulse-inner{
-  transform: translate3d(
-    var(--inner-tx, var(--inner-dx, 0)),
-    var(--inner-ty, var(--inner-dy, 0)),
-    0
-  ) scale(var(--osu-scale,1));
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 50%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.20)) 28%, transparent) 32%,
-      transparent 70%);
-  mix-blend-mode: screen;
-  opacity: .92;
-}
-
 .VibeWidget_root__Chpsm
 {
   background: linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0, var(--ym-controls-color-secondary-text-disabled) 80%)
@@ -209,23 +256,6 @@
 
 /* Лёгкий режим во время скролла/движения в экспериментальном интерфейсе ЯМ.
    Нужен, чтобы полноэкранные radial-gradient/filter слои не стопорили SPA при активной волне. */
-.pcw-interacting #osu-pulse{
-  filter: none !important;
-  transition: none !important;
-  opacity: var(--osu-alpha, .055);
-}
-
-.pcw-interacting #osu-pulse-glow,
-.pcw-interacting .osu-ring{
-  opacity: 0 !important;
-  filter: none !important;
-}
-
-.pcw-interacting #osu-pulse-outer,
-.pcw-interacting #osu-pulse-inner{
-  transition: none !important;
-}
-
 /* картинка-фон .bg-cover не пульсирует */
 [class*="bg-cover"]{ will-change: auto; }
 /* ─────────────────── Light theme inversion fixes ─────────────────── */
@@ -289,40 +319,56 @@
   border-color: var(--ym-controls-color-primary-text-enabled) !important;
 }
 
-.ym-light-theme #osu-pulse{
-  opacity: var(--osu-alpha, .06);
-  filter: brightness(var(--osu-bright, .92));
-}
-
-.ym-light-theme #osu-pulse-outer{
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.055)) 22%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.045)) 9%, transparent) 34%,
-      transparent 68%);
-}
-
-.ym-light-theme #osu-pulse-outer::after{
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.075)) 30%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.060)) 8%, transparent) 26%,
-      transparent 66%);
-}
-
-.ym-light-theme #osu-pulse-inner{
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 32%, transparent) 0%,
-      color-mix(in hsl, var(--ym-background-color-secondary-enabled-blur, rgba(0,0,0,.10)) 16%, transparent) 32%,
-      transparent 70%);
-  mix-blend-mode: multiply;
-  opacity: .72;
-}
-
 .ym-light-theme .VibeWidget_root__Chpsm{
   background: linear-gradient(180deg,
     var(--ym-background-color-primary-enabled-content) 0,
     var(--ym-background-color-secondary-enabled-blur) 82%) !important;
 }
 
+.VibeWidgetAnimation_root__7fpeP{
+  opacity: 0;
+}
+
+/* PulseColor v2: the runtime owns one full-screen WebGL surface. */
+#osu-pulse.pulsecolor-webgl-root {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+  transition: none !important;
+  pointer-events: none !important;
+  contain: strict;
+  z-index: 0;
+}
+
+#osu-pulse.pulsecolor-webgl-root.pulsecolor-webgl-root--fullscreen {
+  position: absolute !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#osu-pulse .pulsecolor-webgl-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: none;
+}
+
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-integrated-fullscreen {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-integrated-fullscreen > :not(#osu-pulse) {
+  position: relative;
+  z-index: 1;
+}

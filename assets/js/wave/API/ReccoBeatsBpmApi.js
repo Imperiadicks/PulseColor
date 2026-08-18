@@ -15,6 +15,9 @@
       normalizeCompare,
       isTitleMatch,
       isArtistMatch,
+      versionsCompatible,
+      parseDurationMs,
+      normalizeIsrc,
       pushContextIsrc,
       pushContextReccoBeatsId,
       getProvider
@@ -40,7 +43,7 @@
       return track?.artist?.name || track?.artistName || track?.artist || '';
     };
 
-    const pickBestReccoBeatsTrack = (tracks, targetTitle, targetArtist) => {
+    const pickBestReccoBeatsTrack = (tracks, targetTitle, targetArtist, targetDurationMs = 0, targetIsrcs = []) => {
       const list = asArray(tracks);
       let best = null;
       let bestScore = -1;
@@ -52,13 +55,24 @@
         const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
         const titleNear = isTitleMatch(trackTitle, targetTitle);
         const artistNear = isArtistMatch(trackArtist, targetArtist);
+        const candidateIsrc = normalizeIsrc(track?.isrc);
+        const exactIsrc = !!candidateIsrc && targetIsrcs.includes(candidateIsrc);
+        if (!exactIsrc && !versionsCompatible(trackTitle, targetTitle)) continue;
+        const trackDurationMs = parseDurationMs(track?.durationMs || track?.duration || track?.length);
+        if (!exactIsrc && targetDurationMs && trackDurationMs && Math.abs(targetDurationMs - trackDurationMs) > 15000) continue;
 
         let score = 0;
+        if (exactIsrc) score += 24;
         if (titleExact) score += 10; else if (titleNear) score += 6;
         if (artistExact) score += 10; else if (artistNear) score += 6;
         if (track?.id) score += 2;
         if (track?.isrc) score += 2;
         if (track?.href) score += 1;
+        if (targetDurationMs && trackDurationMs) {
+          const diff = Math.abs(targetDurationMs - trackDurationMs);
+          if (diff <= 2500) score += 5;
+          else if (diff <= 7000) score += 3;
+        }
         if (Number.isFinite(Number(track?.popularity))) score += Math.min(4, Math.round(Number(track.popularity) / 25));
 
         if (score > bestScore) {
@@ -126,7 +140,13 @@
       if (!out.ok) return { bpm: 0, src: `reccobeats-track-${out.type}` };
 
       const tracks = asArray(out.data?.data || out.data?.tracks || out.data);
-      const bestTrack = pickBestReccoBeatsTrack(tracks, title, artist) || tracks.find((track) => track?.id) || null;
+      const bestTrack = pickBestReccoBeatsTrack(
+        tracks,
+        title,
+        artist,
+        context?.requestedDurationMs || 0,
+        uniqueClean(context?.isrcs || []).map(normalizeIsrc)
+      );
 
       logApi('reccobeats-track-picked', {
         sig,

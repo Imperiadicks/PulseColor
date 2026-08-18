@@ -63,7 +63,10 @@
 
   const coverSrcFromImg = (img) => {
     if (!img) return '';
-    return img.currentSrc || img.src || (img.getAttribute && (img.getAttribute('src') || '')) || '';
+    const src = img.currentSrc || img.src || (img.getAttribute && (img.getAttribute('src') || '')) || '';
+    if (src) return src;
+    const srcset = img.getAttribute?.('srcset') || '';
+    return srcset.split(',')[0]?.trim().split(/\s+/)[0] || '';
   };
 
   const coverScore = (img) => {
@@ -414,41 +417,7 @@ ${buildPaletteAliasBlock()}
 `;
   })();
 
-  const COLORIZE_WAVE_CROSSFADE_CSS = `
-html.pcw-color-transitioning #osu-pulse-outer {
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
-      color-mix(in hsl, var(--pc-wave-blur-from, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
-      transparent 75%) !important;
-}
-
-html.pcw-color-transitioning #osu-pulse-outer::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 55%,
-      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 45%, transparent) 0%,
-      color-mix(in hsl, var(--pc-wave-blur-to, var(--ym-background-color-secondary-enabled-blur, rgba(255,255,255,.14))) 24%, transparent) 35%,
-      transparent 75%);
-  opacity: var(--pc-wave-crossfade-opacity, 0);
-  mix-blend-mode: screen;
-  will-change: opacity;
-}
-
-html.pcw-color-transitioning #osu-pulse-outer::after {
-  animation: none !important;
-  opacity: 0 !important;
-}
-
-html.pcw-color-transitioning #osu-pulse-glow,
-html.pcw-color-transitioning .osu-ring {
-  opacity: 0 !important;
-  filter: none !important;
-}
-`;
+  const COLORIZE_WAVE_CROSSFADE_CSS = '';
 
 
   /*──────────────────────── YM MAPS ───────────────────────*/
@@ -1008,7 +977,7 @@ html.pcw-color-transitioning .osu-ring {
     settleTimer: 0
   };
 
-  const activePaletteTransitions = new WeakMap();
+  const activePaletteTransitions = new Map();
 
   const cleanupDirectPaletteVars = (node) => {
     COLORIZE_DIRECT_PALETTE_KEYS.forEach((key) => node.style.removeProperty(key));
@@ -1030,63 +999,6 @@ html.pcw-color-transitioning .osu-ring {
     node.style.setProperty('--pc-palette-progress', `${to}%`, 'important');
     node.style.setProperty('--pc-palette-from-weight', `${from}%`, 'important');
     node.style.setProperty('--pc-palette-to-weight', `${to}%`, 'important');
-  };
-
-  const getThemeModeFromNode = (node) => {
-    if (node?.classList?.contains('ym-light-theme')) return 'light';
-    if (node?.classList?.contains('ym-dark-theme')) return 'dark';
-    return null;
-  };
-
-  const getActiveThemeMode = () => {
-    const root = document.documentElement;
-    const body = document.body;
-
-    if (root?.classList?.contains('ym-light-theme') || body?.classList?.contains('ym-light-theme')) return 'light';
-    if (root?.classList?.contains('ym-dark-theme') || body?.classList?.contains('ym-dark-theme')) return 'dark';
-
-    const activeRoot = document.querySelector('.ym-light-theme, .ym-dark-theme');
-    return activeRoot?.classList?.contains('ym-light-theme') ? 'light' : 'dark';
-  };
-
-  const getWavePaletteKeyForMode = (mode) => mode === 'light' ? '--color-light-3' : '--color-dark-5';
-
-  const isWaveThemeNode = (node) => {
-    const nodeMode = getThemeModeFromNode(node);
-    return !!nodeMode && nodeMode === getActiveThemeMode();
-  };
-
-  const syncWaveCrossfadeVars = (node, fromVars, toVars, progress) => {
-    if (!isWaveThemeNode(node)) return;
-
-    const mode = getThemeModeFromNode(node) || getActiveThemeMode();
-    const key = getWavePaletteKeyForMode(mode);
-    const fallbackKey = mode === 'light' ? '--color-light-3' : '--color-dark-5';
-    const fromValue = fromVars?.[key] || fromVars?.[fallbackKey] || fromVars?.['--color-dark-5'] || fromVars?.['--color-light-3'];
-    const toValue = toVars?.[key] || toVars?.[fallbackKey] || toVars?.['--color-dark-5'] || toVars?.['--color-light-3'];
-    const rootStyle = document.documentElement.style;
-
-    if (fromValue) rootStyle.setProperty('--pc-wave-blur-from', String(fromValue), 'important');
-    if (toValue) rootStyle.setProperty('--pc-wave-blur-to', String(toValue), 'important');
-    rootStyle.setProperty('--pc-wave-crossfade-opacity', clamp(progress, 0, 1).toFixed(3), 'important');
-    document.documentElement.classList.add('pcw-color-transitioning');
-  };
-
-  const clearWaveCrossfadeVars = (node, vars) => {
-    if (node && !isWaveThemeNode(node)) return;
-
-    const mode = node ? getThemeModeFromNode(node) || getActiveThemeMode() : getActiveThemeMode();
-    const key = getWavePaletteKeyForMode(mode);
-    const value = vars?.[key] || vars?.['--color-dark-5'] || vars?.['--color-light-3'];
-    const rootStyle = document.documentElement.style;
-
-    if (value) {
-      rootStyle.setProperty('--pc-wave-blur-from', String(value), 'important');
-      rootStyle.setProperty('--pc-wave-blur-to', String(value), 'important');
-    }
-
-    rootStyle.setProperty('--pc-wave-crossfade-opacity', '0', 'important');
-    document.documentElement.classList.remove('pcw-color-transitioning');
   };
 
   const parsePaletteColor = (value) => {
@@ -1146,7 +1058,6 @@ html.pcw-color-transitioning .osu-ring {
   const stopPaletteTransition = (node) => {
     const active = activePaletteTransitions.get(node);
     if (active?.raf) cancelAnimationFrame(active.raf);
-    if (active?.wave) clearWaveCrossfadeVars(node, active.toVars || active.fromVars);
     activePaletteTransitions.delete(node);
   };
 
@@ -1165,7 +1076,6 @@ html.pcw-color-transitioning .osu-ring {
       writePaletteEndpoints(node, vars, 'from');
       writePaletteEndpoints(node, vars, 'to');
       setPaletteProgress(node, 1);
-      clearWaveCrossfadeVars(node, vars);
       node.classList.remove('pc-color-palette-reset');
     });
   };
@@ -1178,19 +1088,12 @@ html.pcw-color-transitioning .osu-ring {
     setPaletteProgress(node, 0);
     node.classList.remove('pc-color-palette-reset');
 
-    const wave = isWaveThemeNode(node);
-    if (wave) {
-      syncWaveCrossfadeVars(node, fromVars, toVars, 0);
-      window.PulseColorPerformance?.markInteraction?.(PALETTE_ANIMATION_MS + 220);
-    }
-
     const state = {
       fromVars,
       toVars,
       progress: 0,
       startedAt: 0,
-      raf: 0,
-      wave
+      raf: 0
     };
 
     activePaletteTransitions.set(node, state);
@@ -1203,7 +1106,6 @@ html.pcw-color-transitioning .osu-ring {
 
       state.progress = eased;
       setPaletteProgress(node, eased);
-      if (state.wave) syncWaveCrossfadeVars(node, fromVars, toVars, eased);
 
       if (raw < 1) {
         state.raf = requestAnimationFrame(step);
@@ -1214,7 +1116,6 @@ html.pcw-color-transitioning .osu-ring {
       writePaletteEndpoints(node, toVars, 'from');
       writePaletteEndpoints(node, toVars, 'to');
       setPaletteProgress(node, 1);
-      if (state.wave) clearWaveCrossfadeVars(node, toVars);
       activePaletteTransitions.delete(node);
     };
 
@@ -1283,13 +1184,27 @@ html.pcw-color-transitioning .osu-ring {
   let paletteAnimationFrame = 0;
   let paletteAnimationToken = 0;
   let paletteCurrentBase = null;
+  let currentThemePalettes = { dark: [], light: [] };
+
+  const surfacePaletteFromVars = (vars, mode) => {
+    const keys = mode === 'light'
+      ? ['--color-light-4', '--color-light-7', '--color-light-3', '--color-light-8', '--color-light-5', '--color-light-9']
+      : ['--color-dark-10', '--color-dark-9', '--color-dark-8', '--color-dark-7', '--color-dark-6', '--color-dark-5'];
+    return keys.map((key) => vars[key]).filter(Boolean);
+  };
 
   const applyBasePalette = (base) => {
     const normalized = cloneHSL(base);
+    const darkVars = buildVars(normalized, 'dark');
+    const lightVars = buildVars(normalized, 'light');
     paletteCurrentBase = normalized;
+    currentThemePalettes = {
+      dark: surfacePaletteFromVars(darkVars, 'dark'),
+      light: surfacePaletteFromVars(lightVars, 'light')
+    };
     applyVars({
-      dark: buildVars(normalized, 'dark'),
-      light: buildVars(normalized, 'light')
+      dark: darkVars,
+      light: lightVars
     });
   };
 
@@ -1346,14 +1261,64 @@ html.pcw-color-transitioning .osu-ring {
   let lastHex = '';
   let lastBackgroundURL = '';
   let lastPageURL = location.href;
+  let serviceRunning = false;
+  let serviceGeneration = 0;
+  const colorizeTimers = new Set();
+  const colorizeFrames = new Set();
+  const pendingBackgroundImages = new Set();
+
+  const scheduleColorizeTimer = (callback, delay) => {
+    const generation = serviceGeneration;
+    const id = window.setTimeout(() => {
+      colorizeTimers.delete(id);
+      if (serviceRunning && generation === serviceGeneration) callback();
+    }, delay);
+    colorizeTimers.add(id);
+    return id;
+  };
+
+  const scheduleColorizeFrame = (callback) => {
+    const generation = serviceGeneration;
+    const id = requestAnimationFrame(() => {
+      colorizeFrames.delete(id);
+      if (serviceRunning && generation === serviceGeneration) callback();
+    });
+    colorizeFrames.add(id);
+    return id;
+  };
+
+  const OLD_VIBE_SELECTOR = '[class*="MainPage_vibe"], [data-test-id="VIBE_BLOCK"]';
+  const NEW_WAVE_SELECTOR = '[class*="VibePage_root"], [class*="DefaultLayout_rootNewWave"]';
 
   async function getHiResCover() {
     const src = coverSrcFromImg(getCoverNode());
     return src ? normalizeCoverURL(src, '1000x1000') : null;
   }
 
+  function isVisibleWaveNode(node) {
+    if (!node?.isConnected) return false;
+    const rect = node.getBoundingClientRect?.();
+    const style = getComputedStyle(node);
+    return !!rect && rect.width > 0 && rect.height > 0 &&
+      rect.bottom > 0 && rect.right > 0 &&
+      rect.top < window.innerHeight && rect.left < window.innerWidth &&
+      style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  function getNewWaveNode() {
+    return Array.from(document.querySelectorAll(NEW_WAVE_SELECTOR))
+      .find(isVisibleWaveNode) || null;
+  }
+
+  function isNewWavePage() {
+    return !!getNewWaveNode();
+  }
+
   function getVibeNode() {
-    const nodes = [...document.querySelectorAll('[class*="MainPage_vibe"]')]
+    const newWave = getNewWaveNode();
+    if (newWave) return newWave;
+
+    const nodes = [...document.querySelectorAll(OLD_VIBE_SELECTOR)]
       .filter(node => node && node.nodeType === 1 && node.isConnected);
 
     if (!nodes.length) return null;
@@ -1367,6 +1332,7 @@ html.pcw-color-transitioning .osu-ring {
 
   function hasLegacyVibeMarkers(vibe) {
     if (!vibe || !vibe.querySelector) return false;
+    if (vibe.matches?.(NEW_WAVE_SELECTOR)) return false;
 
     const legacySelectors = [
       '[class*="VibeBlock_"]',
@@ -1388,21 +1354,36 @@ html.pcw-color-transitioning .osu-ring {
 
   function syncVibeModeClass(vibe) {
     const isLegacy = hasLegacyVibeMarkers(vibe);
+    const newWave = isNewWavePage();
+    document.documentElement?.classList.toggle('colorize-new-wave-page', newWave);
     document.body?.classList.toggle('pulsecolor-legacy-vibe', !!isLegacy);
     document.body?.classList.toggle('pulsecolor-modern-vibe', !!vibe && !isLegacy);
+    document.documentElement?.classList.toggle('pulsecolor-legacy-vibe', !!isLegacy);
+    document.documentElement?.classList.toggle('pulsecolor-modern-vibe', !!vibe && !isLegacy);
     return isLegacy;
   }
 
   function resetFullVibeHeight(vibe = getVibeNode()) {
-    if (!vibe) return;
+    if (!vibe) {
+      syncVibeModeClass(null);
+      return;
+    }
     vibe.style.removeProperty('height');
     vibe.style.removeProperty('min-height');
     vibe.style.removeProperty('max-height');
     delete vibe.dataset.pulsecolorFullVibe;
   }
 
+  function cleanupForeignBackgroundLayers(target) {
+    document.querySelectorAll('.bg-layer').forEach(layer => {
+      if (target && target.contains(layer)) return;
+      layer.remove();
+    });
+  }
+
   function backgroundReplace(imageURL) {
     const target = getVibeNode();
+    cleanupForeignBackgroundLayers(target);
     if (!target || !imageURL) return;
 
     const hasCurrentLayer = !!target.querySelector('.bg-layer .bg-cover');
@@ -1413,11 +1394,15 @@ html.pcw-color-transitioning .osu-ring {
     }
 
     const img = new Image();
+    const generation = serviceGeneration;
     img.crossOrigin = 'anonymous';
-    img.src = imageURL;
+    pendingBackgroundImages.add(img);
 
     img.onload = () => {
-      if (!target.isConnected) return;
+      pendingBackgroundImages.delete(img);
+      img.onload = null;
+      img.onerror = null;
+      if (!serviceRunning || generation !== serviceGeneration || !target.isConnected) return;
 
       lastBackgroundURL = imageURL;
       target.dataset.pulsecolorBgUrl = imageURL;
@@ -1458,33 +1443,46 @@ html.pcw-color-transitioning .osu-ring {
       [...target.querySelectorAll('.bg-layer')].forEach(layer => {
         layer.style.opacity = '0';
         layer.style.transition = 'opacity .6s ease';
-        setTimeout(() => layer.remove(), 700);
+        scheduleColorizeTimer(() => layer.remove(), 700);
       });
 
       wrapper.appendChild(imageLayer);
       wrapper.appendChild(gradient);
       target.appendChild(wrapper);
 
-      requestAnimationFrame(() => {
+      scheduleColorizeFrame(() => {
         imageLayer.offsetHeight;
         imageLayer.style.opacity = '1';
       });
     };
+    img.onerror = () => {
+      pendingBackgroundImages.delete(img);
+      img.onload = null;
+      img.onerror = null;
+    };
+    img.src = imageURL;
   }
 
-  function removeBackgroundImage() {
+  function removeBackgroundImage(immediate = false) {
     document.querySelectorAll('.bg-layer').forEach(layer => {
-      try { delete layer.closest?.('[class*="MainPage_vibe"]')?.dataset?.pulsecolorBgUrl; } catch {}
+      try { delete layer.closest?.(`${OLD_VIBE_SELECTOR}, ${NEW_WAVE_SELECTOR}`)?.dataset?.pulsecolorBgUrl; } catch {}
+      if (immediate) {
+        layer.remove();
+        return;
+      }
       layer.style.opacity = '0';
       layer.style.transition = 'opacity .6s ease';
-      setTimeout(() => layer.remove(), 700);
+      scheduleColorizeTimer(() => layer.remove(), 700);
     });
     lastBackgroundURL = '';
   }
 
   function FullVibe() {
     const v = getVibeNode();
-    if (!v) return;
+    if (!v) {
+      syncVibeModeClass(null);
+      return;
+    }
 
     const isLegacy = syncVibeModeClass(v);
 
@@ -1500,7 +1498,10 @@ html.pcw-color-transitioning .osu-ring {
 
   function RemoveFullVibe() {
     const v = getVibeNode();
-    if (!v) return;
+    if (!v) {
+      syncVibeModeClass(null);
+      return;
+    }
 
     syncVibeModeClass(v);
     resetFullVibeHeight(v);
@@ -1544,16 +1545,17 @@ html.pcw-color-transitioning .osu-ring {
   window.PulseColorCore.get = () => CORE;
   window.PulseColorCore.apply = applyCoreSettings;
 
-  window.addEventListener('pulsecolor:coreSettingsChanged', (e) => {
+  const handleCoreSettingsChanged = (e) => {
     const core = e?.detail?.core;
     applyCoreSettings(core);
     try {
       scheduleSync?.({ force: true, bg: true });
     } catch {}
-  });
+  };
 
   /*──────────────────────── recolor ─────────────────────*/
   const recolor = async (force = false) => {
+    const generation = serviceGeneration;
     const src = coverURL();
     const core = (typeof CORE === 'object' && CORE) ? CORE : getCoreSettings();
 
@@ -1569,7 +1571,7 @@ html.pcw-color-transitioning .osu-ring {
     } else {
       if (!force && src === lastSrc) return;
       const pair = await colorsFromCover(src) || fallbackHSL();
-      if (!pair) return;
+      if (!pair || !serviceRunning || generation !== serviceGeneration) return;
 
       [gradC1, gradC2] = pair;
       base = {
@@ -1584,9 +1586,8 @@ html.pcw-color-transitioning .osu-ring {
 
     ensureGradientOverlay();
 
-    window.OsuBeat?.retune?.({ presetBpm: window.OsuBeat?.bpm?.() || 120 });
-
     const image = await getHiResCover();
+    if (!serviceRunning || generation !== serviceGeneration) return;
 
     const backgroundImageNow = !!core.enableBackgroundImage;
     if (backgroundImageNow !== (window.__LAST_BG_ENABLED || null) || force) {
@@ -1607,20 +1608,37 @@ html.pcw-color-transitioning .osu-ring {
   let syncForce = false;
   let syncNeedBg = false;
   let syncRunning = false;
-  let coverObserver = null;
-  let vibeObserver = null;
-  let treeObserver = null;
+  let runtimeDomUnsubscribe = null;
+  let runtimeDomKey = '';
+  let runtimeVibeNode = null;
+  let runtimeFullscreenNode = null;
+  let historyBound = false;
+  let originalPushState = null;
+  let originalReplaceState = null;
+  let wrappedPushState = null;
+  let wrappedReplaceState = null;
+  let domReadyBound = false;
+  const idleHandles = new Map();
 
   function runWhenIdle(fn, timeout = 900) {
     if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(fn, { timeout });
+      const id = requestIdleCallback(() => {
+        idleHandles.delete(id);
+        if (serviceRunning) fn();
+      }, { timeout });
+      idleHandles.set(id, 'idle');
       return;
     }
 
-    window.setTimeout(fn, 0);
+    const id = window.setTimeout(() => {
+      idleHandles.delete(id);
+      if (serviceRunning) fn();
+    }, 0);
+    idleHandles.set(id, 'timeout');
   }
 
   function scheduleSync({ force = false, bg = false, delay = 160 } = {}) {
+    if (!serviceRunning) return;
     syncForce = syncForce || !!force;
     syncNeedBg = syncNeedBg || !!bg;
     if (syncFrame) return;
@@ -1653,94 +1671,23 @@ html.pcw-color-transitioning .osu-ring {
     }, delay);
   }
 
-  function bindCoverObserver() {
-    const node = getCoverNode();
-    if (coverObserver?.__node === node) return;
-    if (coverObserver) coverObserver.disconnect();
-    coverObserver = null;
-    if (!node) return;
-
-    coverObserver = new MutationObserver((muts) => {
-      for (const m of muts) {
-        if (m.type === 'attributes' && (m.attributeName === 'src' || m.attributeName === 'srcset')) {
-          scheduleSync({ force: true, bg: true });
-          break;
-        }
+  function bindRuntimeDomCoordinator() {
+    if (runtimeDomUnsubscribe) return;
+    const coordinator = window.PulseColor?.dom;
+    if (!coordinator?.subscribe) throw new Error('PulseColor DOM coordinator is unavailable');
+    runtimeDomUnsubscribe = coordinator.subscribe((snapshot) => {
+      const vibe = getVibeNode();
+      const key = [snapshot?.track?.key || '', snapshot?.track?.coverKey || ''].join('|');
+      const trackChanged = key !== runtimeDomKey;
+      const layoutChanged = vibe !== runtimeVibeNode || snapshot?.fullscreen !== runtimeFullscreenNode;
+      const backgroundMissing = !!CORE?.enableBackgroundImage && !!vibe && !vibe.querySelector('.bg-layer');
+      runtimeDomKey = key;
+      runtimeVibeNode = vibe;
+      runtimeFullscreenNode = snapshot?.fullscreen || null;
+      if (trackChanged || layoutChanged || backgroundMissing) {
+        scheduleSync({ force: trackChanged, bg: trackChanged || layoutChanged || backgroundMissing, delay: 120 });
       }
     });
-    coverObserver.__node = node;
-    coverObserver.observe(node, { attributes: true, attributeFilter: ['src', 'srcset'] });
-  }
-
-  function bindVibeObserver() {
-    const vibe = getVibeNode();
-    if (vibeObserver?.__node === vibe) return;
-    if (vibeObserver) vibeObserver.disconnect();
-    vibeObserver = null;
-    if (!vibe) return;
-
-    vibeObserver = new MutationObserver(() => {
-      const hasBgLayer = !!vibe.querySelector('.bg-layer');
-      if (!hasBgLayer) scheduleSync({ bg: true });
-    });
-    vibeObserver.__node = vibe;
-    vibeObserver.observe(vibe, { childList: true });
-  }
-
-  function isRelevantNode(node) {
-    if (!node || node.nodeType !== 1) return false;
-    const relevantSelector = '[class*="MainPage_vibe"], img[data-test-id="ENTITY_COVER_IMAGE"], img[class*="AlbumCover_cover__"], img[src*="avatars.yandex.net/get-music-content"], img[srcset*="avatars.yandex.net/get-music-content"], div[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="FULLSCREEN_PLAYER_MODAL"]';
-    if (node.matches?.(relevantSelector)) return true;
-    return !!node.querySelector?.(relevantSelector);
-  }
-
-  function bindTreeObserver() {
-    if (treeObserver) return;
-
-    let bindTimer = 0;
-
-    const scheduleObserverBind = (delay = 120) => {
-      if (bindTimer) return;
-      bindTimer = window.setTimeout(() => {
-        bindTimer = 0;
-        bindCoverObserver();
-        bindVibeObserver();
-      }, delay);
-    };
-
-    treeObserver = new MutationObserver((muts) => {
-      let shouldSync = false;
-      let shouldBg = false;
-
-      for (const m of muts) {
-        if (m.type !== 'childList') continue;
-
-        for (const n of m.addedNodes || []) {
-          if (isRelevantNode(n)) {
-            shouldSync = true;
-            shouldBg = true;
-            break;
-          }
-        }
-        if (shouldSync) break;
-
-        for (const n of m.removedNodes || []) {
-          if (isRelevantNode(n)) {
-            shouldSync = true;
-            shouldBg = true;
-            break;
-          }
-        }
-        if (shouldSync) break;
-      }
-
-      if (!shouldSync) return;
-
-      scheduleObserverBind(120);
-      scheduleSync({ force: true, bg: shouldBg, delay: 180 });
-    });
-
-    treeObserver.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   function handleRouteChange() {
@@ -1748,34 +1695,53 @@ html.pcw-color-transitioning .osu-ring {
     if (currentURL === lastPageURL) return;
     lastPageURL = currentURL;
 
-    window.setTimeout(() => {
-      bindCoverObserver();
-      bindVibeObserver();
+    scheduleColorizeTimer(() => {
       scheduleSync({ force: true, bg: true, delay: 220 });
     }, 80);
   }
 
   function bindHistoryObserver() {
-    if (window.__PulseColorHistoryHooked) return;
+    if (historyBound) return;
+    historyBound = true;
     window.__PulseColorHistoryHooked = true;
 
-    const { pushState, replaceState } = history;
-    history.pushState = function (...args) {
-      const out = pushState.apply(this, args);
+    originalPushState = history.pushState;
+    originalReplaceState = history.replaceState;
+    wrappedPushState = function (...args) {
+      const out = originalPushState.apply(this, args);
       queueMicrotask(handleRouteChange);
       return out;
     };
-    history.replaceState = function (...args) {
-      const out = replaceState.apply(this, args);
+    wrappedReplaceState = function (...args) {
+      const out = originalReplaceState.apply(this, args);
       queueMicrotask(handleRouteChange);
       return out;
     };
+    history.pushState = wrappedPushState;
+    history.replaceState = wrappedReplaceState;
 
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);
-    window.addEventListener('visibilitychange', () => {
-      if (!document.hidden) scheduleSync({ force: true, bg: true, delay: 220 });
-    });
+    document.addEventListener('visibilitychange', handleColorizeVisibility);
+  }
+
+  function handleColorizeVisibility() {
+    if (!document.hidden) scheduleSync({ force: true, bg: true, delay: 220 });
+  }
+
+  function unbindHistoryObserver() {
+    if (!historyBound) return;
+    historyBound = false;
+    if (history.pushState === wrappedPushState && originalPushState) history.pushState = originalPushState;
+    if (history.replaceState === wrappedReplaceState && originalReplaceState) history.replaceState = originalReplaceState;
+    originalPushState = null;
+    originalReplaceState = null;
+    wrappedPushState = null;
+    wrappedReplaceState = null;
+    window.__PulseColorHistoryHooked = false;
+    window.removeEventListener('popstate', handleRouteChange);
+    window.removeEventListener('hashchange', handleRouteChange);
+    document.removeEventListener('visibilitychange', handleColorizeVisibility);
   }
 
   async function tryInjectBackground() {
@@ -1792,19 +1758,90 @@ html.pcw-color-transitioning .osu-ring {
   }
 
   const init = async () => {
+    if (!serviceRunning) return;
     try {
       applyCoreSettings();
     } catch {}
 
     bindHistoryObserver();
-    bindCoverObserver();
-    bindVibeObserver();
-    bindTreeObserver();
+    bindRuntimeDomCoordinator();
 
     await recolor(true);
   };
 
-  document.readyState === 'loading'
-    ? document.addEventListener('DOMContentLoaded', init)
-    : init();
+  const handleColorizeDomReady = () => {
+    domReadyBound = false;
+    init();
+  };
+
+  const startService = () => {
+    if (serviceRunning) return;
+    serviceRunning = true;
+    serviceGeneration += 1;
+    window.addEventListener('pulsecolor:coreSettingsChanged', handleCoreSettingsChanged);
+    if (document.readyState === 'loading') {
+      domReadyBound = true;
+      document.addEventListener('DOMContentLoaded', handleColorizeDomReady, { once: true });
+    } else {
+      init();
+    }
+  };
+
+  const stopService = () => {
+    if (!serviceRunning && !runtimeDomUnsubscribe && !historyBound) return;
+    serviceRunning = false;
+    serviceGeneration += 1;
+    window.removeEventListener('pulsecolor:coreSettingsChanged', handleCoreSettingsChanged);
+    if (domReadyBound) document.removeEventListener('DOMContentLoaded', handleColorizeDomReady);
+    domReadyBound = false;
+    unbindHistoryObserver();
+    runtimeDomUnsubscribe?.();
+    runtimeDomUnsubscribe = null;
+    if (syncFrame) clearTimeout(syncFrame);
+    syncFrame = 0;
+    syncForce = false;
+    syncNeedBg = false;
+    syncRunning = false;
+    clearTimeout(lastInlinePalette.retryTimer);
+    clearTimeout(lastInlinePalette.settleTimer);
+    lastInlinePalette.retryTimer = 0;
+    lastInlinePalette.settleTimer = 0;
+    if (paletteAnimationFrame) cancelAnimationFrame(paletteAnimationFrame);
+    paletteAnimationFrame = 0;
+    paletteAnimationToken += 1;
+    for (const [node] of activePaletteTransitions) stopPaletteTransition(node);
+    for (const [id, kind] of idleHandles) {
+      if (kind === 'idle' && typeof cancelIdleCallback === 'function') cancelIdleCallback(id);
+      else clearTimeout(id);
+    }
+    idleHandles.clear();
+    for (const id of colorizeTimers) clearTimeout(id);
+    colorizeTimers.clear();
+    for (const id of colorizeFrames) cancelAnimationFrame(id);
+    colorizeFrames.clear();
+    for (const image of pendingBackgroundImages) {
+      image.onload = null;
+      image.onerror = null;
+      try { image.src = ''; } catch {}
+    }
+    pendingBackgroundImages.clear();
+    document.documentElement.classList.remove('pcw-color-transitioning');
+    try { RemoveFullVibe(); } catch {}
+    try { removeBackgroundImage(true); } catch {}
+  };
+
+  window.PulseColor.colorizer = {
+    version: 2,
+    start: startService,
+    stop: stopService,
+    getThemePalette(mode = 'dark') {
+      const key = mode === 'light' ? 'light' : 'dark';
+      return currentThemePalettes[key].slice();
+    }
+  };
+  if (typeof window.PulseColor.runtime.registerService === 'function') {
+    window.PulseColor.runtime.registerService('colorizer', { start: startService, stop: stopService });
+  } else {
+    startService();
+  }
 })();

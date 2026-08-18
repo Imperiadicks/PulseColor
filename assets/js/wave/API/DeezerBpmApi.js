@@ -13,6 +13,7 @@
       normalizeCompare,
       isTitleMatch,
       isArtistMatch,
+      versionsCompatible,
       parseDurationMs,
       normalizeIsrc,
       pushContextIsrc
@@ -48,6 +49,7 @@
         const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
         const titleNear = isTitleMatch(trackTitle, targetTitle);
         const artistNear = isArtistMatch(trackArtist, targetArtist);
+        if (!versionsCompatible(trackTitle, targetTitle)) continue;
 
         let score = 0;
         if (titleExact) score += 10; else if (titleNear) score += 6;
@@ -59,6 +61,7 @@
         const trackDurationMs = parseDurationMs(track?.duration);
         if (targetDurationMs && trackDurationMs) {
           const diff = Math.abs(targetDurationMs - trackDurationMs);
+          if (diff > 15000) continue;
           if (diff <= 2500) score += 5;
           else if (diff <= 7000) score += 3;
           else if (diff <= 15000) score += 1;
@@ -86,6 +89,7 @@
         const artistExact = normalizeCompare(trackArtist) === normalizeCompare(targetArtist);
         const titleNear = isTitleMatch(trackTitle, targetTitle);
         const artistNear = isArtistMatch(trackArtist, targetArtist);
+        if (!versionsCompatible(trackTitle, targetTitle)) continue;
 
         let score = 0;
         if (titleExact) score += 10; else if (titleNear) score += 6;
@@ -96,6 +100,7 @@
         const trackDurationMs = parseDurationMs(track?.duration);
         if (targetDurationMs && trackDurationMs) {
           const diff = Math.abs(targetDurationMs - trackDurationMs);
+          if (diff > 15000) continue;
           if (diff <= 2500) score += 5;
           else if (diff <= 7000) score += 3;
           else if (diff <= 15000) score += 1;

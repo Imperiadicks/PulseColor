@@ -6,7 +6,7 @@
   function assetUrl(file) {
     return (
       ASSETS_BASE +
-      encodeURIComponent(file) +
+      String(file).split("/").map(encodeURIComponent).join("/") +
       "?name=" +
       encodeURIComponent(THEME_NAME)
     );
@@ -56,11 +56,23 @@
       await injectCss("main.css");
       await injectCss("osu.css");
 
+      await loadJs("RuntimeUtils.js");
+      await loadJs("RuntimeCore.js");
       await loadJs("colorize.js");
+      await loadJs("AudioEngine.js");
+      await loadJs("GetSongBpmApi.js");
+      await loadJs("DeezerBpmApi.js");
+      await loadJs("ReccoBeatsBpmApi.js");
       await loadJs("OnlineOsuBPM.js");
+      await loadJs("WaveVariants.js");
+      await loadJs("Cover2Anim.js");
+      await loadJs("TweakedYMDesign.js");
+      await loadJs("WebGLRuntime.js");
       await loadJs("MainOsu.js");
+      await loadJs("PulseColorSettingsUI.js");
       await loadJs("ControlPanelOsu.js");
       await loadJs("controlPulseColor.js");
+      await loadJs("AddonSupportSettings.js");
       await loadJs("index.js");
 
       console.log("[PulseColor] All assets loaded successfully.");

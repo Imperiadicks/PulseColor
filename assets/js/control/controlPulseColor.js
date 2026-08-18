@@ -5,6 +5,12 @@
     "use strict";
 
     const ITEM_ID = "pulsecolor-core-settings-item";
+    const CATEGORY_ID = "pulsecolor-settings-category";
+    const CUSTOM_ITEM_ID = "pulsecolor-custom-wave-settings-item";
+    const WAVE_VARIANT_ITEM_ID = "pulsecolor-wave-variant-settings-item";
+    const WAVE_ITEM_ID = "pulsecolor-wave-settings-item";
+    const TWEAKED_SUPPORT_ITEM_ID = "pulsecolor-tweaked-support-settings-item";
+    const COVER2ANIM_SUPPORT_ITEM_ID = "pulsecolor-cover2anim-support-settings-item";
     const PORTAL_ID = "pulsecolor-core-settings-portal";
 
     const ARROW_HREF = "/icons/sprite.svg#arrowRight_xs";
@@ -21,6 +27,24 @@
 
     const MODAL_LOCK_KEY = "__PulseColorModalLockCount";
     const MODAL_ANIM_MS = 220;
+    const pendingUiTimeouts = new Set();
+    const pendingUiFrames = new Set();
+    const scheduleUiTimeout = (callback, delay) => {
+        const id = window.setTimeout(() => {
+            pendingUiTimeouts.delete(id);
+            callback();
+        }, delay);
+        pendingUiTimeouts.add(id);
+        return id;
+    };
+    const scheduleUiFrame = (callback) => {
+        const id = requestAnimationFrame(() => {
+            pendingUiFrames.delete(id);
+            callback();
+        });
+        pendingUiFrames.add(id);
+        return id;
+    };
 
     function lockPageInteraction() {
         const body = document.body;
@@ -102,7 +126,7 @@
     }
 
     function animateModalIn(dialog, backdrop) {
-        requestAnimationFrame(() => {
+        scheduleUiFrame(() => {
             if (backdrop) backdrop.style.opacity = "1";
             if (dialog) {
                 dialog.style.opacity = "1";
@@ -121,7 +145,7 @@
             dialog.style.transform = "translate(-50%, calc(-50% + 16px)) scale(.965)";
         }
 
-        window.setTimeout(() => {
+        scheduleUiTimeout(() => {
             try { done && done(); } catch { }
         }, MODAL_ANIM_MS + 40);
     }
@@ -211,6 +235,81 @@
         use.setAttribute("href", ARROW_HREF);
     }
 
+    function makePulseColorCategoryLi() {
+        const li = document.createElement("li");
+        li.id = CATEGORY_ID;
+        li.className = "Settings_item__Ksa9h";
+        li.style.paddingBlockEnd = "var(--ym-spacer-size-m)";
+
+        const root = document.createElement("div");
+        root.setAttribute("role", "separator");
+        root.setAttribute("aria-label", "PulseColor");
+        root.style.cssText = "display:flex;align-items:center;gap:var(--ym-spacer-size-xs);width:100%;padding-block:var(--ym-spacer-size-xxs);";
+
+        const left = document.createElement("div");
+        left.style.cssText = "height:1px;flex:1 1 auto;background:var(--ym-controls-color-secondary-outline-enabled_stroke);opacity:.6;";
+
+        const title = document.createElement("div");
+        title.className = "_MWOVuZRvUQdXKTMcOPx SehSa7OyRpC2nzYTVb2Q _3_Mxw7Si7j2g4kWjlpR";
+        title.style.cssText = "color:var(--ym-controls-color-secondary-text-enabled);opacity:.72;white-space:nowrap;";
+        title.textContent = "PulseColor";
+
+        const right = document.createElement("div");
+        right.style.cssText = left.style.cssText;
+
+        root.append(left, title, right);
+        li.appendChild(root);
+        return li;
+    }
+
+    function findMiscSettingsItem(ul) {
+        return Array.from(ul.querySelectorAll("li")).find((x) => getTitleText(x) === "Прочие настройки мода") || null;
+    }
+
+    function ensurePulseColorCategory(ul) {
+        let category = ul.querySelector("#" + CATEGORY_ID);
+        if (category) return category;
+
+        category = makePulseColorCategoryLi();
+        const after = findMiscSettingsItem(ul);
+        if (after && after.parentElement === ul) ul.insertBefore(category, after.nextSibling);
+        else ul.appendChild(category);
+        return category;
+    }
+
+    function pulseColorItemOrder(id) {
+        return [
+            CUSTOM_ITEM_ID,
+            WAVE_VARIANT_ITEM_ID,
+            ITEM_ID,
+            TWEAKED_SUPPORT_ITEM_ID,
+            COVER2ANIM_SUPPORT_ITEM_ID,
+            WAVE_ITEM_ID
+        ].indexOf(id);
+    }
+
+    function placePulseColorItem(ul, li) {
+        const category = ensurePulseColorCategory(ul);
+        const order = pulseColorItemOrder(li.id);
+        let anchor = category;
+
+        [
+            CUSTOM_ITEM_ID,
+            WAVE_VARIANT_ITEM_ID,
+            ITEM_ID,
+            TWEAKED_SUPPORT_ITEM_ID,
+            COVER2ANIM_SUPPORT_ITEM_ID,
+            WAVE_ITEM_ID
+        ].forEach((id) => {
+            const item = ul.querySelector("#" + id);
+            if (!item || item === li) return;
+            const itemOrder = pulseColorItemOrder(id);
+            if (itemOrder >= 0 && itemOrder < order) anchor = item;
+        });
+
+        if (anchor.nextSibling !== li) ul.insertBefore(li, anchor.nextSibling);
+    }
+
     function findTemplateLi(ul) {
         const items = Array.from(ul.querySelectorAll("li"));
         const exact = items.find(
@@ -223,7 +322,12 @@
     function injectSettingsButton() {
         const ul = findSettingsUl();
         if (!ul) return;
-        if (ul.querySelector("#" + ITEM_ID)) return;
+        ensurePulseColorCategory(ul);
+        const existing = ul.querySelector("#" + ITEM_ID);
+        if (existing) {
+            placePulseColorItem(ul, existing);
+            return;
+        }
 
         const tpl = findTemplateLi(ul);
         if (!tpl) return;
@@ -244,9 +348,7 @@
             openModal();
         });
 
-        const after = Array.from(ul.querySelectorAll("li")).find((x) => getTitleText(x) === "Прочие настройки мода");
-        if (after && after.parentElement === ul) ul.insertBefore(li, after.nextSibling);
-        else ul.appendChild(li);
+        placePulseColorItem(ul, li);
     }
 
     /* ========== Modal ========== */
@@ -458,53 +560,45 @@
     }
 
     // init
-    const SETTINGS_MUTATION_SELECTOR = '.SettingsPage_content__cR6Ra, [class*="SettingsPage_content"], [class*="SettingsListButtonItem"], [class*="SettingsList"]';
-    let injectTimer = 0;
-
-    function tickInject() { try { injectSettingsButton(); } catch { } }
-
-    function scheduleInject(delay = 160) {
-        if (injectTimer) return;
-        injectTimer = window.setTimeout(() => {
-            injectTimer = 0;
-            if (!document.getElementById(ITEM_ID)) tickInject();
-        }, delay);
+    let firstSettingsInjection = true;
+    let removeInjector = null;
+    let serviceRunning = false;
+    function tickInject() {
+        if (!firstSettingsInjection && document.getElementById(ITEM_ID)) return;
+        firstSettingsInjection = false;
+        try { injectSettingsButton(); } catch { }
     }
-
-    function isSettingsMutationNode(node) {
-        if (!node || node.nodeType !== 1) return false;
-        try {
-            if (node.matches?.(SETTINGS_MUTATION_SELECTOR)) return true;
-            const cls = typeof node.className === "string" ? node.className : "";
-            if (cls.includes("SettingsPage") || cls.includes("SettingsList")) return true;
-            return !!node.querySelector?.(SETTINGS_MUTATION_SELECTOR);
-        } catch {
-            return false;
-        }
-    }
-
-    function hasSettingsMutation(muts) {
-        for (const m of muts) {
-            if (isSettingsMutationNode(m.target)) return true;
-            for (const n of m.addedNodes || []) {
-                if (isSettingsMutationNode(n)) return true;
-            }
-        }
-        return false;
-    }
-
-    const mo = new MutationObserver((muts) => {
-        if (document.getElementById(ITEM_ID)) return;
-        if (hasSettingsMutation(muts)) scheduleInject();
-    });
-
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-    tickInject();
-
-    document.addEventListener("DOMContentLoaded", () => scheduleInject(0), { once: true });
-    window.addEventListener("popstate", () => scheduleInject(220));
-    window.addEventListener("hashchange", () => scheduleInject(220));
-
     // export for debug
     window.PulseColorCoreUI = Object.assign(window.PulseColorCoreUI || {}, { open: openModal, close: closeModal, getCore, setCore });
+
+    const startService = () => {
+        if (serviceRunning) return;
+        serviceRunning = true;
+        removeInjector = window.PulseColorSettingsUI.register("core-settings", tickInject);
+    };
+
+    const stopService = () => {
+        if (!serviceRunning) return;
+        serviceRunning = false;
+        removeInjector?.();
+        removeInjector = null;
+        document.removeEventListener("keydown", onEsc, true);
+        for (const id of pendingUiTimeouts) clearTimeout(id);
+        pendingUiTimeouts.clear();
+        for (const id of pendingUiFrames) cancelAnimationFrame(id);
+        pendingUiFrames.clear();
+        const portal = document.getElementById(PORTAL_ID);
+        if (portal) {
+            portal.remove();
+            unlockPageInteraction();
+        }
+        document.getElementById(ITEM_ID)?.remove();
+        firstSettingsInjection = true;
+    };
+
+    if (typeof window.PulseColor.runtime.registerService === "function") {
+        window.PulseColor.runtime.registerService("core-settings-controls", { start: startService, stop: stopService });
+    } else {
+        startService();
+    }
 })();

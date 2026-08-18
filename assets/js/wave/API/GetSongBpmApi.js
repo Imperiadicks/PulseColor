@@ -19,7 +19,7 @@
 
     const getApiKey = () => String(GETSONGBPM_API_KEY || '').trim();
 
-    const lookup = async ({ title, artist, sig } = {}) => {
+    const lookup = async ({ title, artist, sig, context } = {}) => {
       const apiKey = getApiKey();
       logApiKeyCheck('getsongbpm', apiKey, { sig, title, artist });
       if (!apiKey) {
@@ -36,7 +36,7 @@
       });
       if (!searchOut.ok) return { bpm: 0, src: `getsongbpm-${searchOut.type}` };
 
-      const bestSong = pickBestSong(searchOut.data?.search, title, artist);
+      const bestSong = pickBestSong(searchOut.data?.search, title, artist, context?.requestedDurationMs || 0);
       logApi('getsongbpm-search-picked', {
         sig,
         requested: { title, artist },
