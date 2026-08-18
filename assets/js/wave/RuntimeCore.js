@@ -93,19 +93,22 @@
   const normalizeTweaked = (input) => {
     const next = onlyKnown(DEFAULT_ADDONS.tweakedYmDesign, input);
     next.enabled = next.enabled !== false;
-    next.lyricsBlur = next.lyricsBlur !== false;
+    // Эти параметры больше не выводятся в UI: интеграция всегда использует
+    // исходные значения Tweaked YM Design, чтобы старые сохранённые ползунки
+    // не делали fullscreen почти чёрным и не отключали blur текста.
+    next.lyricsBlur = true;
     next.lyricsMaxBlur = U.clamp(numberOr(next.lyricsMaxBlur, 8), 0, 24);
     next.lyricsBlurStep = U.clamp(numberOr(next.lyricsBlurStep, 2.2), 0, 8);
     next.lyricsMinOpacity = U.clamp(numberOr(next.lyricsMinOpacity, 0.35), 0.1, 1);
     next.lyricsOpacityStep = U.clamp(numberOr(next.lyricsOpacityStep, 0.12), 0, 0.4);
     next.lyricsTransitionMs = U.clamp(numberOr(next.lyricsTransitionMs, 250), 0, 1200);
-    next.coverBackground = next.coverBackground !== false;
-    next.coverBlur = U.clamp(numberOr(next.coverBlur, 28), 0, 64);
-    next.coverSaturate = U.clamp(numberOr(next.coverSaturate, 1.2), 0.5, 2.5);
-    next.coverOverlay = U.clamp(numberOr(next.coverOverlay, 0.55), 0, 0.9);
+    next.coverBackground = true;
+    next.coverBlur = 28;
+    next.coverSaturate = 1.2;
+    next.coverOverlay = 0.55;
     next.coverCrossfadeMs = U.clamp(numberOr(next.coverCrossfadeMs, 900), 0, 3000);
-    next.coverMotion = next.coverMotion !== false;
-    next.coverMotionDuration = U.clamp(numberOr(next.coverMotionDuration, 26), 4, 90);
+    next.coverMotion = true;
+    next.coverMotionDuration = 26;
     return next;
   };
 

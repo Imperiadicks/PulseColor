@@ -3,18 +3,19 @@
 
   const PC = window.PulseColor;
   const U = window.PulseColorRuntimeUtils;
-  if (!PC?.visualModes || !PC.dom || !PC.settings || !U) {
+  if (!PC?.dom || !PC.settings || !U) {
     throw new Error("PulseColor RuntimeCore must be loaded before TweakedYMDesign");
   }
-  if (PC.visualModes.get("tweakedYmDesign")) return;
+  if (PC.design?.source === "Tweaked YM Design 1.0.0") return;
 
-  // Runtime-owned adaptation of Tweaked YM Design 1.0.0 by nelifs.
+  // Full Tweaked YM Design 1.0.0 by nelifs, adapted only to the shared
+  // PulseColor settings and DOM lifecycle.
   const STYLE_ID = "pulsecolor-tweaked-ym-design-style";
   const SOURCE_STYLE = `
 html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] {
-  transition: filter var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
-    opacity var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
-    transform var(--pulsecolor-lyrics-transition, 380ms) cubic-bezier(.4, 0, .2, 1);
+  transition: filter var(--ps-lyrics-blur-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
+    opacity var(--ps-lyrics-blur-transition, 380ms) cubic-bezier(.4, 0, .2, 1),
+    transform var(--ps-lyrics-blur-transition, 380ms) cubic-bezier(.4, 0, .2, 1);
   transform-origin: 50%;
   contain: layout style;
 }
@@ -30,6 +31,74 @@ html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] > span {
 [data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-tweaked-fullscreen::before,
 [data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-tweaked-fullscreen::after {
   z-index: -1 !important;
+}
+
+.ps-apple-cover-host {
+  isolation: isolate;
+  background: transparent !important;
+}
+
+.ps-apple-cover-host > :not(.ps-apple-cover-bg) {
+  z-index: 1;
+  position: relative;
+}
+
+.ps-apple-cover-bg {
+  z-index: 0;
+  pointer-events: none;
+  contain: strict;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ps-apple-cover-bg__layer {
+  opacity: 0;
+  transition: opacity var(--ps-cover-crossfade, .9s) ease-in-out;
+  contain: strict;
+  background-position: 50%;
+  background-repeat: no-repeat;
+  background-size: cover;
+  position: absolute;
+  inset: -10%;
+  transform: scale(1.12) translate(0, 0);
+}
+
+.ps-apple-cover-bg__layer--css-blur {
+  filter: blur(var(--ps-cover-blur, 28px)) saturate(var(--ps-cover-saturate, 1.2));
+}
+
+.ps-apple-cover-bg__layer--visible { opacity: 1; }
+
+.ps-apple-cover-bg__layer--motion:not(.ps-apple-cover-bg__layer--motion-off) {
+  animation: ps-apple-cover-drift-a var(--ps-cover-motion-duration, 26s) ease-in-out infinite alternate;
+}
+
+.ps-apple-cover-bg__layer--b.ps-apple-cover-bg__layer--motion:not(.ps-apple-cover-bg__layer--motion-off) {
+  animation-name: ps-apple-cover-drift-b;
+}
+
+.ps-apple-cover-bg--paused .ps-apple-cover-bg__layer--motion { animation-play-state: paused; }
+
+.ps-apple-cover-bg__vignette {
+  background:
+    radial-gradient(ellipse 85% 70% at 50% 45%, transparent 0%, #0000008c 100%),
+    linear-gradient(180deg,
+      rgba(0, 0, 0, calc(var(--ps-cover-overlay, .55) * .35)) 0%,
+      rgba(0, 0, 0, var(--ps-cover-overlay, .55)) 55%,
+      rgba(0, 0, 0, calc(var(--ps-cover-overlay, .55) * 1.1)) 100%);
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes ps-apple-cover-drift-a {
+  0% { transform: scale(1.12) translate(0, 0); }
+  100% { transform: scale(1.17) translate(1.5%, -1%); }
+}
+
+@keyframes ps-apple-cover-drift-b {
+  0% { transform: scale(1.13) translate(-1%, .5%); }
+  100% { transform: scale(1.18) translate(1%, -1.5%); }
 }
 
 html.pulsecolor-tweaked-vibe [class*="VibePlayerbarMeta_center"],
@@ -73,13 +142,16 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
   html.pulsecolor-tweaked-enabled [data-test-id="SYNC_LYRICS_LINE"] {
     transition-duration: .01ms;
   }
+
+  .ps-apple-cover-bg__layer--motion { animation: none !important; }
 }
 `;
   const LYRICS_LINE_SELECTOR = '[data-test-id="SYNC_LYRICS_LINE"]';
-  const LYRICS_DISTANCE_ATTRIBUTE = "data-pulsecolor-lyrics-distance";
+  const LYRICS_DISTANCE_ATTRIBUTE = "data-ps-lyrics-distance";
   const MAX_BLURRED_LINE_DISTANCE = 8;
-  const BACKGROUND_MAX_DIMENSION = 96;
-  const reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
+  const COVER_SELECTOR = '[data-test-id="ENTITY_COVER_IMAGE"]';
+  const COVER_ROOT_CLASS = "ps-apple-cover-bg";
+  const COVER_HOST_CLASS = "ps-apple-cover-host";
   const trackedLyrics = new Set();
   let settings = PC.settings.get();
   let domSnapshot = PC.dom.getSnapshot();
@@ -89,6 +161,7 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
   let lastLyricsContainer = null;
   let lastActiveIndex = -1;
   let lastLineCount = 0;
+  let coverBackground = null;
 
   const ensureSourceStyle = () => {
     let style = document.getElementById(STYLE_ID);
@@ -103,6 +176,242 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
   const removeSourceStyle = () => document.getElementById(STYLE_ID)?.remove();
 
   const numberOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+  const backgroundCache = new Map();
+  const pendingBackgrounds = new Map();
+
+  const resolveCoverSource = (image, { preferSmall = true, maxWidth = 400 } = {}) => {
+    const srcset = image.getAttribute("srcset");
+    if (srcset) {
+      const candidates = srcset.split(",").map((entry) => entry.trim()).map((entry) => {
+        const [url, descriptor] = entry.split(/\s+/);
+        const width = descriptor?.endsWith("w") ? Number.parseInt(descriptor, 10) : 0;
+        const density = descriptor?.endsWith("x") ? Number.parseFloat(descriptor) : 1;
+        return { url: url || "", width: width || Math.round(density * 400) };
+      }).filter((entry) => entry.url);
+      if (candidates.length) {
+        if (preferSmall) {
+          const bounded = candidates.filter((entry) => entry.width <= maxWidth)
+            .sort((left, right) => right.width - left.width)[0];
+          if (bounded?.url) return bounded.url;
+          const smallest = candidates.sort((left, right) => left.width - right.width)[0];
+          if (smallest?.url) return smallest.url;
+        }
+        const largest = candidates.sort((left, right) => right.width - left.width)[0];
+        if (largest?.url) return largest.url;
+      }
+    }
+    return image.currentSrc || image.src;
+  };
+
+  const preprocessCover = (url, { size = 96, blurPx = 8, saturate = 1.2, quality = 0.68 } = {}) => {
+    if (backgroundCache.has(url)) return Promise.resolve(backgroundCache.get(url));
+    if (pendingBackgrounds.has(url)) return pendingBackgrounds.get(url);
+    const request = new Promise((resolve) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) {
+          resolve(null);
+          return;
+        }
+        context.filter = `blur(${blurPx}px) saturate(${saturate})`;
+        context.drawImage(image, 0, 0, size, size);
+        let dataUrl = null;
+        try { dataUrl = canvas.toDataURL("image/jpeg", quality); } catch {}
+        if (dataUrl) {
+          backgroundCache.set(url, dataUrl);
+          while (backgroundCache.size > 12) backgroundCache.delete(backgroundCache.keys().next().value);
+        }
+        resolve(dataUrl);
+      };
+      image.onerror = () => resolve(null);
+      image.src = url;
+    }).finally(() => pendingBackgrounds.delete(url));
+    pendingBackgrounds.set(url, request);
+    return request;
+  };
+
+  const makeScheduler = (delay) => {
+    let timeoutId = 0;
+    let frameId = 0;
+    const schedule = (callback) => {
+      if (timeoutId || frameId) return;
+      timeoutId = window.setTimeout(() => {
+        timeoutId = 0;
+        frameId = requestAnimationFrame(() => {
+          frameId = 0;
+          callback();
+        });
+      }, delay);
+    };
+    schedule.cancel = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (frameId) cancelAnimationFrame(frameId);
+      timeoutId = 0;
+      frameId = 0;
+    };
+    return schedule;
+  };
+
+  class OriginalCoverBackground {
+    scheduleApply = makeScheduler(200);
+    modal = null;
+    coverImage = null;
+    observer = null;
+    layers = null;
+    activeLayerIsA = true;
+    currentSourceUrl = "";
+    applying = false;
+    generation = 0;
+    paused = false;
+
+    update(modal, config, force = false) {
+      this.config = config;
+      this.syncVariables();
+      const targetModal = config.enabled ? modal : null;
+      if (targetModal !== this.modal) this.setModal(targetModal);
+      if (!config.enabled) return;
+      this.layers?.root.classList.toggle("ps-apple-cover-bg--paused", this.paused);
+      this.scheduleApply(() => this.apply(force));
+    }
+
+    setPaused(paused) {
+      this.paused = paused;
+      this.layers?.root.classList.toggle("ps-apple-cover-bg--paused", paused);
+      if (!paused) this.scheduleApply(() => this.apply(true));
+    }
+
+    syncVariables() {
+      const root = document.documentElement;
+      root.style.setProperty("--ps-cover-blur", `${Math.min(this.config.blurPx, 36)}px`);
+      root.style.setProperty("--ps-cover-saturate", String(this.config.saturate));
+      root.style.setProperty("--ps-cover-overlay", String(this.config.overlay));
+      root.style.setProperty("--ps-cover-crossfade", `${this.config.crossfadeMs}ms`);
+      root.style.setProperty("--ps-cover-motion-duration", `${this.config.motionDurationS}s`);
+    }
+
+    setModal(modal) {
+      this.generation += 1;
+      this.teardownModal();
+      this.modal = modal;
+      if (!modal) return;
+      modal.classList.add(COVER_HOST_CLASS);
+      this.ensureLayers();
+      this.attachObserver();
+    }
+
+    ensureLayers() {
+      const root = document.createElement("div");
+      root.className = COVER_ROOT_CLASS;
+      root.setAttribute("aria-hidden", "true");
+      const layerA = document.createElement("div");
+      layerA.className = "ps-apple-cover-bg__layer ps-apple-cover-bg__layer--a";
+      layerA.dataset.psCoverLayer = "a";
+      const layerB = document.createElement("div");
+      layerB.className = "ps-apple-cover-bg__layer ps-apple-cover-bg__layer--b";
+      layerB.dataset.psCoverLayer = "b";
+      const vignette = document.createElement("div");
+      vignette.className = "ps-apple-cover-bg__vignette";
+      vignette.dataset.psCoverVignette = "";
+      root.append(layerA, layerB, vignette);
+      this.modal.prepend(root);
+      this.layers = { root, layerA, layerB, vignette };
+      this.activeLayerIsA = true;
+    }
+
+    attachObserver() {
+      let imageObserver = null;
+      const attachImage = (image) => {
+        if (image === this.coverImage) return;
+        imageObserver?.disconnect();
+        this.coverImage = image;
+        if (!image) return;
+        imageObserver = new MutationObserver(() => this.scheduleApply(() => this.apply(true)));
+        imageObserver.observe(image, { attributes: true, attributeFilter: ["src", "srcset"] });
+      };
+      attachImage(this.modal.querySelector(COVER_SELECTOR));
+      const modalObserver = new MutationObserver(() => {
+        attachImage(this.modal?.querySelector(COVER_SELECTOR));
+        this.scheduleApply(() => this.apply(false));
+      });
+      modalObserver.observe(this.modal, { childList: true, subtree: true });
+      this.observer = { disconnect: () => { modalObserver.disconnect(); imageObserver?.disconnect(); } };
+    }
+
+    async apply(force) {
+      if (this.paused || this.applying || !this.modal || !this.layers || !this.config?.enabled) {
+        if (this.layers) this.layers.root.hidden = !this.config?.enabled;
+        return;
+      }
+      const image = this.coverImage || this.modal.querySelector(COVER_SELECTOR);
+      if (!image) {
+        this.layers.root.hidden = true;
+        return;
+      }
+      if (!image.complete || image.naturalWidth === 0) {
+        image.addEventListener("load", () => this.scheduleApply(() => this.apply(true)), { once: true });
+        return;
+      }
+      const sourceUrl = resolveCoverSource(image, { preferSmall: true, maxWidth: 400 });
+      if (!sourceUrl || (!force && sourceUrl === this.currentSourceUrl)) return;
+      const generation = this.generation;
+      this.applying = true;
+      try {
+        const processed = await preprocessCover(sourceUrl, {
+          size: 96,
+          blurPx: Math.min(18, Math.round(this.config.blurPx * 0.3)),
+          saturate: this.config.saturate
+        });
+        if (generation !== this.generation || !this.layers || this.paused) return;
+        this.layers.root.hidden = false;
+        this.swapLayers(processed || sourceUrl, !processed);
+        this.currentSourceUrl = sourceUrl;
+      } finally {
+        this.applying = false;
+      }
+    }
+
+    swapLayers(url, useCssBlur) {
+      const incoming = this.activeLayerIsA ? this.layers.layerB : this.layers.layerA;
+      const outgoing = this.activeLayerIsA ? this.layers.layerA : this.layers.layerB;
+      incoming.style.backgroundImage = `url(${JSON.stringify(url)})`;
+      incoming.classList.toggle("ps-apple-cover-bg__layer--css-blur", useCssBlur);
+      incoming.classList.add("ps-apple-cover-bg__layer--visible");
+      incoming.classList.toggle("ps-apple-cover-bg__layer--motion", !useCssBlur);
+      incoming.classList.remove("ps-apple-cover-bg__layer--motion-off");
+      outgoing.classList.remove(
+        "ps-apple-cover-bg__layer--visible",
+        "ps-apple-cover-bg__layer--motion",
+        "ps-apple-cover-bg__layer--css-blur"
+      );
+      outgoing.style.backgroundImage = "";
+      this.activeLayerIsA = !this.activeLayerIsA;
+    }
+
+    teardownModal() {
+      this.observer?.disconnect();
+      this.observer = null;
+      this.coverImage = null;
+      this.modal?.classList.remove(COVER_HOST_CLASS);
+      this.layers?.root.remove();
+      this.layers = null;
+      this.currentSourceUrl = "";
+      this.activeLayerIsA = true;
+    }
+
+    stop() {
+      this.generation += 1;
+      this.scheduleApply.cancel();
+      this.teardownModal();
+      this.modal = null;
+    }
+  }
   const isActiveLine = (line) => line.classList.contains("swiper-slide-active") ||
     Array.from(line.classList).some((name) => name.includes("SyncLyricsScroller_line_active"));
   const activeLineIndex = (lines) => {
@@ -187,12 +496,21 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
     const tweaked = settings.addons.tweakedYmDesign || {};
     const enabled = tweaked.enabled === true;
     document.documentElement.style.setProperty(
-      "--pulsecolor-lyrics-transition",
+      "--ps-lyrics-blur-transition",
       `${U.clamp(numberOr(tweaked.lyricsTransitionMs, 250), 0, 1200)}ms`
     );
     document.documentElement.classList.toggle("pulsecolor-tweaked-enabled", enabled);
     document.documentElement.classList.toggle("pulsecolor-tweaked-vibe", enabled);
     domSnapshot.fullscreen?.classList.toggle("pulsecolor-tweaked-fullscreen", enabled);
+    coverBackground?.update(domSnapshot.fullscreen, {
+      enabled,
+      blurPx: 28,
+      saturate: 1.2,
+      overlay: 0.55,
+      crossfadeMs: U.clamp(numberOr(tweaked.coverCrossfadeMs, 900), 0, 3000),
+      motionDurationS: 26
+    }, forceLyrics);
+    window.PulseColorAddonSupport?.setActive?.("tweakedYmDesign", enabled && !!domSnapshot.fullscreen);
     applyLyrics(forceLyrics);
   };
 
@@ -200,6 +518,11 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
     if (serviceRunning) return;
     serviceRunning = true;
     ensureSourceStyle();
+    coverBackground = new OriginalCoverBackground();
+    const handleVisibility = () => coverBackground?.setPaused(document.hidden || document.visibilityState !== "visible");
+    document.addEventListener("visibilitychange", handleVisibility);
+    coverBackground.removeVisibility = () => document.removeEventListener("visibilitychange", handleVisibility);
+    handleVisibility();
     removeDom = PC.dom.subscribe((nextSnapshot) => {
       if (domSnapshot.fullscreen && domSnapshot.fullscreen !== nextSnapshot.fullscreen) {
         domSnapshot.fullscreen.classList.remove("pulsecolor-tweaked-fullscreen");
@@ -221,284 +544,30 @@ html.pulsecolor-tweaked-vibe [class*="VibeArtistCover_cover"] {
     removeDom = null;
     removeSettings = null;
     clearLyrics();
+    coverBackground?.removeVisibility?.();
+    coverBackground?.stop();
+    coverBackground = null;
+    window.PulseColorAddonSupport?.setActive?.("tweakedYmDesign", false);
     domSnapshot.fullscreen?.classList.remove("pulsecolor-tweaked-fullscreen");
     document.documentElement.classList.remove("pulsecolor-tweaked-enabled", "pulsecolor-tweaked-vibe");
-    document.documentElement.style.removeProperty("--pulsecolor-lyrics-transition");
+    document.documentElement.style.removeProperty("--ps-lyrics-blur-transition");
+    document.documentElement.style.removeProperty("--ps-cover-blur");
+    document.documentElement.style.removeProperty("--ps-cover-saturate");
+    document.documentElement.style.removeProperty("--ps-cover-overlay");
+    document.documentElement.style.removeProperty("--ps-cover-crossfade");
+    document.documentElement.style.removeProperty("--ps-cover-motion-duration");
     removeSourceStyle();
   };
 
-  const vertexSource = `
-    precision highp float;
-    attribute vec2 a_position;
-    varying vec2 v_uv;
-    void main() {
-      v_uv = a_position * 0.5 + 0.5;
-      gl_Position = vec4(a_position, 0.0, 1.0);
-    }
-  `;
+  // Fullscreen background is intentionally owned by the original DOM/CSS runtime above.
 
-  const blurFragmentSource = `
-    precision highp float;
-    varying vec2 v_uv;
-    uniform sampler2D u_current;
-    uniform sampler2D u_next;
-    uniform float u_mix;
-    uniform vec2 u_direction;
-    uniform float u_viewAspect;
-    uniform float u_currentAspect;
-    uniform float u_nextAspect;
-    uniform vec2 u_currentDrift;
-    uniform vec2 u_nextDrift;
-    uniform float u_currentZoom;
-    uniform float u_nextZoom;
-
-    vec2 coverUv(vec2 uv, float imageAspect, vec2 drift, float zoom) {
-      vec2 point = uv - 0.5;
-      if (imageAspect > u_viewAspect) point.x *= u_viewAspect / max(0.001, imageAspect);
-      else point.y *= imageAspect / max(0.001, u_viewAspect);
-      point = point / max(1.0, zoom) - drift;
-      return clamp(point + 0.5, vec2(0.0), vec2(1.0));
-    }
-
-    vec3 sourceAt(vec2 uv) {
-      vec3 currentColor = texture2D(u_current, coverUv(uv, u_currentAspect, u_currentDrift, u_currentZoom)).rgb;
-      vec3 nextColor = texture2D(u_next, coverUv(uv, u_nextAspect, u_nextDrift, u_nextZoom)).rgb;
-      return mix(currentColor, nextColor, u_mix);
-    }
-
-    void main() {
-      vec3 color = sourceAt(v_uv) * 0.227027;
-      color += sourceAt(v_uv + u_direction * 1.384615) * 0.316216;
-      color += sourceAt(v_uv - u_direction * 1.384615) * 0.316216;
-      color += sourceAt(v_uv + u_direction * 3.230769) * 0.070270;
-      color += sourceAt(v_uv - u_direction * 3.230769) * 0.070270;
-      gl_FragColor = vec4(color, 1.0);
-    }
-  `;
-
-  const compositeFragmentSource = `
-    precision highp float;
-    varying vec2 v_uv;
-    uniform sampler2D u_blurred;
-    uniform float u_saturation;
-    uniform float u_overlay;
-    uniform float u_alpha;
-
-    vec3 applySaturation(vec3 color, float amount) {
-      float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-      return mix(vec3(luminance), color, amount);
-    }
-
-    void main() {
-      vec3 color = applySaturation(texture2D(u_blurred, v_uv).rgb, u_saturation);
-      float top = 1.0 - v_uv.y;
-      float vertical = top < 0.55
-        ? mix(u_overlay * 0.35, u_overlay, top / 0.55)
-        : mix(u_overlay, min(1.0, u_overlay * 1.1), (top - 0.55) / 0.45);
-      vec2 ellipse = (v_uv - vec2(0.5, 0.45)) / vec2(0.425, 0.35);
-      float radial = smoothstep(0.0, 1.0, length(ellipse)) * 0.55;
-      float darkness = 1.0 - (1.0 - radial) * (1.0 - vertical);
-      color *= 1.0 - clamp(darkness, 0.0, 0.95);
-      gl_FragColor = vec4(color, u_alpha);
-    }
-  `;
-
-  const motionState = (timestamp, durationSeconds, variant) => {
-    const duration = Math.max(4, numberOr(durationSeconds, 26));
-    const cycle = ((timestamp / 1000 / duration) % 2 + 2) % 2;
-    const progress = cycle <= 1 ? cycle : 2 - cycle;
-    const eased = 0.5 - Math.cos(progress * Math.PI) * 0.5;
-    if (variant === "b") {
-      return {
-        drift: [(-0.01 + 0.02 * eased), (0.005 - 0.02 * eased)],
-        zoom: 1.13 + 0.05 * eased
-      };
-    }
-    return {
-      drift: [0.015 * eased, -0.01 * eased],
-      zoom: 1.12 + 0.05 * eased
-    };
-  };
-
-  const createPass = (host) => {
-    const gl = host.gl;
-    const blurProgram = host.createProgram(vertexSource, blurFragmentSource);
-    const compositeProgram = host.createProgram(vertexSource, compositeFragmentSource);
-    const textures = [gl.createTexture(), gl.createTexture()];
-    const framebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-    const blurPosition = gl.getAttribLocation(blurProgram, "a_position");
-    const compositePosition = gl.getAttribLocation(compositeProgram, "a_position");
-    const location = (program, name) => gl.getUniformLocation(program, name);
-    const blurUniforms = {
-      current: location(blurProgram, "u_current"),
-      next: location(blurProgram, "u_next"),
-      mix: location(blurProgram, "u_mix"),
-      direction: location(blurProgram, "u_direction"),
-      viewAspect: location(blurProgram, "u_viewAspect"),
-      currentAspect: location(blurProgram, "u_currentAspect"),
-      nextAspect: location(blurProgram, "u_nextAspect"),
-      currentDrift: location(blurProgram, "u_currentDrift"),
-      nextDrift: location(blurProgram, "u_nextDrift"),
-      currentZoom: location(blurProgram, "u_currentZoom"),
-      nextZoom: location(blurProgram, "u_nextZoom")
-    };
-    const compositeUniforms = {
-      blurred: location(compositeProgram, "u_blurred"),
-      saturation: location(compositeProgram, "u_saturation"),
-      overlay: location(compositeProgram, "u_overlay"),
-      alpha: location(compositeProgram, "u_alpha")
-    };
-    let width = 2;
-    let height = 2;
-    let targetWidth = 2;
-    let targetHeight = 2;
-    let context = null;
-    let activeVariant = "a";
-    let currentTextureReference = null;
-    let motionElapsed = 0;
-
-    const configureTarget = (index) => {
-      gl.bindTexture(gl.TEXTURE_2D, textures[index]);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, targetWidth, targetHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[index]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[index], 0);
-    };
-
-    const syncTargets = () => {
-      const scale = Math.min(1, BACKGROUND_MAX_DIMENSION / Math.max(width, height));
-      const nextWidth = Math.max(2, Math.round(width * scale));
-      const nextHeight = Math.max(2, Math.round(height * scale));
-      if (nextWidth === targetWidth && nextHeight === targetHeight) return;
-      targetWidth = nextWidth;
-      targetHeight = nextHeight;
-      configureTarget(0);
-      configureTarget(1);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    };
-
-    const bindQuad = (program, attribute) => {
-      gl.useProgram(program);
-      gl.bindBuffer(gl.ARRAY_BUFFER, host.quadBuffer);
-      gl.enableVertexAttribArray(attribute);
-      gl.vertexAttribPointer(attribute, 2, gl.FLOAT, false, 0, 0);
-    };
-
-    const bindTexture = (texture, unit, uniform) => {
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.uniform1i(uniform, unit);
-    };
-
-    return {
-      resourceCounts: Object.freeze({ programs: 2, textures: 2, framebuffers: 2 }),
-      resize(nextWidth, nextHeight) {
-        width = Math.max(2, numberOr(nextWidth, 2));
-        height = Math.max(2, numberOr(nextHeight, 2));
-        syncTargets();
-      },
-      update(nextContext) {
-        context = nextContext;
-        motionElapsed += U.clamp(numberOr(nextContext?.dt, 0), 0, 100);
-        syncTargets();
-      },
-      render(textureState) {
-        if (!context || context.settings?.coverBackground === false) return;
-        const hasCurrent = textureState.textureReady === true;
-        const hasNext = textureState.nextTextureReady === true;
-        if (!hasCurrent && !hasNext) return;
-        if (hasCurrent && currentTextureReference && currentTextureReference !== textureState.currentTexture) {
-          activeVariant = activeVariant === "a" ? "b" : "a";
-        }
-        if (hasCurrent) currentTextureReference = textureState.currentTexture;
-
-        const motionEnabled = context.settings.coverMotion !== false && reducedMotionQuery?.matches !== true;
-        const currentMotion = motionEnabled
-          ? motionState(motionElapsed, context.settings.coverMotionDuration, activeVariant)
-          : { drift: [0, 0], zoom: activeVariant === "a" ? 1.12 : 1.13 };
-        const nextVariant = activeVariant === "a" ? "b" : "a";
-        const nextMotion = motionEnabled
-          ? motionState(motionElapsed, context.settings.coverMotionDuration, nextVariant)
-          : { drift: [0, 0], zoom: nextVariant === "a" ? 1.12 : 1.13 };
-        const mix = hasNext ? U.clamp(numberOr(textureState.textureMix, 0), 0, 1) : 0;
-        const currentTexture = hasCurrent ? textureState.currentTexture : textureState.nextTexture;
-        const nextTexture = hasNext ? textureState.nextTexture : currentTexture;
-        const currentAspect = hasCurrent
-          ? numberOr(textureState.currentTextureAspect, 1)
-          : numberOr(textureState.nextTextureAspect, 1);
-        const nextAspect = hasNext ? numberOr(textureState.nextTextureAspect, currentAspect) : currentAspect;
-        const configuredBlur = U.clamp(numberOr(context.settings.coverBlur, 28), 0, 36);
-        const sourceBlur = Math.min(18, Math.round(configuredBlur * 0.3));
-
-        gl.disable(gl.BLEND);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[0]);
-        gl.viewport(0, 0, targetWidth, targetHeight);
-        bindQuad(blurProgram, blurPosition);
-        bindTexture(currentTexture, 0, blurUniforms.current);
-        bindTexture(nextTexture, 1, blurUniforms.next);
-        gl.uniform1f(blurUniforms.mix, mix);
-        gl.uniform1f(blurUniforms.viewAspect, width / Math.max(1, height));
-        gl.uniform1f(blurUniforms.currentAspect, currentAspect);
-        gl.uniform1f(blurUniforms.nextAspect, nextAspect);
-        gl.uniform2f(blurUniforms.currentDrift, currentMotion.drift[0], currentMotion.drift[1]);
-        gl.uniform2f(blurUniforms.nextDrift, nextMotion.drift[0], nextMotion.drift[1]);
-        gl.uniform1f(blurUniforms.currentZoom, currentMotion.zoom);
-        gl.uniform1f(blurUniforms.nextZoom, nextMotion.zoom);
-        gl.uniform2f(blurUniforms.direction, sourceBlur / Math.max(1, targetWidth), 0);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[1]);
-        gl.viewport(0, 0, targetWidth, targetHeight);
-        bindQuad(blurProgram, blurPosition);
-        bindTexture(textures[0], 0, blurUniforms.current);
-        bindTexture(textures[0], 1, blurUniforms.next);
-        gl.uniform1f(blurUniforms.mix, 0);
-        gl.uniform1f(blurUniforms.currentAspect, width / Math.max(1, height));
-        gl.uniform1f(blurUniforms.nextAspect, width / Math.max(1, height));
-        gl.uniform2f(blurUniforms.currentDrift, 0, 0);
-        gl.uniform2f(blurUniforms.nextDrift, 0, 0);
-        gl.uniform1f(blurUniforms.currentZoom, 1);
-        gl.uniform1f(blurUniforms.nextZoom, 1);
-        gl.uniform2f(blurUniforms.direction, 0, sourceBlur / Math.max(1, targetHeight));
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, width, height);
-        bindQuad(compositeProgram, compositePosition);
-        bindTexture(textures[1], 0, compositeUniforms.blurred);
-        gl.uniform1f(compositeUniforms.saturation, U.clamp(numberOr(context.settings.coverSaturate, 1.2), 0.5, 2.5));
-        gl.uniform1f(compositeUniforms.overlay, U.clamp(numberOr(context.settings.coverOverlay, 0.55), 0, 0.9));
-        gl.uniform1f(compositeUniforms.alpha, hasCurrent ? 1 : mix);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      },
-      getCanvasFilter: () => "",
-      dispose() {
-        for (const framebuffer of framebuffers) gl.deleteFramebuffer(framebuffer);
-        for (const texture of textures) gl.deleteTexture(texture);
-        gl.deleteProgram(blurProgram);
-        gl.deleteProgram(compositeProgram);
-      },
-      inspect: () => ({
-        targetWidth,
-        targetHeight,
-        activeVariant,
-        hasContext: !!context
-      })
-    };
-  };
-
-  const definition = Object.freeze({
-    id: "tweakedYmDesign",
-    version: 2,
-    createPass,
-    testing: Object.freeze({ activeLineIndex, lineStyle, motionState, applyLyrics, clearLyrics })
+  PC.design = Object.freeze({
+    version: 5,
+    source: "Tweaked YM Design 1.0.0",
+    refresh: applyDomDesign,
+    stop: stopService,
+    testing: Object.freeze({ activeLineIndex, lineStyle, applyLyrics, clearLyrics, resolveCoverSource, preprocessCover })
   });
-
-  PC.visualModes.register("tweakedYmDesign", definition);
-  PC.design = Object.freeze({ version: 4, refresh: applyDomDesign, stop: stopService });
   if (typeof PC.runtime.registerService === "function") {
     PC.runtime.registerService("tweaked-ym-design", { start: startService, stop: stopService });
   } else {

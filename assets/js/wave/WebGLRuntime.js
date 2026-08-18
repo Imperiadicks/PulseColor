@@ -408,9 +408,7 @@
     const request = ++textureRequest;
     const wantsCoverPalette = !!fullscreen && settings.addons.cover2Anim?.enabled === true &&
       ["original", "mixed"].includes(settings.addons.cover2Anim?.colorMode);
-    const wantsTweakedCover = !!fullscreen && settings.addons.tweakedYmDesign?.enabled === true &&
-      settings.addons.tweakedYmDesign?.coverBackground !== false;
-    if ((!settings.wave.USE_COVER_TEXTURE && !wantsCoverPalette && !wantsTweakedCover) || !track?.coverUrl || !gl) {
+    if ((!settings.wave.USE_COVER_TEXTURE && !wantsCoverPalette) || !track?.coverUrl || !gl) {
       nextTextureReady = false;
       nextCoverPalette = null;
       return;
@@ -625,9 +623,11 @@
   const desiredVisualModeId = () => {
     if (!fullscreen) return "";
     if (settings.addons.cover2Anim?.enabled === true) return "cover2Anim";
-    if (settings.addons.tweakedYmDesign?.enabled === true) return "tweakedYmDesign";
     return "";
   };
+
+  const tweakedDomBackgroundActive = () => !!fullscreen &&
+    settings.addons.tweakedYmDesign?.enabled === true;
 
   const adjustPassCounters = (counts, direction) => {
     if (!counts) return;
@@ -791,7 +791,8 @@
   };
 
   const wantsRender = () => {
-    const waveEnabled = settings.wave.ENABLE_CUSTOM_WAVE !== false && !desiredVisualModeId();
+    const waveEnabled = settings.wave.ENABLE_CUSTOM_WAVE !== false &&
+      !desiredVisualModeId() && !tweakedDomBackgroundActive();
     return waveEnabled || !!desiredVisualModeId();
   };
 
@@ -830,12 +831,9 @@
     if (!gl || !program || contextLost || !wantsRender()) return;
     syncVisualPass();
     const coverIntegrationActive = activeVisualModeId === "cover2Anim";
-    const tweakedIntegrationActive = activeVisualModeId === "tweakedYmDesign";
     const efficient = coverIntegrationActive
       ? false
-      : tweakedIntegrationActive
-        ? false
-        : settings.wave.WAVE_PERFORMANCE_MODE !== "max";
+      : settings.wave.WAVE_PERFORMANCE_MODE !== "max";
     if (efficient && timestamp - lastDrawAt < 32) return;
     lastDrawAt = timestamp;
     if (resizePending) resize();
@@ -880,9 +878,7 @@
     presets.stepMotion?.(waveMotion, driven, preset, motionDt);
     let textureMix = 0;
     if (nextTextureReady) {
-      const transitionMs = tweakedIntegrationActive && settings.addons.tweakedYmDesign?.coverBackground !== false
-        ? U.clamp(numberOr(settings.addons.tweakedYmDesign?.coverCrossfadeMs, 900), 1, 3000)
-        : COVER2ANIM_PALETTE_FADE_MS;
+      const transitionMs = COVER2ANIM_PALETTE_FADE_MS;
       textureMix = U.clamp((timestamp - textureTransitionAt) / transitionMs, 0, 1);
       if (textureMix >= 1) {
         const previous = currentTexture;
@@ -987,7 +983,8 @@
     gl.uniform1f(uniforms.alpha, preset.alpha);
     gl.uniform1f(uniforms.ringCount, preset.ringCount);
     gl.uniform1f(uniforms.waveStyle, preset.renderStyle === "organic-field" ? 1 : 0);
-    const waveEnabled = settings.wave.ENABLE_CUSTOM_WAVE !== false && !desiredVisualModeId();
+    const waveEnabled = settings.wave.ENABLE_CUSTOM_WAVE !== false &&
+      !desiredVisualModeId() && !tweakedDomBackgroundActive();
     gl.uniform1f(uniforms.waveEnabled, waveEnabled ? 1 : 0);
     gl.uniform1f(uniforms.blockGlow, 0);
     for (let index = 0; index < 4; index += 1) {
@@ -1018,14 +1015,10 @@
     removeSettings = PC.settings.subscribe((next) => {
       const textureWasEnabled = settings.wave.USE_COVER_TEXTURE;
       const coverPaletteWasEnabled = ["original", "mixed"].includes(settings.addons.cover2Anim?.colorMode);
-      const tweakedCoverWasEnabled = settings.addons.tweakedYmDesign?.enabled === true &&
-        settings.addons.tweakedYmDesign?.coverBackground !== false;
       settings = next;
       if (gl) syncVisualPass();
       if ((!textureWasEnabled && settings.wave.USE_COVER_TEXTURE) ||
-          (!coverPaletteWasEnabled && ["original", "mixed"].includes(settings.addons.cover2Anim?.colorMode)) ||
-          (!tweakedCoverWasEnabled && settings.addons.tweakedYmDesign?.enabled === true &&
-            settings.addons.tweakedYmDesign?.coverBackground !== false)) {
+          (!coverPaletteWasEnabled && ["original", "mixed"].includes(settings.addons.cover2Anim?.colorMode))) {
         uploadNextCover(PC.track.getCurrent());
       }
       syncRunning();

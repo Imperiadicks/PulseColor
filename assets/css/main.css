@@ -14,11 +14,25 @@ html.colorize-new-wave-page [class*="Content_main"] {
   border-radius: var(--colorize-wave-radius) !important;
 }
 
-html.colorize-new-wave-page [class*="Content_rootOld_newVibe"],
-html.colorize-new-wave-page [class*="Content_rootOld"][class*="newVibe"] {
-  margin-block-end: calc(var(--ym-spacer-size-m, 8px) * -7) !important;
-  margin-block-start: 0 !important;
+html.colorize-new-wave-page [class*="CommonLayout_root"] {
   min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.colorize-new-wave-page [class*="CommonLayout_root"] > aside,
+html.colorize-new-wave-page [class*="CommonLayout_root"] > [class*="Content_root"][class*="newVibe"] {
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+  height: calc(100vh - 1vh) !important;
+  height: calc(100dvh - 1vh) !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 1vh) !important;
+  max-height: calc(100dvh - 1vh) !important;
+  margin-block-start: 0 !important;
+  margin-block-end: 1vh !important;
+}
+
+html.colorize-new-wave-page [class*="Content_root"][class*="newVibe"] {
   overflow: hidden !important;
   border-radius: var(--colorize-wave-radius) !important;
 }
@@ -28,10 +42,8 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] {
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
-  height: 100vh !important;
-  height: 100dvh !important;
-  min-height: 100vh !important;
-  min-height: 100dvh !important;
+  height: 100% !important;
+  min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   box-sizing: border-box !important;
@@ -45,14 +57,13 @@ html.colorize-new-wave-page [class*="VibePage_root"] {
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
-  height: calc(100% - 0.25vh) !important;
-  min-height: calc(100vh - 0.25vh) !important;
-  min-height: calc(100dvh - 0.25vh) !important;
+  height: 100% !important;
+  min-height: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
   border-radius: var(--colorize-wave-radius) !important;
-  transform: translateY(0.25vh) !important;
+  transform: none !important;
 }
 
 html.colorize-new-wave-page .bg-layer,
@@ -159,11 +170,21 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
 }
 .VibeAnimation_enter_active__j0jOl, .VibeAnimation_enter_done__Oi2Kz, .VibeAnimation_exit__ioGXk {opacity: 0 !important;}
 
-.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068, 
-.WsKeF73pWotx9W1tWdYY, 
+.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068,
+.WsKeF73pWotx9W1tWdYY, .QYIUcw5hsJgmlwLrB5fw,
 .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
 .vqAVPWFJlhAOleK_SLk4, .wy8tgXoSb23KtiD3EFWg, .Meta_title__GGBnH{
   color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+.SonataFullscreenControlsDesktop_sonataPlayButton__QXEEp{
+  background-color: var(--ym-controls-color-secondary-card-enabled)
+}
+.QYIUcw5hsJgmlwLrB5fw{
+  --ym-logo-text-color: var(--ym-logo-color-primary-variant) !important
+}
+.VibePlayerControls_withYellowPlayButton__vnoer, .VibePlayerControls_skipButton__z57B_{
+  background-color: hsl(0, 0%, 100%, 0.08) !important;
+  margin-inline: 0.15rem
 }
 .rWukOKAJh5Ga7JuIp62L{
   background: var(--ym-controls-color-secondary-default-enabled);

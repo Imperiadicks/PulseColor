@@ -1295,14 +1295,23 @@ ${buildPaletteAliasBlock()}
     return src ? normalizeCoverURL(src, '1000x1000') : null;
   }
 
+  function isVisibleWaveNode(node) {
+    if (!node?.isConnected) return false;
+    const rect = node.getBoundingClientRect?.();
+    const style = getComputedStyle(node);
+    return !!rect && rect.width > 0 && rect.height > 0 &&
+      rect.bottom > 0 && rect.right > 0 &&
+      rect.top < window.innerHeight && rect.left < window.innerWidth &&
+      style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
   function getNewWaveNode() {
-    return document.querySelector('[class*="VibePage_root"]') ||
-      document.querySelector('[class*="DefaultLayout_rootNewWave"]') ||
-      null;
+    return Array.from(document.querySelectorAll(NEW_WAVE_SELECTOR))
+      .find(isVisibleWaveNode) || null;
   }
 
   function isNewWavePage() {
-    return !!document.querySelector(NEW_WAVE_SELECTOR);
+    return !!getNewWaveNode();
   }
 
   function getVibeNode() {

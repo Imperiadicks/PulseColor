@@ -467,6 +467,57 @@
     return li;
   }
 
+  function makeStatusToggleLi(title, desc, checked, onChange) {
+    const li = document.createElement("li");
+    li.className = "Settings_item__Ksa9h";
+
+    const root = document.createElement("div");
+    root.className = "SettingsListToggleItem_root__yEEYT";
+    root.style.cssText = "display:flex;flex-direction:column;align-items:stretch;gap:8px;";
+
+    const titleId = makeId(title);
+    root.appendChild(makeTextContainer(titleId, title, desc));
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("role", "switch");
+    button.setAttribute("aria-describedby", titleId);
+    button.style.cssText = [
+      "width:100%",
+      "min-height:42px",
+      "padding:0 12px",
+      "border:1px solid var(--ym-controls-color-secondary-outline-enabled_stroke)",
+      "border-radius:10px",
+      "background:var(--ym-controls-color-secondary-default-enabled)",
+      "font:inherit",
+      "font-size:18px",
+      "text-align:left",
+      "cursor:pointer"
+    ].join(";");
+
+    const apply = (value) => {
+      const enabled = !!value;
+      button.setAttribute("aria-checked", enabled ? "true" : "false");
+      button.textContent = enabled ? "Включено" : "Выключено";
+      button.style.color = enabled
+        ? "var(--ym-controls-color-primary-text-enabled, #a8efc1)"
+        : "var(--ym-controls-color-secondary-text-enabled)";
+    };
+    button.__pulseColorApplyChecked = apply;
+    apply(checked);
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const next = button.getAttribute("aria-checked") !== "true";
+      apply(next);
+      try { onChange(next); } catch {}
+    });
+
+    root.appendChild(button);
+    li.appendChild(root);
+    return li;
+  }
+
   function makeRangeLi(title, desc, value, min, max, step, unit, onChange) {
     const li = document.createElement("li");
     li.className = "Settings_item__Ksa9h";
@@ -514,6 +565,83 @@
 
     wrap.append(input, label);
     root.append(text, wrap);
+    li.appendChild(root);
+    return li;
+  }
+
+  function makeInputLi(title, desc, value, min, max, step, unit, onChange) {
+    const li = document.createElement("li");
+    li.className = "Settings_item__Ksa9h";
+
+    const root = document.createElement("div");
+    root.className = "SettingsListToggleItem_root__yEEYT";
+    root.style.cssText = "display:flex;flex-direction:column;align-items:stretch;gap:8px;";
+
+    const titleId = makeId(title);
+    root.appendChild(makeTextContainer(titleId, title, desc));
+
+    const field = document.createElement("div");
+    field.style.cssText = [
+      "display:flex",
+      "align-items:center",
+      "gap:8px",
+      "min-height:42px",
+      "padding:0 12px",
+      "border:1px solid var(--ym-controls-color-secondary-outline-enabled_stroke)",
+      "border-radius:10px",
+      "background:var(--ym-controls-color-secondary-default-enabled)",
+      "transition:border-color .18s ease,box-shadow .18s ease"
+    ].join(";");
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(value);
+    input.setAttribute("aria-describedby", titleId);
+    input.style.cssText = [
+      "width:100%",
+      "min-width:0",
+      "border:0",
+      "outline:0",
+      "background:transparent",
+      "color:var(--ym-controls-color-secondary-text-enabled)",
+      "font:inherit",
+      "font-size:18px",
+      "line-height:1.2"
+    ].join(";");
+
+    const suffix = document.createElement("span");
+    suffix.className = DESC_CLASS;
+    suffix.textContent = unit || "";
+    suffix.style.whiteSpace = "nowrap";
+    if (!unit) suffix.hidden = true;
+
+    const commit = () => {
+      const fallback = clamp(numberOr(value, min), Number(min), Number(max));
+      const numeric = clamp(numberOr(input.value, fallback), Number(min), Number(max));
+      const normalized = Number(step) >= 1 ? Math.round(numeric) : Math.round(numeric * 100) / 100;
+      input.value = String(normalized);
+      try { onChange(normalized); } catch {}
+    };
+
+    input.addEventListener("focus", () => {
+      field.style.borderColor = "var(--ym-controls-color-primary-default-enabled)";
+      field.style.boxShadow = "0 0 0 1px var(--ym-controls-color-primary-default-enabled)";
+    });
+    input.addEventListener("blur", () => {
+      field.style.borderColor = "var(--ym-controls-color-secondary-outline-enabled_stroke)";
+      field.style.boxShadow = "none";
+      commit();
+    });
+    input.addEventListener("change", commit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") input.blur();
+    });
+
+    field.append(input, suffix);
+    root.appendChild(field);
     li.appendChild(root);
     return li;
   }
@@ -703,8 +831,9 @@
       ul.style.overscrollBehavior = "contain";
 
       if (modalKind === "tweakedYmDesign") {
+      ul.style.gap = "8px";
       ul.appendChild(makeGroupSeparator("Tweaked YM Design"));
-      const modeToggle = makeToggleLi(
+      const modeToggle = makeStatusToggleLi(
         "Поддержка Tweaked YM Design",
         "Включает встроенный fullscreen-дизайн Tweaked YM Design.",
         tweaked.enabled === true,
@@ -713,31 +842,13 @@
       modeToggle.querySelector('button[role="switch"]')?.setAttribute("data-pulsecolor-mode-toggle", "tweakedYmDesign");
       ul.appendChild(modeToggle);
       ul.appendChild(makeGroupSeparator("Текст песен"));
-      ul.appendChild(makeToggleLi(
-        "Плавный blur текста",
-        "Размывает неактивные строки относительно текущей строки.",
-        tweaked.lyricsBlur !== false,
-        (value) => setTweaked({ lyricsBlur: !!value })
-      ));
-      ul.appendChild(makeRangeLi("Максимальный blur", "Предел размытия удалённых строк.", numberOr(tweaked.lyricsMaxBlur, 8), 0, 24, 1, "px", (value) => setTweaked({ lyricsMaxBlur: value })));
-      ul.appendChild(makeRangeLi("Шаг blur", "Нарастание размытия на одну строку.", numberOr(tweaked.lyricsBlurStep, 2.2), 0, 8, 0.1, "px", (value) => setTweaked({ lyricsBlurStep: value })));
-      ul.appendChild(makeRangeLi("Мин. прозрачность", "Минимальная видимость удалённых строк.", numberOr(tweaked.lyricsMinOpacity, 0.35), 0.1, 1, 0.01, "", (value) => setTweaked({ lyricsMinOpacity: value })));
-      ul.appendChild(makeRangeLi("Шаг прозрачности", "Уменьшение прозрачности на одну строку.", numberOr(tweaked.lyricsOpacityStep, 0.12), 0, 0.4, 0.01, "", (value) => setTweaked({ lyricsOpacityStep: value })));
-      ul.appendChild(makeRangeLi("Переход текста", "Длительность плавного перехода строк.", numberOr(tweaked.lyricsTransitionMs, 250), 0, 1200, 10, "ms", (value) => setTweaked({ lyricsTransitionMs: Math.round(value) })));
+      ul.appendChild(makeInputLi("Максимальный blur", "Предел размытия удалённых строк.", numberOr(tweaked.lyricsMaxBlur, 8), 0, 24, 1, "px", (value) => setTweaked({ lyricsMaxBlur: value })));
+      ul.appendChild(makeInputLi("Шаг blur", "Нарастание размытия на одну строку.", numberOr(tweaked.lyricsBlurStep, 2.2), 0, 8, 0.1, "px", (value) => setTweaked({ lyricsBlurStep: value })));
+      ul.appendChild(makeInputLi("Мин. прозрачность", "Минимальная видимость удалённых строк.", numberOr(tweaked.lyricsMinOpacity, 0.35), 0.1, 1, 0.01, "", (value) => setTweaked({ lyricsMinOpacity: value })));
+      ul.appendChild(makeInputLi("Шаг прозрачности", "Уменьшение прозрачности на одну строку.", numberOr(tweaked.lyricsOpacityStep, 0.12), 0, 0.4, 0.01, "", (value) => setTweaked({ lyricsOpacityStep: value })));
+      ul.appendChild(makeInputLi("Переход текста", "Длительность плавного перехода строк.", numberOr(tweaked.lyricsTransitionMs, 250), 0, 1200, 10, "ms", (value) => setTweaked({ lyricsTransitionMs: Math.round(value) })));
       ul.appendChild(makeGroupSeparator("Fullscreen-обложка"));
-      ul.appendChild(makeToggleLi(
-        "Фон из обложки",
-        "Рисует размытую обложку общим WebGL-проходом Tweaked.",
-        tweaked.coverBackground !== false,
-        (value) => setTweaked({ coverBackground: !!value })
-      ));
-      ul.appendChild(makeRangeLi("Blur fullscreen-обложки", "Радиус двухпроходного GPU-размытия.", numberOr(tweaked.coverBlur, 28), 0, 64, 1, "px", (value) => setTweaked({ coverBlur: Math.round(value) })));
-      ul.appendChild(makeRangeLi("Насыщенность обложки", "Насыщенность fullscreen-фона.", numberOr(tweaked.coverSaturate, 1.2), 0.5, 2.5, 0.05, "", (value) => setTweaked({ coverSaturate: value })));
-      ul.appendChild(makeRangeLi("Затемнение", "Сила vignette поверх обложки.", numberOr(tweaked.coverOverlay, 0.55), 0, 0.9, 0.01, "", (value) => setTweaked({ coverOverlay: value })));
-      ul.appendChild(makeRangeLi("Crossfade", "Переход между обложками.", numberOr(tweaked.coverCrossfadeMs, 900), 0, 3000, 50, "ms", (value) => setTweaked({ coverCrossfadeMs: Math.round(value) })));
-      ul.appendChild(makeToggleLi("Drift обложки", "Медленное движение WebGL-текстуры.", tweaked.coverMotion !== false, (value) => setTweaked({ coverMotion: !!value })));
-      ul.appendChild(makeRangeLi("Скорость drift", "Длительность полного цикла движения.", +tweaked.coverMotionDuration || 26, 4, 90, 1, "s", (value) => setTweaked({ coverMotionDuration: value })));
-
+      ul.appendChild(makeInputLi("Crossfade", "Переход между обложками.", numberOr(tweaked.coverCrossfadeMs, 900), 0, 3000, 50, "ms", (value) => setTweaked({ coverCrossfadeMs: Math.round(value) })));
       }
 
       if (modalKind === "cover2Anim") {

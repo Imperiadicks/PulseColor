@@ -77,11 +77,11 @@ const disconnect = () => {
 
 ## Встроенные fullscreen-интеграции
 
-PulseColor использует один runtime, canvas и WebGL-контекст для трёх вариантов волны и fullscreen-эффектов. Встроенный проход Cover2Anim воспроизводит процедурные blob-состояния, исходную геометрию движения, pause/play-переход скорости, три источника палитры, интерполяцию цветов, warp, flow и фильтр canvas. Встроенный проход Tweaked YM Design воспроизводит двухслойный crossfade размытой обложки, две траектории drift, saturation, overlay/vignette, progressive blur синхронизированного текста и scoped-правки Vibe-интерфейса. Автоматическое открытие очереди и отдельные циклы сторонних аддонов не переносятся.
+PulseColor использует общий WebGL-runtime для трёх вариантов волны и Cover2Anim. Tweaked YM Design перенесён отдельно в исходной архитектуре аддона: две CSS-background обложки, предварительное canvas-размытие 96×96, crossfade, две drift-траектории, saturation, overlay/vignette, progressive blur синхронизированного текста и scoped-правки Vibe-интерфейса. Его DOM discovery и настройки подключены к общему координатору PulseColor, поэтому второй глобальный observer не создаётся.
 
 Внешние Cover2Anim и Tweaked YM Design отмечены конфликтующими: PulseColor не изменяет их файлы и предоставляет собственную реализацию в общем runtime.
 
-Реализация вдохновлена визуальными принципами Cover2Anim 0.3.5 (автор karst3nz) и Tweaked YM Design 1.0.0 (автор nelifs). Их собранные minified-файлы не включаются в PulseColor: алгоритмы адаптированы под единый WebGL-runtime, общий аудиоанализатор и общий DOM-координатор темы.
+Cover2Anim 0.3.5 (автор karst3nz) адаптирован под единый WebGL-runtime и аудиоанализатор. Tweaked YM Design 1.0.0 (автор nelifs) перенесён целиком по поведению и подключён к lifecycle общего DOM-координатора темы.
 
 ## Ограничение API-ключей
 

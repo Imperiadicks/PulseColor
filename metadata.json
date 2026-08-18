@@ -44,7 +44,7 @@
     "http://127.0.0.1:2007/get_handle"
   ],
   "supportedVersions": [
-    "<5.97.0"
+    ">5.97.0"
   ],
   "id": "419c58cb-75c5-48bf-b053-933f3b81190f",
   "fromPext": true,
