@@ -1,3 +1,8 @@
 tests/
 .agents/
 .codex/
+pulsesync.settings.json
+node_modules/
+dist/
+*.tsbuildinfo
+.idea/

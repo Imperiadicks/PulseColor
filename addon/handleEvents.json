@@ -1,0 +1,333 @@
+{
+    "sections": [
+        {
+            "title": "Основное оформление",
+            "items": [
+                {
+                    "id": "coreBackgroundImage",
+                    "name": "Фоновое изображение",
+                    "description": "Показывать фоновые изображения PulseColor на страницах приложения.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "coreFullVibe",
+                    "name": "Полное оформление «Моей волны»",
+                    "description": "Применять расширенное оформление PulseColor на странице «Моя волна».",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "coreWhiteRecolor",
+                    "name": "Белые элементы интерфейса",
+                    "description": "Принудительно перекрашивать поддерживаемые элементы интерфейса в белый цвет.",
+                    "type": "button",
+                    "bool": false,
+                    "defaultParameter": false
+                }
+            ]
+        },
+        {
+            "title": "Музыкальная волна",
+            "items": [
+                {
+                    "id": "waveEnabled",
+                    "name": "Включить музыкальную волну",
+                    "description": "Показывать реактивный WebGL-фон PulseColor.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "waveVariant",
+                    "name": "Вариант волны",
+                    "description": "Выберите форму и характер движения волны.",
+                    "type": "selector",
+                    "selected": 1,
+                    "options": {
+                        "1": { "event": "variant1", "name": "Вариант 1" },
+                        "2": { "event": "variant2", "name": "Вариант 2" },
+                        "3": { "event": "variant3", "name": "Вариант 3" }
+                    },
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveDriveMode",
+                    "name": "Источник движения",
+                    "description": "RAW реагирует непосредственно на звук, BPM синхронизирует движение с темпом трека.",
+                    "type": "selector",
+                    "selected": 1,
+                    "options": {
+                        "1": { "event": "raw", "name": "RAW" },
+                        "2": { "event": "bpm", "name": "BPM" }
+                    },
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "wavePerformanceMode",
+                    "name": "Производительность волны",
+                    "description": "Эффективный режим снижает нагрузку во время прокрутки, максимальный работает без ограничений.",
+                    "type": "selector",
+                    "selected": 1,
+                    "options": {
+                        "1": { "event": "efficient", "name": "Эффективная" },
+                        "2": { "event": "max", "name": "Максимальная" }
+                    },
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveWebglQuality",
+                    "name": "Качество WebGL",
+                    "description": "Качество рендера общего WebGL-движка.",
+                    "type": "selector",
+                    "selected": 1,
+                    "options": {
+                        "1": { "event": "auto", "name": "Авто" },
+                        "2": { "event": "balanced", "name": "Баланс" },
+                        "3": { "event": "low", "name": "Экономия" }
+                    },
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveDprLimit",
+                    "name": "Предел плотности пикселей",
+                    "description": "Ограничивает внутреннее разрешение WebGL для баланса качества и производительности.",
+                    "type": "slider",
+                    "min": 0.75,
+                    "max": 2,
+                    "step": 0.05,
+                    "value": 1.5,
+                    "defaultParameter": 1.5
+                },
+                {
+                    "id": "waveCoverColors",
+                    "name": "Цвета обложки",
+                    "description": "Использовать палитру текущей обложки трека.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "waveCoverTexture",
+                    "name": "Текстура обложки",
+                    "description": "Добавлять текстуру обложки в WebGL-фон.",
+                    "type": "button",
+                    "bool": false,
+                    "defaultParameter": false
+                },
+                {
+                    "id": "waveLogging",
+                    "name": "Показывать логи",
+                    "description": "Включить диагностические сообщения PulseColor.",
+                    "type": "button",
+                    "bool": false,
+                    "defaultParameter": false
+                },
+                {
+                    "id": "waveBpmHud",
+                    "name": "Показывать BPM",
+                    "description": "Показывать диагностический BPM-индикатор в правом верхнем углу.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "waveReactionIntensity",
+                    "name": "Интенсивность реакции",
+                    "description": "Сила реакции волны на музыку.",
+                    "type": "slider",
+                    "min": 0.1,
+                    "max": 3,
+                    "step": 0.01,
+                    "value": 1,
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveSensitivity",
+                    "name": "Чувствительность",
+                    "description": "Чувствительность аудиоанализа к тихим и громким участкам.",
+                    "type": "slider",
+                    "min": 0.25,
+                    "max": 3,
+                    "step": 0.01,
+                    "value": 1,
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveSmoothness",
+                    "name": "Плавность",
+                    "description": "Сглаживание реакции волны.",
+                    "type": "slider",
+                    "min": 0,
+                    "max": 1,
+                    "step": 0.01,
+                    "value": 0.72,
+                    "defaultParameter": 0.72
+                },
+                {
+                    "id": "waveBrightness",
+                    "name": "Базовая яркость",
+                    "description": "Базовая яркость визуализации.",
+                    "type": "slider",
+                    "min": 1,
+                    "max": 5,
+                    "step": 0.01,
+                    "value": 1,
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "waveMotionEnabled",
+                    "name": "Движение волны",
+                    "description": "Двигать волну как единый слой с мягким дрейфом.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "waveMotionSpeed",
+                    "name": "Скорость движения",
+                    "description": "Скорость мягкого движения волны.",
+                    "type": "slider",
+                    "min": 0.05,
+                    "max": 1,
+                    "step": 0.01,
+                    "value": 0.36,
+                    "defaultParameter": 0.36
+                }
+            ]
+        },
+        {
+            "title": "Tweaked YM Design",
+            "items": [
+                {
+                    "id": "tweakedEnabled",
+                    "name": "Включить Tweaked YM Design",
+                    "description": "Использовать встроенный fullscreen-дизайн Tweaked YM Design вместо Cover2Anim.",
+                    "type": "button",
+                    "bool": false,
+                    "defaultParameter": false
+                },
+                {
+                    "id": "tweakedLyricsMaxBlur",
+                    "name": "Максимальный blur текста",
+                    "description": "Предел размытия удалённых строк текста.",
+                    "type": "input",
+                    "input": "8",
+                    "defaultParameter": "8"
+                },
+                {
+                    "id": "tweakedLyricsBlurStep",
+                    "name": "Шаг blur текста",
+                    "description": "Нарастание размытия на одну строку.",
+                    "type": "input",
+                    "input": "2.2",
+                    "defaultParameter": "2.2"
+                },
+                {
+                    "id": "tweakedLyricsMinOpacity",
+                    "name": "Минимальная прозрачность",
+                    "description": "Минимальная видимость удалённых строк от 0.1 до 1.",
+                    "type": "input",
+                    "input": "0.35",
+                    "defaultParameter": "0.35"
+                },
+                {
+                    "id": "tweakedLyricsOpacityStep",
+                    "name": "Шаг прозрачности",
+                    "description": "Уменьшение прозрачности на одну строку.",
+                    "type": "input",
+                    "input": "0.12",
+                    "defaultParameter": "0.12"
+                },
+                {
+                    "id": "tweakedLyricsTransitionMs",
+                    "name": "Переход текста (мс)",
+                    "description": "Длительность плавного перехода между активными строками.",
+                    "type": "input",
+                    "input": "250",
+                    "defaultParameter": "250"
+                },
+                {
+                    "id": "tweakedCoverCrossfadeMs",
+                    "name": "Crossfade обложки (мс)",
+                    "description": "Длительность плавной смены fullscreen-обложки.",
+                    "type": "input",
+                    "input": "900",
+                    "defaultParameter": "900"
+                }
+            ]
+        },
+        {
+            "title": "Cover2Anim",
+            "items": [
+                {
+                    "id": "cover2AnimEnabled",
+                    "name": "Включить Cover2Anim",
+                    "description": "Использовать встроенный WebGL-режим Cover2Anim вместо Tweaked YM Design.",
+                    "type": "button",
+                    "bool": true,
+                    "defaultParameter": true
+                },
+                {
+                    "id": "cover2AnimColorMode",
+                    "name": "Расцветка Cover2Anim",
+                    "description": "Источник палитры для fullscreen-анимации.",
+                    "type": "selector",
+                    "selected": 1,
+                    "options": {
+                        "1": { "event": "pulsecolor", "name": "Палитра PulseColor" },
+                        "2": { "event": "original", "name": "Обложка" },
+                        "3": { "event": "mixed", "name": "Смешанная" }
+                    },
+                    "defaultParameter": 1
+                },
+                {
+                    "id": "cover2AnimBlobCount",
+                    "name": "Количество blob",
+                    "description": "Количество процедурных цветовых пятен.",
+                    "type": "slider",
+                    "min": 16,
+                    "max": 256,
+                    "step": 1,
+                    "value": 16,
+                    "defaultParameter": 16
+                },
+                {
+                    "id": "cover2AnimWarp",
+                    "name": "Warp",
+                    "description": "Сила нелинейной деформации пятен.",
+                    "type": "slider",
+                    "min": 0,
+                    "max": 1,
+                    "step": 0.01,
+                    "value": 0.14,
+                    "defaultParameter": 0.14
+                },
+                {
+                    "id": "cover2AnimFlow",
+                    "name": "Flow",
+                    "description": "Размах и течение fullscreen-анимации.",
+                    "type": "slider",
+                    "min": 0,
+                    "max": 1,
+                    "step": 0.01,
+                    "value": 0.53,
+                    "defaultParameter": 0.53
+                },
+                {
+                    "id": "cover2AnimSaturation",
+                    "name": "Насыщенность",
+                    "description": "Насыщенность палитры Cover2Anim.",
+                    "type": "slider",
+                    "min": 0.8,
+                    "max": 1.5,
+                    "step": 0.01,
+                    "value": 1.5,
+                    "defaultParameter": 1.5
+                }
+            ]
+        }
+    ]
+}

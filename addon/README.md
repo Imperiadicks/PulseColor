@@ -38,35 +38,38 @@ PulseColor публикует в renderer-контексте PulseSync объе�
 
 ```js
 function connectPulseColorAudio() {
-  const api = window.PulseColorAudioAPI;
-  if (!api || api.version !== 1) return () => {};
+    const api = window.PulseColorAudioAPI
+    if (!api || api.version !== 1) return () => {}
 
-  const format = api.getFormat();
-  const spectrum = new Uint8Array(format.frequencyBinCount);
+    const format = api.getFormat()
+    const spectrum = new Uint8Array(format.frequencyBinCount)
 
-  return api.subscribe((frame) => {
-    api.readFrequencyData(spectrum);
-    // frame.energy, frame.bass, frame.transient, frame.bpm, frame.phase
-    // frame.selectedMode, frame.effectiveMode, frame.bpmStatus, frame.bpmSource
-  }, { maxFps: 30 });
+    return api.subscribe(
+        (frame) => {
+            api.readFrequencyData(spectrum)
+            // frame.energy, frame.bass, frame.transient, frame.bpm, frame.phase
+            // frame.selectedMode, frame.effectiveMode, frame.bpmStatus, frame.bpmSource
+        },
+        { maxFps: 30 },
+    )
 }
 
-let unsubscribeAudio = () => {};
+let unsubscribeAudio = () => {}
 const onReady = () => {
-  unsubscribeAudio();
-  unsubscribeAudio = connectPulseColorAudio();
-};
+    unsubscribeAudio()
+    unsubscribeAudio = connectPulseColorAudio()
+}
 
 if (window.PulseColorAudioAPI) {
-  onReady();
+    onReady()
 } else {
-  window.addEventListener("pulsecolor:audio-api-ready", onReady, { once: true });
+    window.addEventListener('pulsecolor:audio-api-ready', onReady, { once: true })
 }
 
 const disconnect = () => {
-  window.removeEventListener("pulsecolor:audio-api-ready", onReady);
-  unsubscribeAudio();
-};
+    window.removeEventListener('pulsecolor:audio-api-ready', onReady)
+    unsubscribeAudio()
+}
 ```
 
 Событие `pulsecolor:audio-api-ready` отправляется после публикации API, `pulsecolor:audio-api-stopped` — при остановке runtime. Ошибка одного listener не останавливает другие подписки. Аудиокадры и массивы анализа остаются локальными и не отправляются по сети.
@@ -111,7 +114,8 @@ Cover2Anim 0.3.5 (автор karst3nz) адаптирован под едины�
 PulseColor является клиентским внедряемым аддоном и не имеет доверенного серверного хранилища секретов. Поэтому ключ клиентского BPM-провайдера невозможно надёжно скрыть переносом в `localStorage` или другую renderer-конфигурацию. Runtime маскирует ключи и Authorization-данные в диагностических логах; их значения в документации и отчётах не публикуются.
 
 ---
-## Большая благодарнасть проекту [PulseSync](https://pulsesync.dev/) за предоставление возможности создания тем 
+
+## Большая благодарнасть проекту [PulseSync](https://pulsesync.dev/) за предоставление возможности создания тем
 
 ### Источники вдохновлённые на эту тему и частично взятый код из них:
 

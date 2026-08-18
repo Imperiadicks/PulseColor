@@ -11,6 +11,7 @@
     core: "PulseColor.CoreSettings.v1",
     addons: "PulseColor.AddonSupport.v1"
   });
+  const CATALOG_SETTINGS_NAME = "PulseColor";
 
   const DEFAULT_WAVE = Object.freeze({
     ENABLE_CUSTOM_WAVE: true,
@@ -295,6 +296,145 @@
     }
   };
 
+  const unwrapCatalogSetting = (entry, fallback) => {
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      if (typeof entry.value !== "undefined") return entry.value;
+      if (typeof entry.default !== "undefined") return entry.default;
+    }
+    return typeof entry !== "undefined" ? entry : fallback;
+  };
+
+  const readCatalogBool = (raw, key, fallback) => {
+    const value = unwrapCatalogSetting(raw?.[key], fallback);
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["false", "0", "off", "no"].includes(normalized)) return false;
+      if (["true", "1", "on", "yes"].includes(normalized)) return true;
+    }
+    return Boolean(value);
+  };
+
+  const readCatalogNumber = (raw, key, fallback) => {
+    const value = Number(unwrapCatalogSetting(raw?.[key], fallback));
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const readCatalogChoice = (raw, key, choices, fallback) => {
+    const value = unwrapCatalogSetting(raw?.[key], fallback);
+    const text = String(value ?? "").trim();
+    if (choices.includes(text)) return text;
+    if (/^\d+$/.test(text)) {
+      const index = Number(text);
+      if (index >= 1 && index <= choices.length) return choices[index - 1];
+      if (index >= 0 && index < choices.length) return choices[index];
+    }
+    return fallback;
+  };
+
+  const readCatalogSettings = (raw) => {
+    const current = settings.get();
+    return {
+      core: {
+        enableBackgroundImage: readCatalogBool(raw, "coreBackgroundImage", current.core.enableBackgroundImage),
+        enableFullVibe: readCatalogBool(raw, "coreFullVibe", current.core.enableFullVibe),
+        forceWhiteRecolor: readCatalogBool(raw, "coreWhiteRecolor", current.core.forceWhiteRecolor)
+      },
+      wave: {
+        ENABLE_CUSTOM_WAVE: readCatalogBool(raw, "waveEnabled", current.wave.ENABLE_CUSTOM_WAVE),
+        WAVE_VARIANT: readCatalogChoice(raw, "waveVariant", ["variant1", "variant2", "variant3"], current.wave.WAVE_VARIANT),
+        WAVE_DRIVE_MODE: readCatalogChoice(raw, "waveDriveMode", ["raw", "bpm"], current.wave.WAVE_DRIVE_MODE),
+        WAVE_PERFORMANCE_MODE: readCatalogChoice(raw, "wavePerformanceMode", ["efficient", "max"], current.wave.WAVE_PERFORMANCE_MODE),
+        WEBGL_QUALITY: readCatalogChoice(raw, "waveWebglQuality", ["auto", "balanced", "low"], current.wave.WEBGL_QUALITY),
+        WEBGL_DPR_LIMIT: readCatalogNumber(raw, "waveDprLimit", current.wave.WEBGL_DPR_LIMIT),
+        USE_COVER_COLORS: readCatalogBool(raw, "waveCoverColors", current.wave.USE_COVER_COLORS),
+        USE_COVER_TEXTURE: readCatalogBool(raw, "waveCoverTexture", current.wave.USE_COVER_TEXTURE),
+        REACTION_INTENSITY: readCatalogNumber(raw, "waveReactionIntensity", current.wave.REACTION_INTENSITY),
+        SENSITIVITY: readCatalogNumber(raw, "waveSensitivity", current.wave.SENSITIVITY),
+        SMOOTHNESS: readCatalogNumber(raw, "waveSmoothness", current.wave.SMOOTHNESS),
+        BRIGHTNESS_BASE: readCatalogNumber(raw, "waveBrightness", current.wave.BRIGHTNESS_BASE),
+        MOTION_ENABLED: readCatalogBool(raw, "waveMotionEnabled", current.wave.MOTION_ENABLED),
+        MOTION_SPEED: readCatalogNumber(raw, "waveMotionSpeed", current.wave.MOTION_SPEED)
+      },
+      tweakedYmDesign: {
+        enabled: readCatalogBool(raw, "tweakedEnabled", current.addons.tweakedYmDesign.enabled),
+        lyricsMaxBlur: readCatalogNumber(raw, "tweakedLyricsMaxBlur", current.addons.tweakedYmDesign.lyricsMaxBlur),
+        lyricsBlurStep: readCatalogNumber(raw, "tweakedLyricsBlurStep", current.addons.tweakedYmDesign.lyricsBlurStep),
+        lyricsMinOpacity: readCatalogNumber(raw, "tweakedLyricsMinOpacity", current.addons.tweakedYmDesign.lyricsMinOpacity),
+        lyricsOpacityStep: readCatalogNumber(raw, "tweakedLyricsOpacityStep", current.addons.tweakedYmDesign.lyricsOpacityStep),
+        lyricsTransitionMs: readCatalogNumber(raw, "tweakedLyricsTransitionMs", current.addons.tweakedYmDesign.lyricsTransitionMs),
+        coverCrossfadeMs: readCatalogNumber(raw, "tweakedCoverCrossfadeMs", current.addons.tweakedYmDesign.coverCrossfadeMs)
+      },
+      cover2Anim: {
+        enabled: readCatalogBool(raw, "cover2AnimEnabled", current.addons.cover2Anim.enabled),
+        colorMode: readCatalogChoice(raw, "cover2AnimColorMode", ["pulsecolor", "original", "mixed"], current.addons.cover2Anim.colorMode),
+        blobCount: readCatalogNumber(raw, "cover2AnimBlobCount", current.addons.cover2Anim.blobCount),
+        warp: readCatalogNumber(raw, "cover2AnimWarp", current.addons.cover2Anim.warp),
+        flow: readCatalogNumber(raw, "cover2AnimFlow", current.addons.cover2Anim.flow),
+        saturation: readCatalogNumber(raw, "cover2AnimSaturation", current.addons.cover2Anim.saturation)
+      },
+      logging: readCatalogBool(raw, "waveLogging", localStorage.getItem("osuLogEnabled") === "1"),
+      bpmHud: readCatalogBool(raw, "waveBpmHud", (localStorage.getItem("osuShowBPM") ?? "1") !== "0")
+    };
+  };
+
+  let catalogSettingsUnsubscribe = null;
+  let catalogSettingsProbe = 0;
+  let catalogSettingsBound = false;
+  let previousCatalogModes = null;
+
+  const applyCatalogSettings = (raw, source = "catalog") => {
+    if (!raw || typeof raw !== "object") return;
+    const next = readCatalogSettings(raw);
+    settings.updateCore(next.core, source);
+    settings.updateWave(next.wave, source);
+
+    const requestedModes = {
+      tweaked: next.tweakedYmDesign.enabled === true,
+      cover: next.cover2Anim.enabled === true
+    };
+    let preferred = state.addons.tweakedYmDesign.enabled ? "tweakedYmDesign" : "cover2Anim";
+    if (previousCatalogModes) {
+      if (!previousCatalogModes.tweaked && requestedModes.tweaked) preferred = "tweakedYmDesign";
+      else if (!previousCatalogModes.cover && requestedModes.cover) preferred = "cover2Anim";
+      else if (previousCatalogModes.tweaked && !requestedModes.tweaked) preferred = "cover2Anim";
+      else if (previousCatalogModes.cover && !requestedModes.cover) preferred = "tweakedYmDesign";
+    }
+    if (!requestedModes.tweaked) preferred = "cover2Anim";
+    if (!requestedModes.cover) preferred = "tweakedYmDesign";
+    if (!requestedModes.tweaked && !requestedModes.cover) preferred = "none";
+
+    next.tweakedYmDesign.enabled = preferred === "tweakedYmDesign" && requestedModes.tweaked;
+    next.cover2Anim.enabled = preferred === "cover2Anim" && requestedModes.cover;
+    settings.updateAddons({
+      tweakedYmDesign: next.tweakedYmDesign,
+      cover2Anim: next.cover2Anim
+    }, source);
+    previousCatalogModes = requestedModes;
+
+    localStorage.setItem("osuLogEnabled", next.logging ? "1" : "0");
+    localStorage.setItem("osuShowBPM", next.bpmHud ? "1" : "0");
+    window.PulseColorWaveUI?.setLogEnabled?.(next.logging);
+    window.PulseColorWaveUI?.setBpmHudEnabled?.(next.bpmHud);
+  };
+
+  const bindCatalogSettings = () => {
+    if (catalogSettingsBound) return true;
+    try {
+      const store = window.pulsesyncApi?.getSettings?.(CATALOG_SETTINGS_NAME);
+      if (!store || typeof store.getCurrent !== "function") return false;
+      applyCatalogSettings(store.getCurrent(), "catalog-initial");
+      const unsubscribe = typeof store.onChange === "function"
+        ? store.onChange((next) => applyCatalogSettings(next, "catalog-change"))
+        : null;
+      catalogSettingsUnsubscribe = typeof unsubscribe === "function" ? unsubscribe : null;
+      catalogSettingsBound = true;
+      return true;
+    } catch (error) {
+      logger.warn("catalog-settings-bind", error);
+      return false;
+    }
+  };
+
   const syncBeatDriverConfig = () => {
     const target = window.BeatDriverConfig || {};
     for (const key of Object.keys(target)) {
@@ -329,12 +469,25 @@
     settingsBridgeBound = true;
     window.addEventListener("pulsecolor:beatDriverConfigChanged", handleLegacyWaveSettings);
     window.addEventListener("pulsecolor:coreSettingsChanged", handleLegacyCoreSettings);
+    if (!bindCatalogSettings()) {
+      catalogSettingsProbe = window.setInterval(() => {
+        if (!bindCatalogSettings()) return;
+        clearInterval(catalogSettingsProbe);
+        catalogSettingsProbe = 0;
+      }, 500);
+    }
   };
   const stopSettingsBridge = () => {
     if (!settingsBridgeBound) return;
     settingsBridgeBound = false;
     window.removeEventListener("pulsecolor:beatDriverConfigChanged", handleLegacyWaveSettings);
     window.removeEventListener("pulsecolor:coreSettingsChanged", handleLegacyCoreSettings);
+    if (catalogSettingsProbe) clearInterval(catalogSettingsProbe);
+    catalogSettingsProbe = 0;
+    catalogSettingsUnsubscribe?.();
+    catalogSettingsUnsubscribe = null;
+    catalogSettingsBound = false;
+    previousCatalogModes = null;
   };
 
   const frameListeners = new Map();

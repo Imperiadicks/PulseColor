@@ -1383,6 +1383,8 @@
     close: closeModal,
     setCfgValue,
     updateCustomWave,
+    setLogEnabled,
+    setBpmHudEnabled,
   });
 
   /* ===================== lifecycle ===================== */
@@ -1405,7 +1407,6 @@
     setBpmHudEnabled(getBpmHudEnabled());
     updateCustomWave(true);
     removeBpmSubscription = window.PulseColor.bpm?.subscribe?.((state) => updateBpmHud(state)) || null;
-    removeInjector = window.PulseColorSettingsUI.register("wave-settings", tickInject);
   };
 
   const stopService = () => {
