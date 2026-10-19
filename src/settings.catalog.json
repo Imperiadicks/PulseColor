@@ -1,0 +1,413 @@
+{
+  "sections": [
+    {
+      "title": "Оформление",
+      "items": [
+        {
+          "id": "panelOpacity",
+          "name": "Плотность фона панелей",
+          "description": "Общий фон основной области, боковой панели и плеера. От 0% до 20%; чем больше значение, тем плотнее цвет. По умолчанию 10%.",
+          "type": "slider",
+          "min": 0,
+          "max": 20,
+          "step": 1,
+          "defaultParameter": 10
+        },
+        {
+          "id": "coreColorSource",
+          "name": "Раскраска",
+          "description": "Источник основного цвета интерфейса и волны. Если выбранного изображения нет или оно заменено заглушкой, используется второй источник. При появлении выбранного изображения его приоритет восстанавливается. Ручной цвет имеет приоритет.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "album",
+              "name": "По обложке альбома"
+            },
+            "2": {
+              "event": "artist",
+              "name": "По фото исполнителя"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "coreBackgroundImage",
+          "name": "Фоновое изображение",
+          "description": "Показывать фоновое изображение на страницах приложения.",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "coreFullVibe",
+          "name": "Оформление страницы «Моя волна»",
+          "description": "Применять оформление PulseColor к странице «Моя волна».",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "coreMinimalVibe",
+          "name": "Только плеер в «Моей волне»",
+          "description": "Скрыть рекомендации, фото исполнителя и дополнительный текст. Оставить только плеер.",
+          "type": "button",
+          "bool": false,
+          "defaultParameter": false
+        },
+        {
+          "id": "coreWhiteRecolor",
+          "name": "Чёрно-белая палитра",
+          "description": "Использовать белый как источник палитры вместо обложки, фото исполнителя или ручного цвета.",
+          "type": "button",
+          "bool": false,
+          "defaultParameter": false
+        },
+        {
+          "id": "fullscreenVariant",
+          "name": "Оформление полноэкранного плеера",
+          "description": "Выберите оформление полноэкранного плеера.",
+          "type": "selector",
+          "options": {
+            "1": {
+              "event": "standard",
+              "name": "Стандартное"
+            },
+            "2": {
+              "event": "tweakedYmDesign",
+              "name": "Tweaked YM Design"
+            },
+            "3": {
+              "event": "cover2Anim",
+              "name": "Cover2Anim"
+            }
+          },
+          "defaultParameter": "3"
+        }
+      ]
+    },
+    {
+      "title": "Волна",
+      "items": [
+        {
+          "id": "waveEnabled",
+          "name": "Включить волну",
+          "description": "Показывать выбранный вариант волны: до 30 кадров/с. После остановки — 2 секунды без снижения частоты, затем плавное замедление до 10 кадров/с с медленным движением.",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "waveVariant",
+          "name": "Вариант волны",
+          "description": "Форма волны: круговая 2D, объёмная 3D или свечение вдоль краёв окна.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "variant1",
+              "name": "Круговая · 2D"
+            },
+            "2": {
+              "event": "silk3d",
+              "name": "Объёмная · 3D"
+            },
+            "3": {
+              "event": "edge2d",
+              "name": "По краям окна · 2D"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "wavePaletteMode",
+          "name": "Палитра волны",
+          "description": "Один основной цвет, основной со случайным дополнительным, три цвета из обложки альбома или переливы с контрастными оттенками. Случайный цвет сохраняется на время трека.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "single",
+              "name": "Один цвет"
+            },
+            "2": {
+              "event": "duo",
+              "name": "Основной + случайный"
+            },
+            "3": {
+              "event": "artwork3",
+              "name": "Три цвета из обложки"
+            },
+            "4": {
+              "event": "legacy",
+              "name": "Контрастные переливы"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveDriveMode",
+          "name": "Реакция волны",
+          "description": "По звуку — реакция на частоты и громкость музыки. По темпу — пульсация по BPM, когда темп доступен.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "raw",
+              "name": "По звуку"
+            },
+            "2": {
+              "event": "bpm",
+              "name": "По темпу (BPM)"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveWebglQuality",
+          "name": "Качество отрисовки",
+          "description": "Предел разрешения волны: 1,2 / 0,9 / 0,45 млн пикселей. В 3D размер промежуточного буфера — до 384 / 320 / 224 пикселей по длинной стороне. Фактическое разрешение зависит от окна и DPR. Все уровни — до 30 кадров/с. Для Cover2Anim меняется масштаб рендера: 100 / 82 / 65%, без указанных лимитов пикселей.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "auto",
+              "name": "Высокое · до 1,2 Мп"
+            },
+            "2": {
+              "event": "balanced",
+              "name": "Среднее · до 0,9 Мп"
+            },
+            "3": {
+              "event": "low",
+              "name": "Низкое · до 0,45 Мп"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveDprLimit",
+          "name": "Плотность пикселей (DPR)",
+          "description": "Максимальное число пикселей рендера на один пиксель интерфейса. Например, DPR 1,5 даёт до 1,5× по каждой стороне. Качество отрисовки может дополнительно снизить разрешение.",
+          "type": "slider",
+          "min": 0.75,
+          "max": 2,
+          "step": 0.05,
+          "value": 1.5,
+          "defaultParameter": 1.5
+        },
+        {
+          "id": "waveCoverColors",
+          "name": "Цвета волны из изображений",
+          "description": "Использовать выбранную палитру волны из обложки или фото исполнителя. При отключении используется нейтральная палитра.",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "waveCoverTexture",
+          "name": "Загрузка текстуры обложки",
+          "description": "Загружать обложку в видеотекстуру для полноэкранных эффектов. Обычные 2D- и 3D-волны не накладывают изображение обложки на волну.",
+          "type": "button",
+          "bool": false,
+          "defaultParameter": false
+        },
+        {
+          "id": "waveLogging",
+          "name": "Диагностические сообщения",
+          "description": "Показывать сообщения для проверки работы PulseColor.",
+          "type": "button",
+          "bool": false,
+          "defaultParameter": false
+        },
+        {
+          "id": "waveBpmHud",
+          "name": "Индикатор темпа (BPM)",
+          "description": "Показывать индикатор BPM и состояния аудиоанализа в правом верхнем углу.",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "waveReactionIntensity",
+          "name": "Сила реакции",
+          "description": "Сила реакции волны на музыку.",
+          "type": "slider",
+          "min": 0.1,
+          "max": 3,
+          "step": 0.01,
+          "value": 1,
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveSensitivity",
+          "name": "Чувствительность к звуку",
+          "description": "Чувствительность аудиоанализа к тихим и громким участкам.",
+          "type": "slider",
+          "min": 0.25,
+          "max": 3,
+          "step": 0.01,
+          "value": 1,
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveSmoothness",
+          "name": "Сглаживание реакции",
+          "description": "Сглаживание реакции волны.",
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "value": 0.72,
+          "defaultParameter": 0.72
+        },
+        {
+          "id": "waveBrightness",
+          "name": "Яркость волны",
+          "description": "Общий множитель яркости волны.",
+          "type": "slider",
+          "min": 1,
+          "max": 5,
+          "step": 0.01,
+          "value": 1,
+          "defaultParameter": 1
+        },
+        {
+          "id": "waveMotionEnabled",
+          "name": "Движение волны",
+          "description": "Включить движение и изменение формы волны.",
+          "type": "button",
+          "bool": true,
+          "defaultParameter": true
+        },
+        {
+          "id": "waveMotionSpeed",
+          "name": "Скорость движения",
+          "description": "Скорость изменения формы и движения волны.",
+          "type": "slider",
+          "min": 0.05,
+          "max": 1,
+          "step": 0.01,
+          "value": 0.36,
+          "defaultParameter": 0.36
+        }
+      ]
+    },
+    {
+      "title": "Текст песен",
+      "items": [
+        {
+          "id": "tweakedLyricsMaxBlur",
+          "name": "Максимальное размытие строк",
+          "description": "Размытие строк, наиболее удалённых от текущей.",
+          "type": "input",
+          "input": "8",
+          "defaultParameter": "8"
+        },
+        {
+          "id": "tweakedLyricsBlurStep",
+          "name": "Шаг размытия строк",
+          "description": "Насколько увеличивать размытие с каждой строкой дальше от текущей.",
+          "type": "input",
+          "input": "2.2",
+          "defaultParameter": "2.2"
+        },
+        {
+          "id": "tweakedLyricsMinOpacity",
+          "name": "Минимальная непрозрачность строк",
+          "description": "Видимость удалённых строк: 0,1 — почти прозрачные, 1 — полностью видимые.",
+          "type": "input",
+          "input": "0.35",
+          "defaultParameter": "0.35"
+        },
+        {
+          "id": "tweakedLyricsOpacityStep",
+          "name": "Шаг затухания строк",
+          "description": "Насколько уменьшать непрозрачность с каждой строкой дальше от текущей.",
+          "type": "input",
+          "input": "0.12",
+          "defaultParameter": "0.12"
+        },
+        {
+          "id": "tweakedLyricsTransitionMs",
+          "name": "Длительность перехода строк (мс)",
+          "description": "Длительность плавного перехода между активными строками.",
+          "type": "input",
+          "input": "250",
+          "defaultParameter": "250"
+        }
+      ]
+    },
+    {
+      "title": "Cover2Anim",
+      "items": [
+        {
+          "id": "cover2AnimColorMode",
+          "name": "Палитра Cover2Anim",
+          "description": "Источник цветов для анимации Cover2Anim.",
+          "type": "selector",
+          "selected": 1,
+          "options": {
+            "1": {
+              "event": "pulsecolor",
+              "name": "Цвет интерфейса"
+            },
+            "2": {
+              "event": "original",
+              "name": "Цвета обложки"
+            },
+            "3": {
+              "event": "mixed",
+              "name": "Смешанная палитра"
+            }
+          },
+          "defaultParameter": 1
+        },
+        {
+          "id": "cover2AnimBlobCount",
+          "name": "Количество цветовых пятен",
+          "description": "Количество процедурных цветовых пятен.",
+          "type": "slider",
+          "min": 16,
+          "max": 256,
+          "step": 1,
+          "value": 16,
+          "defaultParameter": 16
+        },
+        {
+          "id": "cover2AnimWarp",
+          "name": "Деформация пятен",
+          "description": "Сила нелинейной деформации пятен.",
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "value": 0.14,
+          "defaultParameter": 0.14
+        },
+        {
+          "id": "cover2AnimFlow",
+          "name": "Скорость течения",
+          "description": "Скорость движения цветовых пятен в Cover2Anim.",
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "value": 0.53,
+          "defaultParameter": 0.53
+        },
+        {
+          "id": "cover2AnimSaturation",
+          "name": "Насыщенность цветов",
+          "description": "Насыщенность палитры Cover2Anim.",
+          "type": "slider",
+          "min": 0.8,
+          "max": 1.5,
+          "step": 0.01,
+          "value": 1.5,
+          "defaultParameter": 1.5
+        }
+      ]
+    }
+  ]
+}

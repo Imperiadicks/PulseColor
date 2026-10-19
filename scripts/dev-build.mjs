@@ -1,193 +1,139 @@
-import path from 'node:path'
-import { spawn } from 'node:child_process'
-import { promises as fs } from 'node:fs'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import path from "node:path";
+import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
-import { getPulseSyncAddonDir } from './pulsesync-paths.mjs'
+import {
+  formatDeliveryResult,
+  notifyClient,
+  readLocalModules,
+} from "./addon-delivery.mjs";
+import { createModuleBuilder } from "./module-build.mjs";
+import { buildFamily } from "./build-family.mjs";
+import { deliverFamily, readAddonFamily } from "./addon-family.mjs";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const viteBin = path.join(rootDir, 'node_modules', 'vite', 'bin', 'vite.js')
-const outDir = path.resolve(getPulseSyncAddonDir())
-const inPlaceBuild = outDir === rootDir
-const addonStaticDir = path.join(rootDir, 'addon')
-const addonConfigPath = path.join(rootDir, 'addon.config.mjs')
-const sourceHandleEventsPath = path.join(addonStaticDir, 'handleEvents.json')
-const installedHandleEventsPath = path.join(outDir, 'handleEvents.json')
+const scriptRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const rootDir = process.argv[2] ? path.resolve(process.argv[2]) : scriptRoot;
+const buildRoot = path.join(rootDir, ".pulsesync-dev");
+const ignored = new Set([
+  "node_modules",
+  ".git",
+  ".pulsesync-dev",
+  "dist",
+  "target",
+]);
+const modules = createModuleBuilder(rootDir);
+let stopping = false;
+let busy = false;
+let attempted = "";
+let lastDeliveries = [];
+let lastClientCheck = 0;
+const lastMessages = new Map();
+let retryAfter = 0;
 
-function sanitizeMetadataValue(value) {
-    if (Array.isArray(value)) {
-        return value.map((entry) => String(entry).trim()).filter(Boolean)
-    }
-
-    return typeof value === 'string' ? value.trim() : ''
-}
-
-async function loadAddonConfig() {
-    const configUrl = new URL(pathToFileURL(addonConfigPath).href)
-    configUrl.searchParams.set('ts', String(Date.now()))
-    const module = await import(configUrl.href)
-
-    return module.default
-}
-
-async function createMetadata() {
-    const addonConfig = await loadAddonConfig()
-
-    return {
-        id: addonConfig.id,
-        name: addonConfig.name,
-        description: addonConfig.description,
-        version: addonConfig.version,
-        author: sanitizeMetadataValue(addonConfig.author),
-        type: addonConfig.type,
-        image: addonConfig.image || '',
-        banner: addonConfig.banner || '',
-        libraryLogo: addonConfig.libraryLogo || '',
-        css: 'script.css',
-        script: 'script.js',
-        tags: Array.isArray(addonConfig.tags) ? addonConfig.tags : [],
-        dependencies: Array.isArray(addonConfig.dependencies) ? addonConfig.dependencies : [],
-        conflictsWith: Array.isArray(addonConfig.conflictsWith) ? addonConfig.conflictsWith : [],
-        allowedUrls: Array.isArray(addonConfig.allowedUrls) ? addonConfig.allowedUrls : [],
-        supportedVersions: Array.isArray(addonConfig.supportedVersions) ? addonConfig.supportedVersions : [],
-    }
-}
-
-async function collectWatchEntries(dir, bucket = []) {
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-
+async function sourceSignature() {
+  const outputs = new Set(
+    Object.values((await readLocalModules(rootDir)) ?? {}).map((ref) =>
+      path.resolve(rootDir, ref.path),
+    ),
+  );
+  const hash = createHash("sha256");
+  async function visit(directory) {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-        const stat = await fs.stat(fullPath)
-
-        if (entry.isDirectory()) {
-            await collectWatchEntries(fullPath, bucket)
-        } else {
-            bucket.push(`${path.relative(rootDir, fullPath)}:${stat.mtimeMs}:${stat.size}`)
-        }
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!ignored.has(entry.name)) await visit(file);
+      } else if (
+        entry.isFile() &&
+        !outputs.has(file) &&
+        !entry.name.endsWith(".tsbuildinfo") &&
+        !entry.name.endsWith(".log")
+      ) {
+        hash.update(path.relative(rootDir, file));
+        hash.update(await fs.readFile(file));
+      }
     }
-
-    return bucket
+  }
+  await visit(rootDir);
+  return hash.digest("hex");
 }
 
-async function buildStaticSignature() {
-    const entries = await collectWatchEntries(addonStaticDir)
-    const addonConfigStat = await fs.stat(addonConfigPath)
-
-    entries.push(`${path.relative(rootDir, addonConfigPath)}:${addonConfigStat.mtimeMs}:${addonConfigStat.size}`)
-    return entries.sort().join('|')
+function report(result) {
+  const message = formatDeliveryResult(result);
+  if (message !== lastMessages.get(result.directoryName)) console.log(message);
+  lastMessages.set(result.directoryName, message);
 }
 
-async function readFileIfExists(filePath) {
-    try {
-        return await fs.readFile(filePath, 'utf8')
-    } catch (error) {
-        if (error?.code === 'ENOENT') return null
-        throw error
+async function tick() {
+  if (busy || stopping || Date.now() < retryAfter) return;
+  busy = true;
+  let delivering = false;
+  try {
+    const signature = await sourceSignature();
+    if (signature === attempted) {
+      if (lastDeliveries.length && Date.now() - lastClientCheck >= 5000) {
+        lastClientCheck = Date.now();
+        for (const result of lastDeliveries)
+          report({
+            ...result,
+            client:
+              result.type !== "web-addon"
+                ? result.client
+                : await notifyClient(result.directoryName),
+          });
+      }
+      return;
     }
-}
-
-async function getStatIfExists(filePath) {
-    try {
-        return await fs.stat(filePath)
-    } catch (error) {
-        if (error?.code === 'ENOENT') return null
-        throw error
+    attempted = signature;
+    const configs = await readAddonFamily(rootDir, signature);
+    for (const config of configs) {
+      const name = String(config.directoryName ?? "");
+      if (!name || name === "." || name === ".." || /[\\/:]/.test(name))
+        throw new Error("Invalid addon directoryName");
     }
+    if (
+      lastDeliveries.length &&
+      configs.map((config) => config.directoryName).join("|") !==
+        lastDeliveries.map((result) => result.directoryName).join("|")
+    )
+      throw new Error(
+        "directoryName changed. Stop dev before changing addon identities.",
+      );
+    await modules.update({ force: true, strict: true });
+    if (stopping || !modules.ready) return;
+    await buildFamily(rootDir, { mode: "development", outputRoot: buildRoot });
+    if (stopping || !modules.ready || (await sourceSignature()) !== signature)
+      return;
+    delivering = true;
+    lastDeliveries = await deliverFamily(buildRoot, configs, rootDir);
+    lastClientCheck = Date.now();
+    for (const result of lastDeliveries) report(result);
+  } catch (error) {
+    if (delivering) attempted = "";
+    retryAfter = Date.now() + 2000;
+    if (!stopping)
+      console.error(
+        `Не удалось обновить аддон: ${error instanceof Error ? error.message : String(error)}`,
+      );
+  } finally {
+    busy = false;
+  }
 }
 
-async function syncStaticAddonArtifacts() {
-    const metadata = await createMetadata()
-    const currentAddonConfig = await loadAddonConfig()
-    const nextDirectoryName = String(currentAddonConfig?.directoryName || '').trim()
-
-    if (nextDirectoryName && nextDirectoryName !== path.basename(outDir) && warnedDirectoryName !== nextDirectoryName) {
-        warnedDirectoryName = nextDirectoryName
-        console.warn(
-            `addon.config.mjs directoryName changed to "${nextDirectoryName}". Restart yarn dev to switch output.`,
-        )
-    }
-
-    await fs.mkdir(outDir, { recursive: true })
-    await fs.cp(addonStaticDir, outDir, { recursive: true, force: true })
-    await fs.writeFile(path.join(outDir, 'metadata.json'), JSON.stringify(metadata, null, 4) + '\n', 'utf8')
+console.log(
+  "Разработка аддона: успешные сборки автоматически доставляются в клиент. Ctrl+C — выход.",
+);
+const timer = setInterval(() => void tick(), 500);
+function stop() {
+  stopping = true;
+  clearInterval(timer);
+  modules.stop();
 }
-
-async function syncInstalledHandleEventsIfNeeded({ onlyWhenNewer = false } = {}) {
-    const [installedStat, sourceStat] = await Promise.all([
-        getStatIfExists(installedHandleEventsPath),
-        getStatIfExists(sourceHandleEventsPath),
-    ])
-
-    if (!installedStat || (onlyWhenNewer && sourceStat && installedStat.mtimeMs <= sourceStat.mtimeMs)) return
-
-    const installedSignature = `${installedStat.mtimeMs}:${installedStat.size}`
-    if (!onlyWhenNewer && installedSignature === lastInstalledHandleEventsSignature) return
-
-    lastInstalledHandleEventsSignature = installedSignature
-    const [installedHandleEvents, sourceHandleEvents] = await Promise.all([
-        readFileIfExists(installedHandleEventsPath),
-        readFileIfExists(sourceHandleEventsPath),
-    ])
-
-    if (installedHandleEvents == null || installedHandleEvents === sourceHandleEvents) return
-
-    await fs.writeFile(sourceHandleEventsPath, installedHandleEvents, 'utf8')
-    lastStaticSignature = await buildStaticSignature()
-    console.log('Synced handleEvents.json from installed addon back to source')
-}
-
-console.log(`Watching addon build into ${outDir}`)
-if (inPlaceBuild) {
-    console.log('In-place mode is safe: Vite will update generated files without emptying the source repository.')
-}
-
-let lastStaticSignature = ''
-let lastInstalledHandleEventsSignature = ''
-let staticSyncPromise = Promise.resolve()
-let warnedDirectoryName = ''
-
-await syncInstalledHandleEventsIfNeeded({ onlyWhenNewer: true })
-
-const syncStaticIfNeeded = async (force) => {
-    const nextSignature = await buildStaticSignature()
-    if (!force && nextSignature === lastStaticSignature) return
-
-    lastStaticSignature = nextSignature
-    await syncStaticAddonArtifacts()
-    const installedStat = await getStatIfExists(installedHandleEventsPath)
-    lastInstalledHandleEventsSignature = installedStat ? `${installedStat.mtimeMs}:${installedStat.size}` : ''
-    console.log('Synced static addon files')
-}
-
-await syncStaticIfNeeded(true)
-
-const child = spawn(process.execPath, [viteBin, 'build', '--watch', '--mode', 'development'], {
-    cwd: rootDir,
-    env: {
-        ...process.env,
-        PULSESYNC_ADDON_OUT_DIR: outDir,
-        PULSESYNC_ADDON_IN_PLACE: inPlaceBuild ? '1' : '0',
-    },
-    stdio: 'inherit',
-})
-
-const staticSyncTimer = setInterval(() => {
-    staticSyncPromise = staticSyncPromise
-        .then(() => syncInstalledHandleEventsIfNeeded())
-        .then(() => syncStaticIfNeeded(false))
-        .catch((error) => console.error('Failed to sync static addon files:', error))
-}, 500)
-
-const stop = (signal) => {
-    clearInterval(staticSyncTimer)
-    child.kill(signal)
-}
-
-process.on('SIGINT', () => stop('SIGINT'))
-process.on('SIGTERM', () => stop('SIGTERM'))
-
-child.on('exit', (code) => {
-    clearInterval(staticSyncTimer)
-    process.exitCode = code ?? 0
-})
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
+await tick();

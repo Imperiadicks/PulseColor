@@ -1,0 +1,12 @@
+node_modules/
+out/
+pnpm-lock.yaml
+.tsbuildinfo
+src/data
+addon/
+assets/
+docs/
+examples/
+.idea/
+.pulsesync-dev/
+dist/

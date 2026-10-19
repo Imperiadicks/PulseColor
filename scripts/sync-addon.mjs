@@ -1,61 +1,44 @@
-import path from 'node:path'
-import { promises as fs } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import addonConfig from '../addon.config.mjs'
-import { getPulseSyncAddonDir, getPulseSyncAddonsDir } from './pulsesync-paths.mjs'
+import { formatDeliveryResult } from "./addon-delivery.mjs";
+import { readAddonFamily, deliverFamily } from "./addon-family.mjs";
+import { createModuleBuilder } from "./module-build.mjs";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const sourceDir = path.join(rootDir, 'dist', addonConfig.directoryName)
-const runtimeSettingsFile = 'pulsesync.settings.json'
-
-async function copyIntoSourceRepository(targetDir) {
-    const entries = await fs.readdir(sourceDir, { withFileTypes: true })
-
-    for (const entry of entries) {
-        const source = path.join(sourceDir, entry.name)
-        const destination = path.join(targetDir, entry.name)
-
-        if (entry.isDirectory()) {
-            await fs.cp(source, destination, { recursive: true, force: true })
-        } else {
-            await fs.copyFile(source, destination)
-        }
-    }
-}
+const scriptRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const rootDir = process.argv[2] ? path.resolve(process.argv[2]) : scriptRoot;
+const configs = await readAddonFamily(rootDir);
 
 async function main() {
-    const targetRoot = getPulseSyncAddonsDir()
-    const targetDir = getPulseSyncAddonDir()
-    const runtimeSettingsPath = path.join(targetDir, runtimeSettingsFile)
-
-    await fs.access(sourceDir)
-    await fs.mkdir(targetRoot, { recursive: true })
-
-    if (path.resolve(targetDir) === rootDir) {
-        await copyIntoSourceRepository(targetDir)
-        console.log(`Synced generated addon files in place without removing the source repository: ${targetDir}`)
-        return
-    }
-
-    let runtimeSettings = null
-    try {
-        runtimeSettings = await fs.readFile(runtimeSettingsPath)
-    } catch (error) {
-        if (error?.code !== 'ENOENT') throw error
-    }
-
-    await fs.rm(targetDir, { recursive: true, force: true })
-    await fs.cp(sourceDir, targetDir, { recursive: true, force: true })
-
-    if (runtimeSettings) {
-        await fs.writeFile(runtimeSettingsPath, runtimeSettings)
-    }
-
-    console.log(`Synced addon to ${targetDir}`)
+  const modules = createModuleBuilder(rootDir);
+  const stop = () => {
+    modules.stop();
+    process.exitCode = 130;
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  try {
+    await modules.update({ force: true, strict: true });
+  } finally {
+    process.removeListener("SIGINT", stop);
+    process.removeListener("SIGTERM", stop);
+  }
+  if (!modules.ready) return;
+  const results = await deliverFamily(
+    path.join(rootDir, "dist"),
+    configs,
+    rootDir,
+  );
+  for (const result of results) {
+    console.log(formatDeliveryResult(result));
+    console.log(`Addon directory: ${result.targetDir}`);
+  }
 }
 
 main().catch((error) => {
-    console.error('Failed to sync addon:', error)
-    process.exitCode = 1
-})
+  console.error("Failed to sync addon:", error);
+  process.exitCode = 1;
+});

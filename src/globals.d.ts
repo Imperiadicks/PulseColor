@@ -1,1 +1,2 @@
-import '@pulsesync/yamusic-types/global'
+declare global { interface Window { __pulsecolorThemeBridge?: () => void; } }
+export {};

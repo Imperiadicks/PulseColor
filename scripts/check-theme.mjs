@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import config from '../addon.config.mjs';
+import { runtimeId,coverId } from '../addon.ids.mjs';
+assert.equal(config.name, 'PulseColor');
+assert.equal(config.type, 'theme');
+assert.deepEqual(config.dependencies, [runtimeId,coverId]);
+const entry = await readFile(new URL('../src/theme.ts', import.meta.url), 'utf8');
+assert.ok(!entry.includes('bootstrap') && !entry.includes('defineAddon'));
+console.log('PulseColor theme identity verified; only a bounded settings publisher runs in the main world');

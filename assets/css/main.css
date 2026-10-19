@@ -1,6 +1,54 @@
 /* ─────────────────── Общие доработки интерфейса ─────────────────── */
+.UwnL5AJBMMAp6NwMDdZk,
+.VibePlayerControls_playButtonIcon__OXCWN,
+:is(.UwnL5AJBMMAp6NwMDdZk, .VibePlayerControls_playButtonIcon__OXCWN) :is(svg, use, path) {
+  transition: color 220ms ease;
+}
+
+:is(button, [role="button"]):hover:not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(.UwnL5AJBMMAp6NwMDdZk, .VibePlayerControls_playButtonIcon__OXCWN),
+:is(button, [role="button"]):hover:not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(.UwnL5AJBMMAp6NwMDdZk, .VibePlayerControls_playButtonIcon__OXCWN) :is(svg, use, path) {
+  color: var(--ym-controls-color-primary-text-hovered) !important;
+  fill: currentColor !important;
+  transition: color 220ms ease, fill 220ms ease;
+}
+
+.VibePlayerControls_playButton__vnoer {
+  background: #ffffff14 !important;
+}
+
+:is(.VibePlayerControls_withYellowPlayButton__vnoer,
+  .HcfYy4VfnRHqgXzIdL7w,
+  .VibePlayerbarMeta_root___dH5G,
+  .VibePlayerControls_playButton__vnoer,
+  .VibePlayerControls_skipButton__z57B_,
+  .AlbumCover_coverContainer__NOd_o,
+  .AlbumCover_root__hkDPz,
+  .VibePlayerBar_button__GLhJ_,
+  .VibePlayerBar_button__GLhJ_.VibePlayerBar_important__XGV7k) {
+  transition: scale 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+
+  :is(.VibePlayerControls_withYellowPlayButton__vnoer,
+    .HcfYy4VfnRHqgXzIdL7w,
+    .VibePlayerbarMeta_root___dH5G,
+    .VibePlayerControls_playButton__vnoer,
+    .VibePlayerControls_skipButton__z57B_,
+    .AlbumCover_coverContainer__NOd_o,
+    .AlbumCover_root__hkDPz,
+    .VibePlayerBar_button__GLhJ_):hover {
+    scale: 1.04;
+  }
+
+  /* Nested cover wrappers must not multiply the enlargement. */
+  .AlbumCover_root__hkDPz:hover .AlbumCover_coverContainer__NOd_o {
+    scale: 1;
+  }
+}
+
 [class*="MainPage_vibe"] {
-  transition: height 1.5s ease;
+  transition: none;
   overflow: hidden;
 }
 
@@ -19,17 +67,68 @@ html.colorize-new-wave-page [class*="CommonLayout_root"] {
   overflow: hidden !important;
 }
 
-html.colorize-new-wave-page [class*="CommonLayout_root"] > aside,
-html.colorize-new-wave-page [class*="CommonLayout_root"] > [class*="Content_root"][class*="newVibe"] {
+/* Keep this outside .colorize-new-wave-page / .newVibe: the same shells
+   must also animate back after those route classes have been removed. */
+[class*="CommonLayout_root"]>aside,
+[class*="CommonLayout_root"]>[class*="Content_root"] {
+  /* Commit geometry once; LayoutMotion animates clipping, never text scale. */
+  transition: none !important;
+}
+
+/* This shell survives page-content fades, so its frame remains visible. */
+[class*="CommonLayout_root"]>[class*="Content_root"] {
+  outline: 1px solid var(--color-light-1, rgba(255, 255, 255, .15));
+  outline-offset: -1px;
+  border-radius: 12px;
+}
+
+html.colorize-new-wave-page [class*="CommonLayout_root"]>aside,
+html.colorize-new-wave-page [class*="CommonLayout_root"]>[class*="Content_root"][class*="newVibe"] {
   align-self: stretch !important;
   box-sizing: border-box !important;
   height: calc(100vh - 1vh) !important;
-  height: calc(100dvh - 1vh) !important;
+  height: calc(100dvh - 4vh) !important;
   min-height: 0 !important;
   max-height: calc(100vh - 1vh) !important;
-  max-height: calc(100dvh - 1vh) !important;
+  max-height: calc(100dvh - 4vh) !important;
   margin-block-start: 0 !important;
   margin-block-end: 1vh !important;
+}
+
+@media (max-height: 750px) {
+
+  html.colorize-new-wave-page [class*="CommonLayout_root"]>aside,
+  html.colorize-new-wave-page [class*="CommonLayout_root"]>[class*="Content_root"][class*="newVibe"] {
+    height: calc(100dvh - 5.5vh) !important;
+  }
+
+}
+
+/* Route intent wins even before React removes the old .newVibe classes. */
+html:root[data-pulsecolor-layout="compact"] [class*="CommonLayout_root"]>aside,
+html:root[data-pulsecolor-layout="compact"] [class*="CommonLayout_root"]>[class*="Content_root"] {
+  height: var(--pulsecolor-compact-height) !important;
+  max-height: var(--pulsecolor-compact-height) !important;
+  margin-block-end: 0 !important;
+}
+
+html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>aside,
+html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>[class*="Content_root"] {
+  height: calc(100dvh - 4vh) !important;
+  max-height: calc(100dvh - 4vh) !important;
+  margin-block-end: 1vh !important;
+}
+
+@media (max-height: 750px) {
+
+  html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>aside,
+  html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>[class*="Content_root"] {
+    height: calc(100dvh - 5.5vh) !important;
+  }
+}
+
+.SHvrm0VRiLVwGqJJjNO8:before {
+  background: var(--ym-controls-color-secondary-text-enabled) !important;
 }
 
 html.colorize-new-wave-page [class*="Content_root"][class*="newVibe"] {
@@ -51,6 +150,14 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] {
   border-radius: var(--colorize-wave-radius) !important;
 }
 
+html.colorize-new-wave-page [class*="BaseNotification_root"] {
+  background: none;
+}
+
+html.colorize-new-wave-page [class*="NotificationReloadPrefetchedRequests_text__oXCop"] {
+  color: var(--ym-controls-color-primary-default-hovered)
+}
+
 html.colorize-new-wave-page [class*="VibePage_root"] {
   position: relative !important;
   isolation: isolate !important;
@@ -66,6 +173,14 @@ html.colorize-new-wave-page [class*="VibePage_root"] {
   transform: none !important;
 }
 
+/* Background ownership stays here, separate from the interface palette. */
+.ym-dark-theme .bg-gradient {
+  background: radial-gradient(circle at 70% 70%,
+    var(--ym-background-color-secondary-enabled-blur, transparent) 0%,
+    var(--ym-background-color-primary-enabled-content, #0003) 70%,
+    var(--ym-background-color-primary-enabled-basic, #0005) 100%);
+}
+
 html.colorize-new-wave-page .bg-layer,
 html.colorize-new-wave-page .bg-cover,
 html.colorize-new-wave-page .bg-gradient {
@@ -77,8 +192,8 @@ html.colorize-new-wave-page .bg-layer {
   z-index: 0 !important;
 }
 
-html.colorize-new-wave-page [class*="VibePage_root"] > :not(.bg-layer),
-html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-layer) {
+html.colorize-new-wave-page [class*="VibePage_root"]> :not(.bg-layer),
+html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"]> :not(.bg-layer) {
   position: relative !important;
   z-index: 2 !important;
 }
@@ -88,122 +203,361 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
     background-position: 20% 20%;
     background-size: 110%;
   }
+
   25% {
     background-position: 80% 20%;
     background-size: 115%;
   }
+
   50% {
     background-position: 80% 80%;
     background-size: 120%;
   }
+
   75% {
     background-position: 20% 80%;
     background-size: 115%;
   }
+
   100% {
     background-position: 20% 20%;
     background-size: 110%;
   }
 }
+
 [class*="bg-cover"] {
-  animation: backgroundMovement 15s infinite
-    cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
+  animation: backgroundMovement 15s infinite cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;
   margin: 0 !important;
 }
+
 .avatar-zoom {
   cursor: zoom-in;
   overflow: hidden;
   transform-origin: center;
 }
-.kc5CjvU5hT9KEj0iTt3C:hover, .kc5CjvU5hT9KEj0iTt3C:focus 
-{
+
+.kc5CjvU5hT9KEj0iTt3C:hover,
+.kc5CjvU5hT9KEj0iTt3C:focus {
   backdrop-filter: none;
 }
-.PlayButton_root__nYKdN:not(:disabled), .PlayButton_root__nYKdN:not(:disabled) {
-  transition: all 0.2s ease-in-out;
+
+.PlayButton_root__nYKdN:not(:disabled),
+.PlayButton_root__nYKdN:not(:disabled) {
+  transition: color .16s ease, background-color .16s ease, opacity .16s ease, scale .18s ease;
 }
-.PageHeaderPlaylist_root__yJBii, .CommonAlbumPage_averageColorBackground__hs1_3, .PlaylistPage_averageColorBackground__3wEkw, .ArtistPage_averageColorBackground__wXTSY{
-  background: linear-gradient(var(--ym-controls-color-secondary-default-enabled, var(--ym-background-color-secondary-enabled-blur)) 0, transparent 100%)
+
+/* Hover must not start layout/blur animations inherited from native `all`. */
+html:root :is(button,[role="button"],a[href]),
+html:root :is(button,[role="button"],a[href]) * {
+  transition-property:opacity,transform,scale,translate !important;
 }
+
+.PageHeaderPlaylist_root__yJBii,
+.CommonAlbumPage_averageColorBackground__hs1_3,
+.PlaylistPage_averageColorBackground__3wEkw,
+.ArtistPage_averageColorBackground__wXTSY {
+  background: none !important;
+}
+
 .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs,
 .Content_rootOld__g85_m,
-.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
-.LikesAndHistory_historyIconContainer__KPPbS, .LikesAndHistoryItem_root__oI1gk{
+.Content_main__8_wIa,
+.PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK,
+.LikesAndHistory_historyIconContainer__KPPbS,
+.LikesAndHistoryItem_root__oI1gk {
   background: none;
   background-color: transparent !important;
 }
-.Content_main__8_wIa, .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK{
-  border:1px solid var(--color-light-1) !important;
-  box-shadow:0 0 0 1px var(--color-light-1) inset; /* чтобы выделялась и на прозрачном */
+
+.PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
+  border: 1px solid var(--color-light-1) !important;
+  box-shadow: 0 0 0 1px var(--color-light-1) inset;
+  /* чтобы выделялась и на прозрачном */
 }
+
+[class*="Content_main"] {
+  border: none !important;
+  box-shadow: none !important;
+}
+
 .CommonLayout_root__WC_W1 {
   background: radial-gradient(circle at 70% 70%,
-    var(--ym-background-color-secondary-enabled-blur) 0%,
-    var(--ym-background-color-primary-enabled-content) 70%,
-    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+      var(--ym-background-color-secondary-enabled-blur) 0%,
+      var(--ym-background-color-primary-enabled-content) 70%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
 
   box-shadow: inset 0 0 40px 10px rgba(0, 0, 0, 0.4) !important;
   border-radius: 12px;
 }
+
 .PlayerBarDesktopWithBackgroundProgressBar_player__ASKKs {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+/* Animate the outer bar once, not both nested wrappers (which would multiply
+   opacity). The inner wrapper is a fallback for alternative player layouts. */
+html[data-pulsecolor-playerbar-enter] :is([class*="PlayerBarDesktopWithBackgroundProgressBar_root"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"]):not([class*="PlayerBarDesktopWithBackgroundProgressBar_root"] *,
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"] *,
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"] *) {
+  animation: pulsecolor-playerbar-appear 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes pulsecolor-playerbar-appear {
+  from {
+    translate: 0 calc(100% + 2rem);
+  }
+
+  to {
+    translate: 0 0;
+  }
+}
+
+html[data-pulsecolor-playerbar-leave] :is([class*="PlayerBarDesktopWithBackgroundProgressBar_root"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"]):not([data-pulsecolor-playerbar-exit], [data-pulsecolor-playerbar-exit] *) {
+  visibility: hidden !important;
+}
+
+[data-pulsecolor-playerbar-exit],
+[data-pulsecolor-playerbar-exit] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Toggle this class on html to slide the collapsed navbar out and back. */
+html:root [class*="CommonLayout_root"]>aside[class*="Navbar_root"] {
+  margin-block-start: 0 !important;
+  align-self: stretch;
+}
+
+/* translate creates a stacking context: lift the whole sidebar while its
+   account popup is open, not just the cross-origin iframe inside it. */
+html:root [class*="CommonLayout_root"]>aside:has(.UserWidget-Dialog_visible) {
+  z-index: 5 !important;
+}
+
+html:root:not([data-pulsecolor-layout]):not(.colorize-new-wave-page) [class*="CommonLayout_root"]>aside[class*="Navbar_root"] {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+html:root [class*="Navbar_root_collapsed__"] {
+  translate: 0 0;
+  width: var(--navbar-width, var(--navbar-collapsed-width, 4.5rem)) !important;
+  margin-inline-end: 1;
+  transition: none !important;
+  border: 1px solid var(--pc-glass-border) !important;
+  border-radius: 12px;
+  box-shadow: none !important;
+  outline: 1px solid var(--color-light-1, rgba(255, 255, 255, .15));
+}
+
+html:root.pulsecolor-navbar-slide-away [class*="Navbar_root_collapsed__"],
+html:root[data-pulsecolor-minimal-vibe] [class*="Navbar_root_collapsed__"] {
+  translate: calc(-100% - 2rem) 0;
+  margin-inline-end: calc(-1 * var(--navbar-width, var(--navbar-collapsed-width, 4.5rem)));
+  pointer-events: none;
+}
+
+/* Keep the native player visible; hide only its surrounding decoration. */
+html:root:is(.pulsecolor-navbar-slide-away, [data-pulsecolor-minimal-vibe]) [class*="CommonLayout_root"]:has(> [class*="Navbar_root_collapsed__"])>[class*="Content_root"] {
+  margin-inline-start: -.5rem;
+}
+
+html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
+  [class*="VibePage_root"] [class*="AlbumCover_cover__"]) {
+  transition: opacity 320ms ease-in-out, visibility 0s !important;
+}
+
+html:root :is([class*="VibePage_player__"], [class*="VibePage_context__"]) {
+  right: 0;
+  transition: right 380ms cubic-bezier(.4, 0, .2, 1) !important;
+}
+
+html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
+  [class*="VibePage_root"] [class*="AlbumCover_cover__"]) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: opacity 320ms ease-in-out, visibility 0s 320ms !important;
+}
+
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
+  right: 19.2vw !important;
+}
+
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] {
+  right: 19.2vw !important;
+}
+
+[data-pulsecolor-reveal-pending] {
+  opacity: 0;
+}
+
+/* First-paint gate, mirrored by ContentReveal.CONTENT. Only outer semantic
+   units enter: never multiply opacity across their nested text/icons/buttons. */
+html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="CommonTrack_root"], [class*="EntityCard_root"], [class*="ArtistCard_root"],
+  [class*="PageHeader_root"], [class*="PageHeaderBase_root"],
+  [class^="Banner_root"], [class*=" Banner_root"],
+  [class*="CommonControlsBar_root"], [class*="EmptyState_root"],
+  [class*="LandingPage_root"] :is([class*="BlockHeader_root"], [class*="LikesAndHistoryItem_root"], [class*="NewRelease_root"]),
+  [class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
+  [class*="VibePage_player__"], [class*="VibePage_words__"],
+  h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]):not([data-pulsecolor-reveal-ready]):not([class*="Shimmer_"] *,
+  [data-test-id="FULLSCREEN_PLAYER_MODAL"] *, [data-test-id="SYNC_LYRICS_CONTENT"] *,
+  [class*="Content_main"] :is([class*="CommonTrack_root"], [class*="EntityCard_root"], [class*="ArtistCard_root"], [class*="Shimmer_root"],
+    [class*="PageHeader_root"], [class*="PageHeaderBase_root"],
+    [class^="Banner_root"], [class*=" Banner_root"],
+    [class*="CommonControlsBar_root"], [class*="EmptyState_root"],
+    [class*="LandingPage_root"] :is([class*="BlockHeader_root"], [class*="LikesAndHistoryItem_root"], [class*="NewRelease_root"]),
+    [class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
+    [class*="VibePage_player__"], [class*="VibePage_words__"],
+    h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]) *) {
+  opacity: 0;
+}
+
+/* Keep the row readable while its cover loads; preserve image geometry and
+   native lazy-loading/intersection behaviour. No shimmer/blur animation. */
+[data-pulsecolor-cover-pending] {
+  opacity: 0;
+}
+
+/* Retain the exact native track shimmer's appearance until that row enters.
+   The presentation-only copy is not a loading state or a second live row. */
+[data-pulsecolor-placeholder-host] {
+  position: relative;
+}
+
+[data-pulsecolor-native-placeholder] {
+  position: absolute;
+  inset: 0 !important;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+[data-pulsecolor-native-placeholder],
+[data-pulsecolor-native-placeholder] *,
+[data-pulsecolor-native-placeholder] *::before,
+[data-pulsecolor-native-placeholder] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Keep native placeholders static, including shimmer on pseudo-elements. */
+html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimmer_"], [class*="Shimmer_"] *),
+html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimmer_"], [class*="Shimmer_"] *)::before,
+html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimmer_"], [class*="Shimmer_"] *)::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:root [class*="Navbar_root_collapsed__"] {
+    transition: none !important;
+  }
+
+  html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
+    [class*="VibePage_words__"], [class*="VibePage_player__"], [class*="VibePage_context__"],
+    [class*="VibePage_root"] [class*="AlbumCover_cover__"]) {
+    transition: none !important;
+  }
+
+  [class*="CommonLayout_root"]>aside,
+  [class*="CommonLayout_root"]>[class*="Content_root"] {
+    transition-duration: 0s !important;
+  }
+
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_root"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"] {
+    animation: none !important;
+  }
+}
+
 .WithTopBanner_root__P__x3 {
   background: radial-gradient(circle at 65% 65%,
-    var(--ym-background-color-secondary-enabled-blur) 0%,
-    var(--ym-background-color-primary-enabled-content) 60%,
-    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+      var(--ym-background-color-secondary-enabled-blur) 0%,
+      var(--ym-background-color-primary-enabled-content) 60%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
 }
+
 .WithTopBanner_root__P__x3 {
-    box-shadow: inset 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: inset 0 10px 30px rgba(0, 0, 0, 0.6) !important;
 }
+
 .By12CU9obvaH0jYtauNw {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .By12CU9obvaH0jYtauNw::-webkit-scrollbar {
   display: none;
 }
-.VibeBlock_controls__BpDFL
-{
+
+.VibeBlock_controls__BpDFL {
   z-index: 2;
 }
-.VibeAnimation_enter_active__j0jOl, .VibeAnimation_enter_done__Oi2Kz, .VibeAnimation_exit__ioGXk {opacity: 0 !important;}
 
-.SonataFullscreenControlsDesktop_sonataButton__69FFc, .iJVAJMgccD4vj4E4o068,
-.WsKeF73pWotx9W1tWdYY, .QYIUcw5hsJgmlwLrB5fw,
+.VibeAnimation_enter_active__j0jOl,
+.VibeAnimation_enter_done__Oi2Kz,
+.VibeAnimation_exit__ioGXk {
+  opacity: 0 !important;
+}
+
+.SonataFullscreenControlsDesktop_sonataButton__69FFc,
+.iJVAJMgccD4vj4E4o068,
+.WsKeF73pWotx9W1tWdYY,
+.QYIUcw5hsJgmlwLrB5fw,
 .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
-.vqAVPWFJlhAOleK_SLk4, .wy8tgXoSb23KtiD3EFWg, .Meta_title__GGBnH{
+.vqAVPWFJlhAOleK_SLk4,
+.wy8tgXoSb23KtiD3EFWg,
+.Meta_title__GGBnH {
   color: var(--ym-controls-color-secondary-on_default-enabled) !important;
 }
-.SonataFullscreenControlsDesktop_sonataPlayButton__QXEEp{
-  background-color: var(--ym-controls-color-secondary-card-enabled)
+
+.SonataFullscreenControlsDesktop_sonataPlayButton__QXEEp {
+  background-color: var(--ym-controls-color-secondary-card-enabled);
 }
-.QYIUcw5hsJgmlwLrB5fw{
-  --ym-logo-text-color: var(--ym-logo-color-primary-variant) !important
+
+.QYIUcw5hsJgmlwLrB5fw {
+  --ym-logo-text-color: var(--ym-logo-color-primary-variant) !important;
 }
-.VibePlayerControls_withYellowPlayButton__vnoer, .VibePlayerControls_skipButton__z57B_{
+
+.VibePlayerControls_withYellowPlayButton__vnoer,
+.VibePlayerControls_skipButton__z57B_ {
   background-color: hsl(0, 0%, 100%, 0.08) !important;
-  margin-inline: 0.15rem
+  margin-inline: 0.15rem;
 }
-.rWukOKAJh5Ga7JuIp62L{
+
+.rWukOKAJh5Ga7JuIp62L {
   background: var(--ym-controls-color-secondary-default-enabled);
 }
-.rWukOKAJh5Ga7JuIp62L:hover, .LikesAndHistory_historyIconContainer__KPPbS:hover, .LikesAndHistoryItem_root__oI1gk:hover{
+
+.rWukOKAJh5Ga7JuIp62L:hover,
+.LikesAndHistory_historyIconContainer__KPPbS:hover,
+.LikesAndHistoryItem_root__oI1gk:hover {
   background: var(--ym-controls-color-secondary-default-hovered) !important;
 }
-.JjlbHZ4FaP9EAcR_1DxF:active{
+
+.JjlbHZ4FaP9EAcR_1DxF:active {
   color: var(--ym-controls-color-secondary-on_default-enabled) !important;
 }
-.JjlbHZ4FaP9EAcR_1DxF:hover{
+
+.JjlbHZ4FaP9EAcR_1DxF:hover {
   color: var(--ym-controls-color-primary-default-hovered) !important;
 }
-.PlaylistFilters_filter_selected__y3GuB{
+
+.PlaylistFilters_filter_selected__y3GuB {
   border-color: var(--ym-controls-color-secondary-on_default-enabled) !important;
 }
-.ChangeVolume_icon__5Zv2a:hover{
+
+.ChangeVolume_icon__5Zv2a:hover {
   color: var(--ym-controls-color-primary-default-hovered) !important;
-} 
+}
 
 .bg-static-mode [class*="bg-cover"] {
   animation: none !important;
@@ -230,46 +584,49 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
   fill: currentColor !important;
 }
 
-:is(button, [role="button"]):not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(svg, use, path) {
-  color: var(--ym-controls-color-secondary-text-enabled) !important;
-  fill: currentColor !important;
-}
-
 .customButton.bordered {
   border-color: var(--ym-controls-color-secondary-text-enabled) !important;
 }
 
 .VibeAnimation_enter_active__j0jOl,
 .VibeAnimation_enter_done__Oi2Kz,
-.VibeAnimation_exit__ioGXk { opacity:0 !important; }
+.VibeAnimation_exit__ioGXk {
+  opacity: 0 !important;
+}
+
 [class*="VibeAnimation_enter_active__"],
 [class*="VibeAnimation_enter_done__"],
-[class*="VibeAnimation_exit__"] { opacity:0 !important; }
+[class*="VibeAnimation_exit__"] {
+  opacity: 0 !important;
+}
 
 /* ─────────────────── Волна ─────────────────── */
 
-.VibeWidget_root__Chpsm
-{
-  background: linear-gradient(180deg, var(--ym-background-color-primary-enabled-content) 0, var(--ym-controls-color-secondary-text-disabled) 80%)
+.VibeWidget_root__Chpsm {
+  background: linear-gradient(180deg,
+      var(--ym-background-color-primary-enabled-content) 0,
+      var(--ym-controls-color-secondary-text-disabled) 80%);
 }
-
 
 /* Лёгкий режим во время скролла/движения в экспериментальном интерфейсе ЯМ.
    Нужен, чтобы полноэкранные radial-gradient/filter слои не стопорили SPA при активной волне. */
 /* картинка-фон .bg-cover не пульсирует */
-[class*="bg-cover"]{ will-change: auto; }
+[class*="bg-cover"] {
+  will-change: auto;
+}
+
 /* ─────────────────── Light theme inversion fixes ─────────────────── */
 .ym-light-theme .Content_main__8_wIa,
-.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK{
-  border:1px solid var(--color-dark-1) !important;
-  box-shadow:0 0 0 1px var(--color-dark-1) inset !important;
+.ym-light-theme .PlayerBarDesktopWithBackgroundProgressBar_root__bpmwN.PlayerBarDesktopWithBackgroundProgressBar_important__HzXrK {
+  border: 1px solid var(--color-dark-1) !important;
+  box-shadow: 0 0 0 1px var(--color-dark-1) inset !important;
 }
 
 .ym-light-theme .CommonLayout_root__WC_W1 {
   background: radial-gradient(circle at 70% 70%,
-    var(--ym-background-color-secondary-enabled-blur) 0%,
-    var(--ym-background-color-primary-enabled-content) 72%,
-    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+      var(--ym-background-color-secondary-enabled-blur) 0%,
+      var(--ym-background-color-primary-enabled-content) 72%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
   box-shadow: inset 0 0 34px 8px rgba(255, 255, 255, 0.28) !important;
   border-radius: 12px;
 }
@@ -280,9 +637,9 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
 
 .ym-light-theme .WithTopBanner_root__P__x3 {
   background: radial-gradient(circle at 65% 65%,
-    var(--ym-background-color-secondary-enabled-blur) 0%,
-    var(--ym-background-color-primary-enabled-content) 60%,
-    var(--ym-background-color-primary-enabled-basic) 100%) !important;
+      var(--ym-background-color-secondary-enabled-blur) 0%,
+      var(--ym-background-color-primary-enabled-content) 60%,
+      var(--ym-background-color-primary-enabled-basic) 100%) !important;
   box-shadow: inset 0 10px 28px rgba(255, 255, 255, 0.22) !important;
 }
 
@@ -292,44 +649,79 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
 .ym-light-theme .SonataFullscreenControlsDesktop_playPauseButtonIcon__IkUNX,
 .ym-light-theme .vqAVPWFJlhAOleK_SLk4,
 .ym-light-theme .wy8tgXoSb23KtiD3EFWg,
-.ym-light-theme .Meta_title__GGBnH{
+.ym-light-theme .Meta_title__GGBnH {
   color: var(--ym-controls-color-primary-text-enabled) !important;
 }
 
-.ym-light-theme .rWukOKAJh5Ga7JuIp62L{
+.ym-light-theme .rWukOKAJh5Ga7JuIp62L {
   background: var(--ym-controls-color-secondary-default-enabled);
 }
 
 .ym-light-theme .rWukOKAJh5Ga7JuIp62L:hover,
 .ym-light-theme .LikesAndHistory_historyIconContainer__KPPbS:hover,
-.ym-light-theme .LikesAndHistoryItem_root__oI1gk:hover{
+.ym-light-theme .LikesAndHistoryItem_root__oI1gk:hover {
   background: var(--ym-controls-color-secondary-default-hovered) !important;
 }
 
-.ym-light-theme .JjlbHZ4FaP9EAcR_1DxF:active{
+.ym-light-theme .JjlbHZ4FaP9EAcR_1DxF:active {
   color: var(--ym-controls-color-primary-on_default-enabled) !important;
 }
 
 .ym-light-theme .JjlbHZ4FaP9EAcR_1DxF:hover,
-.ym-light-theme .ChangeVolume_icon__5Zv2a:hover{
+.ym-light-theme .ChangeVolume_icon__5Zv2a:hover {
   color: var(--ym-controls-color-primary-text-hovered) !important;
 }
 
-.ym-light-theme .PlaylistFilters_filter_selected__y3GuB{
+.ym-light-theme .PlaylistFilters_filter_selected__y3GuB {
   border-color: var(--ym-controls-color-primary-text-enabled) !important;
 }
 
-.ym-light-theme .VibeWidget_root__Chpsm{
+.ym-light-theme .VibeWidget_root__Chpsm {
   background: linear-gradient(180deg,
-    var(--ym-background-color-primary-enabled-content) 0,
-    var(--ym-background-color-secondary-enabled-blur) 82%) !important;
+      var(--ym-background-color-primary-enabled-content) 0,
+      var(--ym-background-color-secondary-enabled-blur) 82%) !important;
 }
 
-.VibeWidgetAnimation_root__7fpeP{
+.VibeWidgetAnimation_root__7fpeP {
   opacity: 0;
 }
 
+/* Invisible native art must not take part in page geometry/painting. */
+html.pulsecolor-wave-page [class*="VibeWidgetAnimation_root"] { display:none !important; }
+html.pulsecolor-wave-page :is([class*="Content_main"],[class*="VibePage_root"]) {
+  transition-property:opacity,transform !important;
+}
+
 /* PulseColor v2: the runtime owns one full-screen WebGL surface. */
+/* Only page shells become transparent; cards, menus and lyrics keep surfaces.
+   Scope is owned by the renderer and removed when wave/theme is disabled. */
+html.pulsecolor-wave-page [class*="WithTopBanner_root"] {
+  background: #0a0b0d !important;
+}
+
+html.pulsecolor-wave-page:is(.ym-light-theme, :has(.ym-light-theme)) [class*="WithTopBanner_root"] {
+  background: #f4f3f5 !important;
+}
+
+html.pulsecolor-wave-page .pulsecolor-wave-host {
+  isolation: isolate;
+  background: transparent !important;
+}
+
+html.pulsecolor-wave-page .pulsecolor-wave-host> :not(#osu-pulse) {
+  z-index: 1;
+}
+
+html.pulsecolor-wave-page :is([class*="Content_root"],
+  [class*="Content_main"],
+  [class*="MainPage_root"],
+  [class*="SearchPage_root"],
+  [class*="CollectionPage_root"],
+  [class*="SettingsPage_root"],
+  [class*="VibeWidget_root"]) {
+  background: transparent !important;
+}
+
 #osu-pulse.pulsecolor-webgl-root {
   position: fixed !important;
   inset: 0 !important;
@@ -368,7 +760,7 @@ html.colorize-new-wave-page [class*="DefaultLayout_rootNewWave"] > :not(.bg-laye
   overflow: hidden;
 }
 
-[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-integrated-fullscreen > :not(#osu-pulse) {
+[data-test-id="FULLSCREEN_PLAYER_MODAL"].pulsecolor-integrated-fullscreen> :not(#osu-pulse) {
   position: relative;
   z-index: 1;
 }

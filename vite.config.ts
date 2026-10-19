@@ -1,98 +1,64 @@
-import path from 'node:path'
-import { promises as fs } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import path from "node:path";
 
-import { defineConfig } from 'vite'
+import { promises as fs } from "node:fs";
+import { defineConfig } from "vite";
 
-import addonConfig from './addon.config.mjs'
+import addonConfig from "./addon.config.mjs";
+import { settingsMetadata } from './src/settings.ts';
+import catalog from './src/settings.catalog.json' with { type: 'json' };
+const root = import.meta.dirname;
+const outDir = path.resolve(
+  root,
+  process.env.PULSESYNC_BUILD_ROOT || "dist",
+  addonConfig.directoryName,
+);
 
-const rootDir = path.dirname(fileURLToPath(import.meta.url))
-const addonStaticDir = path.resolve(rootDir, 'addon')
-const outDir = process.env.PULSESYNC_ADDON_OUT_DIR
-    ? path.resolve(process.env.PULSESYNC_ADDON_OUT_DIR)
-    : path.resolve(rootDir, 'dist', addonConfig.directoryName)
-const inPlaceBuild = process.env.PULSESYNC_ADDON_IN_PLACE === '1'
-
-function sanitizeMetadataValue(value: string | string[] | undefined) {
-    if (Array.isArray(value)) {
-        return value.map((entry) => String(entry).trim()).filter(Boolean)
-    }
-
-    return typeof value === 'string' ? value.trim() : ''
-}
-
-function createMetadata() {
-    return {
-        id: addonConfig.id,
-        name: addonConfig.name,
-        description: addonConfig.description,
-        version: addonConfig.version,
-        author: sanitizeMetadataValue(addonConfig.author),
-        type: addonConfig.type,
-        image: addonConfig.image || '',
-        banner: addonConfig.banner || '',
-        libraryLogo: addonConfig.libraryLogo || '',
-        css: 'script.css',
-        script: 'script.js',
-        tags: Array.isArray(addonConfig.tags) ? addonConfig.tags : [],
-        dependencies: Array.isArray(addonConfig.dependencies) ? addonConfig.dependencies : [],
-        conflictsWith: Array.isArray(addonConfig.conflictsWith) ? addonConfig.conflictsWith : [],
-        allowedUrls: Array.isArray(addonConfig.allowedUrls) ? addonConfig.allowedUrls : [],
-        supportedVersions: Array.isArray(addonConfig.supportedVersions) ? addonConfig.supportedVersions : [],
-    }
-}
-
-function packagePulseSyncAddon() {
-    return {
-        name: 'package-pulsesync-addon',
-        async closeBundle() {
-            await fs.mkdir(outDir, { recursive: true })
-            await fs.cp(addonStaticDir, outDir, { recursive: true, force: true })
-            await fs.writeFile(
-                path.join(outDir, 'metadata.json'),
-                JSON.stringify(createMetadata(), null, 4) + '\n',
-                'utf8',
-            )
-        },
-    }
-}
-
-export default defineConfig(({ mode }) => {
-    const isDevBuild = mode === 'development'
-
-    return {
-        resolve: {
-            alias: {
-                '@': path.resolve(rootDir, 'src'),
+export default defineConfig(({ mode }) => ({
+  build: {
+    outDir,
+    emptyOutDir: true,
+    target: "chrome140",
+    minify: mode === "development" ? false : "oxc",
+    cssCodeSplit: false,
+    lib: {
+      entry: path.join(root, "src/theme.ts"),
+      formats: ["iife"],
+      name: "PulseColorTheme",
+      fileName: () => 'script.js',
+      cssFileName: "script",
+    },
+  },
+  plugins: [
+    {
+      name: "pulsecolor-css-theme",
+      async closeBundle() {
+        await fs.cp(path.join(root, "addon"), outDir, {
+          recursive: true,
+          force: true,
+        });
+        for (const file of [
+          "LICENSE-PulseColor.md",
+          "THIRD-PARTY-NOTICES.md",
+          "LICENSE",
+          "LICENSE.ru.md",
+        ]) {
+          await fs.copyFile(path.join(root, file), path.join(outDir, file));
+        }
+        await fs.writeFile(
+          path.join(outDir, "metadata.json"),
+          JSON.stringify(
+            {
+              ...addonConfig,
+              css: "script.css",
+              script: 'script.js',
+              settings: settingsMetadata.toConfig(),
             },
-        },
-        build: {
-            assetsDir: 'Assets',
-            emptyOutDir: !inPlaceBuild,
-            minify: isDevBuild ? false : 'esbuild',
-            outDir,
-            sourcemap: false,
-            target: 'chrome140',
-            cssCodeSplit: false,
-            lib: {
-                entry: path.resolve(rootDir, 'src/main.ts'),
-                formats: ['iife'],
-                name: 'PulseColor',
-                fileName: () => 'script.js',
-                cssFileName: 'script',
-            },
-            rollupOptions: {
-                output: {
-                    assetFileNames: (assetInfo) => {
-                        if (assetInfo.names?.some((name) => name.endsWith('.css'))) {
-                            return '[name][extname]'
-                        }
-
-                        return 'Assets/[name][extname]'
-                    },
-                },
-            },
-        },
-        plugins: [packagePulseSyncAddon()],
-    }
-})
+            null,
+            4,
+          ) + "\n",
+        );
+        await fs.writeFile(path.join(outDir, 'handleEvents.json'), JSON.stringify(catalog, null, 4) + '\n');
+      },
+    },
+  ],
+}));

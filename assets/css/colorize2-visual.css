@@ -1,0 +1,545 @@
+/* Interface port from Colorize 2: surfaces, typography, states and controls.
+   Page backgrounds, cover layers, wave rendering and shell geometry stay in PulseColor.
+   Semantic class prefixes tolerate native YM hash changes. */
+
+/* Player metadata: native class prefixes also survive YM hash updates. */
+/* One shared surface, only on outer shells: do not stack opacity on children. */
+html:root:root [class*="CommonLayout_root"] > :is(aside, [class*="Content_root"]),
+html:root:root [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
+    background: color-mix(in srgb, var(--ym-background-color-secondary-enabled-blur) clamp(0%, var(--pulsecolor-panel-opacity, 10%), 20%), transparent) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) :is([data-test-id='WHEEL_SETTING_ITEM'], [data-test-id='WHEEL_RESHUFFLE_ITEM']) img[class*='WheelItem_cover'] {
+    filter: var(--pulsecolor-wheel-icon-filter, none) !important;
+    transition: filter 450ms cubic-bezier(.22, 1, .36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(.ym-dark-theme, .ym-light-theme) :is([data-test-id='WHEEL_SETTING_ITEM'], [data-test-id='WHEEL_RESHUFFLE_ITEM']) img[class*='WheelItem_cover'] {
+        transition: none !important;
+    }
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="VibePlayerbarMeta_center__"]::before {
+    background: color-mix(in srgb, var(--ym-controls-color-accent-default-enabled) 25%, transparent) !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) :is([class*="VibePlayerbarMeta_trackNameText__"], [class*="VibePlayerbarMeta_timecodeOverlay__"]) {
+    color: var(--ym-controls-color-secondary-text-enabled_variant) !important;
+}
+
+/* Colorize 2 framing on PulseColor's persistent shells. Do not add a second
+   border to Content_main: it is the shell that expands during navigation. */
+:is(.ym-dark-theme, .ym-light-theme) :is([class*="CommonLayout_root__"], [class*="WithTopBanner_root__"]) {
+    border-radius: 12px !important;
+}
+.ym-dark-theme [class*="CommonLayout_root__"] {
+    box-shadow: inset 0 0 40px 10px rgba(0, 0, 0, .4) !important;
+}
+.ym-dark-theme [class*="WithTopBanner_root__"] {
+    box-shadow: inset 0 10px 30px rgba(0, 0, 0, .6) !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) [class*="CommonLayout_root__"] > [class*="Content_root__"] {
+    outline-color: var(--color-light-1);
+    border-radius: var(--ym-layout-border-radius, 12px);
+}
+
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_sonataPlayButton__"]:not(:disabled):focus-visible, :is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_sonataPlayButton__"]:not(:disabled):hover
+{
+    background-color: var(--ym-controls-color-secondary-card-hovered)
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="VibeResetButton_context__"]
+{
+    color: var(--accent-color, var(--ym-controls-color-secondary-text-enabled_variant));
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .avatar-zoom {
+    cursor: zoom-in;
+    overflow: hidden;
+    transform-origin: center;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .kc5CjvU5hT9KEj0iTt3C:hover, :is(.ym-dark-theme, .ym-light-theme) .kc5CjvU5hT9KEj0iTt3C:focus {
+    backdrop-filter: none;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="PlayButton_root__"]:not(:disabled) {
+    transition: all 0.2s ease-in-out;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="PlayerBarDesktopWithBackgroundProgressBar_player__"], :is(.ym-dark-theme, .ym-light-theme) [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"][class*="PlayerBarDesktopWithBackgroundProgressBar_important__"], :is(.ym-dark-theme, .ym-light-theme) [class*="LikesAndHistory_historyIconContainer__"], :is(.ym-dark-theme, .ym-light-theme) [class*="LikesAndHistoryItem_root__"] {
+    background: none;
+    background-color: transparent !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="DefaultLayout_navbar_application_linux__"], :is(.ym-dark-theme, .ym-light-theme) [class*="DefaultLayout_navbar_application_windows__"], :is(.ym-dark-theme, .ym-light-theme) [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"][class*="PlayerBarDesktopWithBackgroundProgressBar_important__"] {
+    border: 1px solid var(--color-light-1) !important;
+    box-shadow: 0 0 0 1px var(--color-light-1) inset;
+    margin-block-start: 13;
+    border-radius: var(--ym-layout-border-radius);
+    margin-block-end: 10px;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) html.colorize-borderless [class*='DefaultLayout_navbar_application_linux__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-borderless [class*='DefaultLayout_navbar_application_windows__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-borderless [class*='PlayerBarDesktopWithBackgroundProgressBar_root__'][class*='PlayerBarDesktopWithBackgroundProgressBar_important__'] {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="PlayerBarDesktopWithBackgroundProgressBar_player__"] {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .By12CU9obvaH0jYtauNw {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .By12CU9obvaH0jYtauNw::-webkit-scrollbar {
+    display: none;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_sonataPlayButton__"] {
+    background-color: var(--ym-controls-color-secondary-card-enabled);
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="VibePlayerControls_withYellowPlayButton__"], :is(.ym-dark-theme, .ym-light-theme) [class*="VibePlayerControls_skipButton__"] {
+    background-color: hsl(0, 0%, 100%, 0.08) !important;
+    margin-inline: 0.15rem;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls [class*='VibePlayerBar_button__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls [class*='VibePlayerControls_playButton__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls [class*='VibePlayerControls_withYellowPlayButton__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls [class*='VibePlayerControls_skipButton__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls [class*='VibePlayerControls_playButton_playing__'], :is(.ym-dark-theme, .ym-light-theme) html.colorize-bright-vibe-controls :is(button, [role='button']).colorize-vibe-control-contrast {
+    background: color-mix(in srgb, var(--color-dark-10) 78%, transparent) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .rWukOKAJh5Ga7JuIp62L {
+    background: var(--ym-controls-color-secondary-default-enabled);
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .rWukOKAJh5Ga7JuIp62L:hover, :is(.ym-dark-theme, .ym-light-theme) [class*="LikesAndHistory_historyIconContainer__"]:hover, :is(.ym-dark-theme, .ym-light-theme) [class*="LikesAndHistoryItem_root__"]:hover {
+    background: var(--ym-controls-color-secondary-default-hovered) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .JjlbHZ4FaP9EAcR_1DxF:active {
+    color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .JjlbHZ4FaP9EAcR_1DxF:hover {
+    color: var(--ym-controls-color-primary-default-hovered) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="PlaylistFilters_filter_selected__"] {
+    border-color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="TrackModal_root__"], :is(.ym-dark-theme, .ym-light-theme) .PulseSync_castPopover, :is(.ym-dark-theme, .ym-light-theme) .s7_MO4NdsYs7nPQALD8W {
+    background-color: color-mix(in srgb, var(--ym-background-color-secondary-enabled-blur) 65%, transparent);
+    backdrop-filter: blur(28px);
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .SHvrm0VRiLVwGqJJjNO8:before {
+    background: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .customButton.bordered {
+    border-color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) .MsLY_qiKofQrwKAr98EC:after
+{
+    background: linear-gradient(1turn,  var(--ym-background-color-secondary-enabled-blur, var(--ym-background-color-primary-enabled-content)) 0, hsla(0, 0%, 5%, 0) 100%)
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*='StickyHeader_container__'][class*='SearchPage_skeletonStickyHeader__'][class*='SearchPage_important__'] {
+    z-index: 1;
+    inset-block-start: 4rem;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+/* Search uses the Content shell's shared surface. Its empty-query sticky
+   header must not paint a second gradient/blur strip over the wave. Keep the
+   native sticky geometry, input outline and filter-button states intact. */
+/* Reserve the same header slot for recommendations as for search results.
+   Scrollable content is clipped by its own viewport BELOW the controls, not
+   covered with an opaque rectangle that would also hide the wave. */
+html:root [class*="SearchPage_root"] {
+    padding-block-start: var(--search-header-height-with-filters, 7.5rem) !important;
+}
+html:root [class*="SearchPage_root"] [class*="StickyHeader_backdrop__"] {
+    display: none !important;
+}
+html:root [class*="SearchPage_root"] :is(
+    [class*="SearchPage_header__"],
+    [class*="SearchPage_carousel__"],
+    [class*="SearchPage_skeletonStickyHeader__"]
+),
+html:root [class*="SearchPage_root"] :is(
+    [class*="SearchPage_header__"],
+    [class*="SearchPage_carousel__"],
+    [class*="SearchPage_skeletonStickyHeader__"]
+)::before,
+html:root [class*="SearchPage_root"] :is(
+    [class*="SearchPage_header__"],
+    [class*="SearchPage_carousel__"],
+    [class*="SearchPage_skeletonStickyHeader__"]
+)::after {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_sonataButton__"], :is(.ym-dark-theme, .ym-light-theme) .iJVAJMgccD4vj4E4o068, :is(.ym-dark-theme, .ym-light-theme) .WsKeF73pWotx9W1tWdYY, :is(.ym-dark-theme, .ym-light-theme) .QYIUcw5hsJgmlwLrB5fw, :is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_playPauseButtonIcon__"], :is(.ym-dark-theme, .ym-light-theme) .vqAVPWFJlhAOleK_SLk4, :is(.ym-dark-theme, .ym-light-theme) .wy8tgXoSb23KtiD3EFWg, :is(.ym-dark-theme, .ym-light-theme) [class*="Meta_title__"], :is(.ym-dark-theme, .ym-light-theme) [class*="NewRelease_artistCaption__"], :is(.ym-dark-theme, .ym-light-theme) [class*="NewReleaseCard_title__"] {
+    color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .cover-download-button, :is(.ym-dark-theme, .ym-light-theme) .cover-download-button:focus {
+    background-color: var(--ym-controls-color-secondary-card-enabled);
+    color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:disabled, [disabled], [aria-disabled='true']) {
+    color: var(--ym-controls-color-secondary-text-disabled) !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) [class*="ChangeVolume_icon__"]:hover {
+    color: var(--ym-controls-color-primary-default-hovered) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .cover-download-button svg {
+    fill: var(--ym-controls-color-secondary-text-enabled);
+}
+
+:is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:disabled, [disabled], [aria-disabled='true']) :is(svg, use, path) {
+    color: var(--ym-controls-color-secondary-default-enabled) !important;
+    fill: currentColor !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) [class*="BaseSonataControlsDesktop_playButtonIcon__"], :is(.ym-dark-theme, .ym-light-theme) [class*="VibePlayerControls_withYellowPlayButton__"] [class*="VibePlayerControls_playButtonIcon__"]{
+    color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+:is(.ym-dark-theme, .ym-light-theme) [class*="FullscreenPlayerDesktop_closeButton__"]
+{
+    background-color: var(--color-dark-3-6) !important
+}
+:is(.ym-dark-theme, .ym-light-theme) .nHWc2sto1C6Gm0Dpw_l0
+{
+    background-color: var(--color-dark-3-6) !important
+}
+:is(.ym-dark-theme, .ym-light-theme) .QYIUcw5hsJgmlwLrB5fw {
+    --ym-logo-text-color: var(--ym-logo-color-primary-variant) !important;
+}
+
+:is(.ym-dark-theme, .ym-light-theme) .PulseSync_castPopoverItemTitle {
+    color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="ChangeVolume_root__"]
+    {
+    max-width:160px;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="DefaultLayout_content__"] [class*="MainPage_root__"]::-webkit-scrollbar
+    {
+    width:0;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="MainPage_landing__"]
+    {
+    padding-right:24px;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="SyncLyrics_content__"]:after, :is(.ym-dark-theme, .ym-light-theme) [class*="SyncLyrics_content__"]:before
+    {
+    display:none;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="NavbarDesktop_logoLink__"]
+    {
+    margin-top:15px;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="CollectionPage_collectionColor__"], :is(.ym-dark-theme, .ym-light-theme) .ygfy3HHHNs5lMz5mm4ON, :is(.ym-dark-theme, .ym-light-theme) .yvGpKZBZLwidMfMcVMR3
+    {
+    color:var(--ym-logo-color-primary-variant);
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) .kc5CjvU5hT9KEj0iTt3C
+    {backdrop-filter:none;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) .kc5CjvU5hT9KEj0iTt3C:hover, :is(.ym-dark-theme, .ym-light-theme) .kc5CjvU5hT9KEj0iTt3C:focus
+    {
+    backdrop-filter:saturate(180%) blur(15px);
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) ::placeholder
+    {
+    color:var(--color-light-4-10) !important;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) .PSBpanel
+    {
+      color:var(--ym-logo-color-primary-variant) !important;
+      font-weight:500 !important;
+      left:0; right:0 !important;
+      display:flex; justify-content:center;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) .mdbxU6IWInQTsVjwnapn
+    {
+    background:var(--color-light-5) !important;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) .xZzTMqgg0qtV5vqUIrkK
+    {
+    background-color:var(--color-dark-3-6) !important;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="FullscreenPlayerDesktop_poster_withSyncLyricsAnimation__"], :is(.ym-dark-theme, .ym-light-theme) [class*="SyncLyricsCard_root__"]
+    {
+    inset-block-end:35px !important;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="VibeContext_context__"], :is(.ym-dark-theme, .ym-light-theme) [class*="VibeSettings_toggleSettingsButton__"], :is(.ym-dark-theme, .ym-light-theme) [class*="VibeContext_pinButton__"]{
+        backdrop-filter: blur(25px);
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+
+    .ym-dark-theme.ym-dark-theme {
+    --ym-controls-color-primary-default-disabled: var(--color-dark-6) !important;
+    --ym-controls-color-primary-default-enabled: var(--color-light-9) !important;
+    --ym-controls-color-primary-default-hovered: var(--color-light-8) !important;
+    --ym-controls-color-primary-default-pressed: var(--color-light-10) !important;
+    --ym-controls-color-primary-default-focused_stroke: var(--color-light-6-4) !important;
+    --ym-controls-color-primary-on_default-disabled: var(--color-dark-3-8) !important;
+    --ym-controls-color-primary-on_default-enabled: var(--color-dark-10) !important;
+    --ym-controls-color-primary-outline-disabled: var(--color-dark-7) !important;
+    --ym-controls-color-primary-outline-enabled: var(--color-dark-6-10) !important;
+    --ym-controls-color-primary-outline-hovered: var(--color-dark-5) !important;
+    --ym-controls-color-primary-outline-hovered_stroke: var(--color-light-7) !important;
+    --ym-controls-color-primary-outline-selected_stroke: var(--color-light-8) !important;
+    --ym-controls-color-primary-outline-pressed: var(--color-dark-4) !important;
+    --ym-controls-color-primary-outline-focused_stroke: var(--color-light-6-4) !important;
+    --ym-controls-color-primary-on_outline-disabled: var(--color-light-4-6) !important;
+    --ym-controls-color-primary-on_outline-enabled: var(--color-light-10) !important;
+    --ym-controls-color-primary-text-disabled: var(--color-light-4-5) !important;
+    --ym-controls-color-primary-text-enabled: var(--color-light-10-6) !important;
+    --ym-controls-color-primary-text-enabled_variant: var(--color-light-9) !important;
+    --ym-controls-color-primary-text-hovered: var(--color-light-8) !important;
+    --ym-controls-color-primary-text-hovered_variant: var(--color-light-9) !important;
+    --ym-controls-color-primary-text-vibe: linear-gradient(180deg, var(--color-light-10-9) 8.63%, var(--color-light-7-7) 77.58%) !important;
+    --ym-controls-color-primary-text-vibe_icon: var(--color-light-8-7) !important;
+    --ym-controls-color-secondary-default-disabled: var(--color-light-10-1) !important;
+    --ym-controls-color-secondary-default-enabled: var(--color-light-10-1) !important;
+    --ym-controls-color-secondary-default-hovered: var(--color-light-10-2) !important;
+    --ym-controls-color-secondary-default-pressed: var(--color-light-10-3) !important;
+    --ym-controls-color-secondary-default-focused: var(--color-dark-10-5) !important;
+    --ym-controls-color-secondary-default-focused_stroke: var(--color-light-10-4) !important;
+    --ym-controls-color-secondary-on_default-disabled: var(--color-light-6-3) !important;
+    --ym-controls-color-secondary-on_default-enabled: var(--color-light-9) !important;
+    --ym-controls-color-secondary-on_default-enabled_variant: var(--color-light-10-5) !important;
+    --ym-controls-color-secondary-on_default-hovered: var(--color-light-8) !important;
+    --ym-controls-color-secondary-outline-disabled_stroke: var(--color-dark-7) !important;
+    --ym-controls-color-secondary-outline-enabled_stroke: var(--color-light-8-3) !important;
+    --ym-controls-color-secondary-outline-hovered_stroke: var(--color-light-6-5) !important;
+    --ym-controls-color-secondary-outline-selected: var(--color-dark-7) !important;
+    --ym-controls-color-secondary-outline-selected_stroke: var(--color-light-9) !important;
+    --ym-controls-color-secondary-outline-pressed: var(--color-dark-5) !important;
+    --ym-controls-color-secondary-outline-focused_stroke: var(--color-dark-5) !important;
+    --ym-controls-color-secondary-on_outline-disabled: var(--color-light-4-5) !important;
+    --ym-controls-color-secondary-on_outline-enabled: var(--color-light-9) !important;
+    --ym-controls-color-secondary-on_outline-enabled_variant: var(--color-light-5-6) !important;
+    --ym-controls-color-secondary-text-disabled: var(--color-light-10-1) !important;
+    --ym-controls-color-secondary-text-enabled: var(--color-light-8-5) !important;
+    --ym-controls-color-secondary-text-enabled_variant: var(--color-light-10) !important;
+    --ym-controls-color-secondary-text-hovered: var(--color-light-9) !important;
+    --ym-controls-color-secondary-text-selected: var(--color-light-9) !important;
+    --ym-controls-color-secondary-card-disabled: var(--color-light-10-3) !important;
+    --ym-controls-color-secondary-card-enabled: var(--color-dark-8-9) !important;
+    --ym-controls-color-secondary-card-hovered: var(--color-dark-6-9) !important;
+    --ym-controls-color-plus-default-disabled: var(--color-light-10-1) !important;
+    --ym-controls-color-plus-default-enabled: linear-gradient(90deg, var(--color-light-6), var(--color-light-8) 30%, var(--color-light-7) 75%, var(--color-light-5)) !important;
+    --ym-controls-color-plus-default-hovered: linear-gradient(90deg, var(--color-light-6-9), var(--color-light-8-9) 30%, var(--color-light-7-9) 75%, var(--color-light-5-9)) !important;
+    --ym-controls-color-plus-default-pressed: var(--color-light-10-3) !important;
+    --ym-controls-color-plus-default-focused_stroke: var(--color-light-10-5) !important;
+    --ym-controls-color-plus-on_default-disabled: var(--color-light-4-6) !important;
+    --ym-controls-color-plus-on_default-enabled: var(--color-light-8-9) !important;
+    --ym-controls-color-accent-default-enabled: var(--color-light-7) !important;
+    --ym-controls-color-accent-default-hovered: var(--color-light-6) !important;
+    --ym-controls-color-accent-default-pressed: var(--color-light-10-8) !important;
+    --ym-controls-color-accent-default-focused_stroke: var(--color-light-6-3) !important;
+    --ym-controls-color-accent-on_default-enabled: var(--color-dark-10) !important;
+}
+
+    .ym-light-theme.ym-light-theme {
+    --ym-controls-color-primary-default-disabled: var(--color-light-4) !important;
+    --ym-controls-color-primary-default-enabled: var(--color-dark-8) !important;
+    --ym-controls-color-primary-default-hovered: var(--color-dark-7) !important;
+    --ym-controls-color-primary-default-pressed: var(--color-dark-9) !important;
+    --ym-controls-color-primary-default-focused_stroke: var(--color-dark-6-3) !important;
+    --ym-controls-color-primary-on_default-disabled: var(--color-dark-4-6) !important;
+    --ym-controls-color-primary-on_default-enabled: var(--color-light-10) !important;
+    --ym-controls-color-primary-outline-disabled: var(--color-light-4) !important;
+    --ym-controls-color-primary-outline-enabled: var(--color-light-7) !important;
+    --ym-controls-color-primary-outline-hovered: var(--color-light-5) !important;
+    --ym-controls-color-primary-outline-hovered_stroke: var(--color-dark-7) !important;
+    --ym-controls-color-primary-outline-selected_stroke: var(--color-dark-8) !important;
+    --ym-controls-color-primary-outline-pressed: var(--color-light-10) !important;
+    --ym-controls-color-primary-outline-focused_stroke: var(--color-dark-6-3) !important;
+    --ym-controls-color-primary-on_outline-disabled: var(--color-dark-4-5) !important;
+    --ym-controls-color-primary-on_outline-enabled: var(--color-dark-9) !important;
+    --ym-controls-color-primary-text-disabled: var(--color-dark-4-5) !important;
+    --ym-controls-color-primary-text-enabled: var(--color-dark-7-8) !important;
+    --ym-controls-color-primary-text-enabled_variant: var(--color-dark-9) !important;
+    --ym-controls-color-primary-text-hovered: var(--color-dark-8) !important;
+    --ym-controls-color-primary-text-hovered_variant: var(--color-light-8) !important;
+    --ym-controls-color-primary-text-vibe: linear-gradient(167.52deg, var(--color-dark-10-9) 27.43%, var(--color-dark-8-9) 50.08%, var(--color-dark-6-9) 95.09%) !important;
+    --ym-controls-color-primary-text-vibe_icon: var(--color-dark-10-9) !important;
+    --ym-controls-color-secondary-default-disabled: var(--color-dark-1-1) !important;
+    --ym-controls-color-secondary-default-enabled: var(--color-dark-2-1) !important;
+    --ym-controls-color-secondary-default-hovered: var(--color-dark-3-2) !important;
+    --ym-controls-color-secondary-default-pressed: var(--color-light-8-6) !important;
+    --ym-controls-color-secondary-default-focused: var(--color-dark-5-5) !important;
+    --ym-controls-color-secondary-default-focused_stroke: var(--color-dark-3-3) !important;
+    --ym-controls-color-secondary-on_default-disabled: var(--color-dark-4-4) !important;
+    --ym-controls-color-secondary-on_default-enabled: var(--color-dark-10-9) !important;
+    --ym-controls-color-secondary-on_default-enabled_variant: var(--color-light-8-7) !important;
+    --ym-controls-color-secondary-on_default-hovered: var(--color-light-8) !important;
+    --ym-controls-color-secondary-outline-disabled_stroke: var(--color-dark-2-2) !important;
+    --ym-controls-color-secondary-outline-enabled_stroke: var(--color-dark-4-4) !important;
+    --ym-controls-color-secondary-outline-hovered_stroke: var(--color-dark-6-5) !important;
+    --ym-controls-color-secondary-outline-selected: var(--color-light-6) !important;
+    --ym-controls-color-secondary-outline-selected_stroke: var(--color-dark-10) !important;
+    --ym-controls-color-secondary-outline-pressed: var(--color-dark-2-2) !important;
+    --ym-controls-color-secondary-outline-focused_stroke: var(--color-dark-2-2) !important;
+    --ym-controls-color-secondary-on_outline-disabled: var(--color-dark-4-4) !important;
+    --ym-controls-color-secondary-on_outline-enabled: var(--color-dark-9) !important;
+    --ym-controls-color-secondary-on_outline-enabled_variant: var(--color-dark-6-7) !important;
+    --ym-controls-color-secondary-text-disabled: var(--color-light-6-4) !important;
+    --ym-controls-color-secondary-text-enabled: var(--color-light-8-5) !important;
+    --ym-controls-color-secondary-text-enabled_variant: var(--color-light-6) !important;
+    --ym-controls-color-secondary-text-hovered: var(--color-light-7) !important;
+    --ym-controls-color-secondary-text-selected: var(--color-light-7) !important;
+    --ym-controls-color-secondary-card-disabled: var(--color-light-7-3) !important;
+    --ym-controls-color-secondary-card-enabled: var(--color-dark-9-9) !important;
+    --ym-controls-color-secondary-card-hovered: var(--color-dark-8-9) !important;
+    --ym-controls-color-plus-default-disabled: var(--color-light-6-3) !important;
+    --ym-controls-color-plus-default-enabled: linear-gradient(90deg, var(--color-dark-6), var(--color-dark-8) 30%, var(--color-dark-7) 75%, var(--color-dark-5)) !important;
+    --ym-controls-color-plus-default-hovered: linear-gradient(90deg, var(--color-dark-6-9), var(--color-dark-8-9) 30%, var(--color-dark-7-9) 75%, var(--color-dark-5-9)) !important;
+    --ym-controls-color-plus-default-pressed: var(--color-light-8) !important;
+    --ym-controls-color-plus-default-focused_stroke: var(--color-dark-6-4) !important;
+    --ym-controls-color-plus-on_default-disabled: var(--color-dark-4-6) !important;
+    --ym-controls-color-plus-on_default-enabled: var(--color-light-8-9) !important;
+    --ym-controls-color-accent-default-enabled: var(--color-dark-7) !important;
+    --ym-controls-color-accent-default-hovered: var(--color-dark-6) !important;
+    --ym-controls-color-accent-default-pressed: var(--color-light-8) !important;
+    --ym-controls-color-accent-default-focused_stroke: var(--color-dark-6-3) !important;
+    --ym-controls-color-accent-on_default-enabled: var(--color-light-10) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']) {
+    transition: color 220ms ease, background-color 220ms ease,
+        border-color 220ms ease, outline-color 220ms ease,
+        scale 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']) :is(svg, use, path) {
+    transition: color 220ms ease, fill 220ms ease, stroke 220ms ease;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):not(:disabled):not([disabled]):not([aria-disabled='true']) :is(svg, use, path) {
+    color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):not(:disabled):not([disabled]):not([aria-disabled='true']) svg:not([fill='none']):not([stroke]) {
+    fill: currentColor !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:hover, :focus-visible):not(:disabled):not([disabled]):not([aria-disabled='true']) :is(svg, use, path) {
+    color: var(--ym-controls-color-primary-text-hovered) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):active:not(:disabled):not([disabled]):not([aria-disabled='true']) :is(svg, use, path) {
+    color: var(--ym-controls-color-primary-default-pressed) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):focus-visible:not(:disabled):not([disabled]):not([aria-disabled='true']) {
+    outline: 2px solid var(--ym-controls-color-primary-default-focused_stroke) !important;
+    outline-offset: 3px;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:disabled, [disabled], [aria-disabled='true']), :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:disabled, [disabled], [aria-disabled='true']) :is(svg, use, path) {
+    color: var(--ym-controls-color-secondary-text-disabled) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is([class*='VibePlayerControls_withYellowPlayButton'], [class*='VibePlayerControls_playButton__'], [class*='VibePlayerControls_skipButton']) {
+    background-color: #ffffff14 !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is([class*='SonataFullscreenControlsDesktop_sonataPlayButton'], .cover-download-button) {
+    background-color: var(--ym-controls-color-secondary-card-enabled);
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is([class*='SonataFullscreenControlsDesktop_sonataPlayButton'], .cover-download-button):is(:hover, :focus-visible):not(:disabled) {
+    background-color: var(--ym-controls-color-secondary-card-hovered);
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) .rWukOKAJh5Ga7JuIp62L {
+    background: var(--ym-controls-color-secondary-default-enabled);
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(.rWukOKAJh5Ga7JuIp62L, [class*='LikesAndHistory_historyIconContainer'], [class*='LikesAndHistoryItem_root']):is(:hover, :focus-visible) {
+    background: var(--ym-controls-color-secondary-default-hovered) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) .JjlbHZ4FaP9EAcR_1DxF:is(:hover, :focus-visible), :is(.ym-dark-theme, .ym-light-theme) [class*='ChangeVolume_icon']:is(:hover, :focus-visible) {
+    color: var(--ym-controls-color-primary-default-hovered) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) .JjlbHZ4FaP9EAcR_1DxF:active {
+    color: var(--ym-controls-color-secondary-on_default-enabled) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*='PlaylistFilters_filter_selected'],
+:is(.ym-dark-theme, .ym-light-theme) .customButton.bordered {
+    border-color: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is([class*='VibePlayerControls_withYellowPlayButton'], [class*='VibePlayerControls_playButton__'],
+    [class*='VibePlayerControls_skipButton'], [class*='VibePlayerBar_button'],
+    [class*='AlbumCover_root'], [class*='AlbumCover_coverContainer']) {
+    transition: scale 220ms cubic-bezier(.22, 1, .36, 1), color 220ms ease, background-color 220ms ease;
+}
+
+    @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+
+    :is(.ym-dark-theme, .ym-light-theme) :is([class*='VibePlayerControls_withYellowPlayButton'], [class*='VibePlayerControls_playButton__'],
+        [class*='VibePlayerControls_skipButton'], [class*='VibePlayerBar_button'],
+        [class*='AlbumCover_root'], [class*='AlbumCover_coverContainer']):hover:not(:disabled):not([disabled]):not([aria-disabled='true']) {
+        scale: 1.04;
+    }
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*='AlbumCover_root']:hover [class*='AlbumCover_coverContainer'] {
+        scale: 1;
+    }
+}
+
+    @media (prefers-reduced-motion: no-preference) {
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):active:not(:disabled):not([disabled]):not([aria-disabled='true']) {
+        scale: .97;
+    }
+}
+
+    @media (prefers-reduced-motion: reduce) {
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button'], svg, use, path), :is(.ym-dark-theme, .ym-light-theme) :is([class*='AlbumCover_root'], [class*='AlbumCover_coverContainer']) {
+        transition: none !important;
+        scale: 1 !important;
+    }
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']):is(:hover, :focus-visible, :active), :is(.ym-dark-theme, .ym-light-theme) :is(button, [role='button']) :is(svg, use, path) {
+    transition-duration: 220ms;
+}
+
+    :is(.ym-dark-theme, .ym-light-theme) [class*="WheelItem_title_accentColor__"] {
+    color: var(--ym-controls-color-secondary-text-enabled_variant) !important;
+}
