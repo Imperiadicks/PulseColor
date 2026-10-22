@@ -2,8 +2,25 @@
    Page backgrounds, cover layers, wave rendering and shell geometry stay in PulseColor.
    Semantic class prefixes tolerate native YM hash changes. */
 
+/* Only during an appearance switch: keep normal hover and wheel motion cheap. */
+.ym-light-theme { --pc-shell-outline: var(--color-dark-4-5); }
+.ym-dark-theme { --pc-shell-outline: var(--color-light-1); }
+@media (prefers-reduced-motion: no-preference) {
+    html[data-pc-theme-changing] :is(body, button, a, span, p, h1, h2, h3, svg, use, aside, [class*="Content_root"], [class*="PlayerBarDesktop"]) {
+        transition: color 450ms ease, fill 450ms ease, background-color 450ms ease, border-color 450ms ease, outline-color 450ms ease !important;
+    }
+}
+
 
 /* Player metadata: native class prefixes also survive YM hash updates. */
+
+/* PulseSync settings host uses literal black/white instead of theme roles. */
+html:root :is(.ym-light-theme, [data-pc-vibe-appearance="light"]) :is([class^="_badge_"], [class*=" _badge_"]) {
+    color: var(--color-light-10, #fff) !important;
+}
+html:root :is([class^="_header_"], [class*=" _header_"]) h2 {
+    color: var(--ym-controls-color-primary-text-enabled_variant) !important;
+}
 
 html:root [class*="CommonControlsBar_downloadIcon__"],
 html:root [class*="CommonControlsBar_downloadIcon__"] :is(svg, use),
@@ -84,9 +101,23 @@ html:root:root [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
     box-shadow: inset 0 10px 30px rgba(0, 0, 0, .6) !important;
 }
 
-:is(.ym-dark-theme, .ym-light-theme) [class*="CommonLayout_root__"]>[class*="Content_root__"] {
-    outline-color: var(--color-light-1);
+html:root:root [class*="CommonLayout_root__"]> :is(aside, [class*="Content_root__"]) {
+    outline: 1px solid var(--pc-shell-outline, var(--color-light-1));
+    outline-offset: -1px;
+    border-color: var(--pc-shell-outline, var(--color-light-1)) !important;
     border-radius: var(--ym-layout-border-radius, 12px);
+}
+html:root:root [class*="CommonLayout_root__"]>aside {
+    box-shadow: none !important;
+}
+
+/* One matte surface for sidebar, content and the ordinary bottom player. */
+html:root:root body[data-pc-vibe-appearance="light"] [class*="CommonLayout_root"]> :is(aside, [class*="Content_root"]),
+html:root:root body[data-pc-vibe-appearance="light"] [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
+    background: color-mix(in srgb, var(--color-dark-3) 24%, transparent) !important;
+}
+html:root [class*="NavbarDesktop_logoLink"] {
+    --ym-logo-color-primary-back: transparent !important;
 }
 
 :is(.ym-dark-theme, .ym-light-theme) [class*="SonataFullscreenControlsDesktop_sonataPlayButton__"]:not(:disabled):focus-visible,
@@ -196,6 +227,11 @@ html:root:root [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
  :is(.ym-dark-theme, .ym-light-theme) .s7_MO4NdsYs7nPQALD8W {
     background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent);
     backdrop-filter: var(--pulsecolor-ui-blur-heavy, blur(28px));
+}
+
+html:root .s7_MO4NdsYs7nPQALD8W,
+html:root [role="menu"] {
+    border-radius: 20px !important;
 }
 
 :is(.ym-dark-theme, .ym-light-theme) .SHvrm0VRiLVwGqJJjNO8:before {
@@ -334,6 +370,13 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
     margin-top: 15px;
 }
 
+/* The full wordmark already includes the star. The native compact logo must
+   not overlay its black disc on the expanded sidebar in light appearance. */
+html:root [class*="CommonLayout_root"]>aside:not([class*="Navbar_root_collapsed"])
+  [class*="NavbarDesktop_logoLink"] svg:has(>use[*|href$="#musicLogo"]) {
+    display: none !important;
+}
+
  :is(.ym-dark-theme, .ym-light-theme) [class*="CollectionPage_collectionColor__"],
  :is(.ym-dark-theme, .ym-light-theme) .ygfy3HHHNs5lMz5mm4ON,
  :is(.ym-dark-theme, .ym-light-theme) .yvGpKZBZLwidMfMcVMR3 {
@@ -391,7 +434,7 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
     --ym-controls-color-primary-on_default-disabled: var(--color-dark-3-8) !important;
     --ym-controls-color-primary-on_default-enabled: var(--color-dark-10) !important;
     --ym-controls-color-primary-outline-disabled: var(--color-dark-7) !important;
-    --ym-controls-color-primary-outline-enabled: var(--color-dark-6-10) !important;
+    --ym-controls-color-primary-outline-enabled: var(--color-dark-4) !important;
     --ym-controls-color-primary-outline-hovered: var(--color-dark-5) !important;
     --ym-controls-color-primary-outline-hovered_stroke: var(--color-light-7) !important;
     --ym-controls-color-primary-outline-selected_stroke: var(--color-light-8) !important;
@@ -457,7 +500,7 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
     --ym-controls-color-primary-on_default-disabled: var(--color-dark-4-6) !important;
     --ym-controls-color-primary-on_default-enabled: var(--color-light-10) !important;
     --ym-controls-color-primary-outline-disabled: var(--color-light-4) !important;
-    --ym-controls-color-primary-outline-enabled: var(--color-light-7) !important;
+    --ym-controls-color-primary-outline-enabled: var(--color-light-4) !important;
     --ym-controls-color-primary-outline-hovered: var(--color-light-5) !important;
     --ym-controls-color-primary-outline-hovered_stroke: var(--color-dark-7) !important;
     --ym-controls-color-primary-outline-selected_stroke: var(--color-dark-8) !important;
@@ -492,11 +535,11 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
     --ym-controls-color-secondary-on_outline-disabled: var(--color-dark-4-4) !important;
     --ym-controls-color-secondary-on_outline-enabled: var(--color-dark-9) !important;
     --ym-controls-color-secondary-on_outline-enabled_variant: var(--color-dark-6-7) !important;
-    --ym-controls-color-secondary-text-disabled: var(--color-light-6-4) !important;
-    --ym-controls-color-secondary-text-enabled: var(--color-light-8-5) !important;
-    --ym-controls-color-secondary-text-enabled_variant: var(--color-light-6) !important;
-    --ym-controls-color-secondary-text-hovered: var(--color-light-7) !important;
-    --ym-controls-color-secondary-text-selected: var(--color-light-7) !important;
+    --ym-controls-color-secondary-text-disabled: var(--color-dark-4-5) !important;
+    --ym-controls-color-secondary-text-enabled: var(--color-dark-7-8) !important;
+    --ym-controls-color-secondary-text-enabled_variant: var(--color-dark-9) !important;
+    --ym-controls-color-secondary-text-hovered: var(--color-dark-8) !important;
+    --ym-controls-color-secondary-text-selected: var(--color-dark-8) !important;
     --ym-controls-color-secondary-card-disabled: var(--color-light-7-3) !important;
     --ym-controls-color-secondary-card-enabled: var(--color-dark-9-9) !important;
     --ym-controls-color-secondary-card-hovered: var(--color-dark-8-9) !important;
@@ -695,11 +738,11 @@ html:root [data-test-id="PIN_ITEM"]:is(:hover, :focus-within):not([aria-disabled
 }
 /* Only the native generic wave orb. Artist/user/playlist covers stay intact.
    The direct image-src condition cannot be invalidated by Swiper's classes. */
-html:root [data-test-id="PIN_COVER"] [class*="PlayButtonWithCover_cover__"]:has(> img[src*="/get-music-misc/29541/img.64426e"]) {
+html:root [data-test-id="PIN_COVER"] [class*="PlayButtonWithCover_cover__"]:has(> img[src*="/get-music-misc/"][src*="/img.64426e"]) {
     isolation: isolate;
     background: var(--ym-controls-color-primary-text-hovered) !important;
 }
-html:root [data-test-id="PIN_COVER"] img[src*="/get-music-misc/29541/img.64426e"] {
+html:root [data-test-id="PIN_COVER"] img[src*="/get-music-misc/"][src*="/img.64426e"] {
     filter: grayscale(1) !important;
     mix-blend-mode: luminosity;
 }
