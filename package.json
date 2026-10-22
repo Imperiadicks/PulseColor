@@ -2,7 +2,10 @@
   "name": "pulsecolor",
   "version": "2.0.0",
   "private": true,
-  "repository": {"type":"git","url":"https://github.com/Imperiadicks/PulseColor.git"},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Imperiadicks/PulseColor.git"
+  },
   "type": "module",
   "description": "PulseColor CSS theme; depends on PulseColorVisual",
   "scripts": {
@@ -26,7 +29,9 @@
     "@types/node": "26.6.3",
     "@types/react": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
+    "acorn": "8.8.2",
     "esbuild": "^0.28.0",
+    "javascript-obfuscator": "4.1.1",
     "oxfmt": "0.71.0",
     "prettier": "^3.9.9",
     "react": "19.3.0",

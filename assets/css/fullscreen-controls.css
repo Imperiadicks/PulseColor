@@ -1,313 +1,743 @@
 /* Native React nodes stay in place. Only their grid participation changes. */
-html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is(
-  [class*="FullscreenPlayerDesktopControls_root"] button,
-  [class*="FullscreenPlayerDesktop_closeButton"]
-) {
-  background: rgb(0 0 0 / .36) !important;
-  border: 1px solid rgb(255 255 255 / .05) !important;
-  border-radius: 50% !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
+    display: grid !important;
+    visibility: visible !important;
 }
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [data-pc-lyrics-placeholder] {
+    opacity: 1 !important;
+    cursor: not-allowed !important;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]):not([data-pc-fullscreen-layout="controls"]) [class*="FullscreenPlayerDesktopControls_root"] {
+    background: rgb(0 0 0 / .38) !important;
+    border-radius: inherit;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) {
+    --pc-fs-button-dark: color-mix(in srgb, var(--color-dark-6, #181818) 75%, black);
+    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-button-opacity, 95%), transparent) !important;
+    color: var(--ym-controls-color-secondary-text-enabled) !important;
+    opacity: 1 !important;
+    border: 1px solid rgb(255 255 255 / .12) !important;
+    border-radius: 50% !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    transition-property: background-color, color, border-color, opacity, transform, scale !important;
+    transition-duration: 180ms !important;
+}
+
+
 /* Geometry normalisation belongs ONLY to the custom layout. Native overlay
    buttons size themselves through padding; zeroing it collapses them to icons. */
+
 html:root:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
-  display: grid !important;
-  place-items: center !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
-  line-height: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    line-height: 0 !important;
 }
-html:root:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="FullscreenPlayerDesktopControls_root"] button,
-  [class*="FullscreenPlayerDesktop_closeButton"]
-) > span {
-  display: grid !important;
-  place-items: center !important;
-  width: 100% !important; height: 100% !important;
-  padding: 0 !important; margin: 0 !important;
-  line-height: 0 !important;
-  transform: none !important; translate: none !important;
+
+html:root:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"])>span {
+    display: grid !important;
+    place-items: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 0 !important;
+    transform: none !important;
+    translate: none !important;
 }
-html:root:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="FullscreenPlayerDesktopControls_root"] button,
-  [class*="FullscreenPlayerDesktop_closeButton"]
-) svg {
-  display: block !important;
-  width: 24px !important; height: 24px !important;
-  margin: 0 !important; padding: 0 !important;
-  transform: none !important; translate: none !important;
+
+html:root:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) svg {
+    display: block !important;
+    width: 24px !important;
+    height: 24px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    translate: none !important;
 }
-html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is(
-  [class*="FullscreenPlayerDesktopControls_root"] button,
-  [class*="FullscreenPlayerDesktop_closeButton"]
-):is(:hover, :focus-visible):not(:disabled) {
-  background: rgb(0 0 0 / .5) !important;
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-expanded="true"]):not(:disabled):not([aria-disabled="true"]) {
+    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-button-opacity, 100%), transparent) !important;
+    color: var(--ym-controls-color-secondary-text-hovered, var(--ym-controls-color-secondary-text-enabled)) !important;
 }
+
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [data-test-id="FULLSCREEN_PLAYER_CLOSE_BUTTON"] {
+    --pc-fs-button-dark: var(--ym-controls-color-primary-default-disabled);
+    --pc-fs-button-opacity: 100%;
+}
+
+/* A missing-lyrics placeholder must occupy the exact native bottom cell. */
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]):not([data-pc-fullscreen-layout="controls"]) [data-pc-lyrics-placeholder] {
+    grid-row: 3 !important;
+    grid-column: 2 !important;
+    align-self: end !important;
+    justify-self: center !important;
+    margin: 0 0 var(--ym-spacer-size-l, 16px) !important;
+    width: 64px !important;
+    height: 64px !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+    place-items: center !important;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]):not([data-pc-fullscreen-layout="controls"]) [data-pc-lyrics-placeholder] svg {
+    width: 32px !important;
+    height: 32px !important;
+    display: block;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) :is(svg, svg use) {
+    color: var(--ym-controls-color-secondary-text-enabled) !important;
+    fill: currentColor !important;
+    fill-opacity: 1 !important;
+    opacity: 1 !important;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [class*="FullscreenPlayerDesktopControls_root"] button :is(span, svg, use) {
+    opacity: 1 !important;
+}
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-expanded="true"]):not(:disabled):not([aria-disabled="true"]) :is(svg, svg use) {
+    color: var(--ym-controls-color-secondary-text-hovered, var(--ym-controls-color-secondary-text-enabled)) !important;
+}
+
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) button:focus-visible {
-  outline: 2px solid var(--ym-controls-color-secondary-text-enabled_variant);
-  outline-offset: 3px;
+    outline: 2px solid var(--ym-controls-color-secondary-text-enabled_variant);
+    outline-offset: 3px;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [class*="FullscreenPlayerDesktopControls_root"] button:is(:disabled, [aria-disabled="true"]) {
+    opacity: 1 !important;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [class*="FullscreenPlayerDesktopControls_root"] button:is(:disabled, [aria-disabled="true"]) :is(svg, svg use) {
+    color: var(--ym-controls-color-secondary-text-disabled) !important;
 }
 
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopPoster_cover"] {
-  display: none !important;
+    display: none !important;
 }
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-  grid-template-rows: auto auto auto !important;
-  align-content: center !important;
-  justify-items: stretch !important;
-  gap: 20px !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: calc(100dvh - 96px) !important;
-  max-width: calc(100vw - 48px) !important;
-  padding-block: 20px !important;
-  box-sizing: border-box !important;
+    display: grid !important;
+    /* Native enter/leave keyframes animate transform and conflict with our FLIP. */
+    animation: none !important;
+    transition: none !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto auto !important;
+    align-content: center !important;
+    justify-items: stretch !important;
+    gap: 20px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 96px) !important;
+    max-width: calc(100vw - 48px) !important;
+    padding-block: 20px !important;
+    box-sizing: border-box !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="FullscreenPlayerDesktopPoster_root"],
-  [class*="FullscreenPlayerDesktopContent_info"]
-) { display: contents !important; }
+
+html:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopPoster_root"], [class*="FullscreenPlayerDesktopContent_info"]) {
+    display: contents !important;
+}
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] {
-  grid-row: 1 !important;
-  width: 100% !important;
-  margin: 0 !important;
-  text-align: center;
+    grid-row: 1 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    text-align: center;
 }
+
 html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"] {
-  grid-row: 2 !important;
-  width: 100% !important;
-  max-width: none !important;
-  margin: 0 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
 }
+
 html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] {
-  height: 8px !important;
-  border-radius: 999px !important;
-  min-width: 0 !important;
+    height: 8px !important;
+    border-radius: 999px !important;
+    min-width: 0 !important;
 }
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] {
-  grid-row: 3 !important;
-  display: flex !important;
-  flex-wrap: wrap !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px !important;
-  position: static !important;
-  inset: auto !important;
-  width: 100% !important;
-  height: auto !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: none !important;
-  pointer-events: auto !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] :is(button,
-  [class*="FullscreenPlayerDesktopControls_menuWrapper"],
-  [class*="FullscreenPlayerDesktopControls_bottomRightButtonsWrapper"]) {
-  position: static !important;
-  inset: auto !important;
-  transform: none !important;
-  margin: 0 !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] > * {
-  order: 2;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
-  order: 1 !important;
-  flex: 0 0 100% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px !important;
-  position: static !important;
-  margin: 0 !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_sonataButtons"] {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_buttonContainer"] {
-  flex: 0 0 auto !important;
-  width: auto !important;
-  min-width: 0 !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_buttonContainer"]:empty {
-  display: none !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  padding: 12px !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] [class*="SonataFullscreenControlsDesktop_sonataPlayButton"] {
-  width: 64px !important;
-  height: 64px !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 999px;
-}
-@media (max-width: 700px), (max-height: 550px) {
-  html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-    padding: 10px !important;
-  }
-  html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+    grid-row: 3 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
     gap: 12px !important;
-  }
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    pointer-events: auto !important;
 }
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] :is(button, [class*="FullscreenPlayerDesktopControls_menuWrapper"], [class*="FullscreenPlayerDesktopControls_bottomRightButtonsWrapper"]) {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"]>* {
+    order: 2;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
+    order: 1 !important;
+    flex: 0 0 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    position: static !important;
+    margin: 0 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_sonataButtons"] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_buttonContainer"] {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="SonataFullscreenControlsDesktop_buttonContainer"]:empty {
+    display: none !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
+    padding: 12px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] [class*="SonataFullscreenControlsDesktop_sonataPlayButton"] {
+    width: 64px !important;
+    height: 64px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 999px;
+}
+
+@media (max-width: 700px),
+(max-height: 550px) {
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        padding: 10px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        gap: 12px !important;
+    }
+}
+
 
 /* Vibe-style title/seek pill with side actions; playback stays on its axis. */
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-  --pc-fs-button: clamp(32px,3.5vw,48px);
-  grid-template-columns:repeat(2,var(--pc-fs-button)) minmax(100px,1fr) repeat(2,var(--pc-fs-button)) !important;
-  grid-template-rows:64px auto !important;
-  align-items:center !important; gap:24px 6px !important;
-  position:absolute !important; inset:auto !important; left:50% !important; top:50% !important;
-  transform:translate(-50%,-50%) !important;
-  width:min(720px,calc(100% - 64px)) !important; max-width:calc(100vw - 32px) !important;
-  padding:0 !important; margin:0 !important;
-}
-html:root [data-pc-fullscreen-layout="controls"]:has([class*="FullscreenPlayerDesktopContent_meta_isSplitMode"]) [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-  left:25% !important; width:min(680px,calc(50% - 64px)) !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="FullscreenPlayerDesktopControls_root"],
-  [class*="FullscreenPlayerDesktopControls_menuWrapper"],
-  [class*="FullscreenPlayerDesktopControls_bottomRightButtonsWrapper"]
-) { display:contents !important; }
-html:root [data-pc-fullscreen-layout="controls"] :is(
-  [data-test-id="TIMECODE_WRAPPER"], [class*="FullscreenPlayerDesktopContent_meta"]
-) { grid-row:1 !important; grid-column:3 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"] {
-  position:relative !important; display:block !important; height:64px !important;
-  border-radius:999px !important; overflow:hidden !important; background:rgb(255 255 255 / .12) !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"]::before {
-  content:""; position:absolute; inset:0 auto 0 0; width:var(--track-progress,0%);
-  background:color-mix(in srgb, var(--ym-controls-color-accent-default-enabled) 25%, transparent); pointer-events:none;
-}
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"] [class*="Timecode_root"] { display:none !important; }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] {
-  position:absolute !important; inset:0 !important; width:100% !important; height:64px !important;
-  margin:0 !important; padding:0 !important; background:transparent !important;
-  border:0 !important; border-radius:999px !important; cursor:pointer;
-}
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track { height:64px; background:transparent; }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-thumb { opacity:0; }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::before,
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::after { display:none !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] {
-  z-index:1; pointer-events:none !important; overflow:hidden;
-  display: grid !important; place-items: center !important;
-  align-self: center !important; height: 64px !important;
-  padding: 0 16px !important; box-sizing: border-box !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] * { pointer-events:none !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_artists"] { display:none !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="Meta_metaContainer"] { width:100% !important; min-width:0 !important; padding:0 !important; margin:0 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"],
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"] :is(div,a,span) {
-  display:block !important; min-width:0 !important;
-  line-height:24px !important; font-size:clamp(14px,1.4vw,20px) !important; font-weight:700 !important;
-  margin:0 !important; padding:0 !important; text-align:center !important;
-  white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
-  grid-row:1 !important; width:var(--pc-fs-button) !important; height:var(--pc-fs-button) !important; min-width:0 !important; padding:10px !important;
-  align-self: center !important; justify-self: center !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] { grid-column:2 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] { grid-column:4 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] { grid-column:5 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] { grid-column:1 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
-  grid-row:2 !important; grid-column:1 / -1 !important; display:grid !important;
-  grid-template-columns:44px 52px 64px 52px 44px !important;
-  justify-content:center !important; align-items:center !important; gap:12px !important;
-  width:100% !important; height:auto !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="SonataFullscreenControlsDesktop_sonataButtons"],
-  [class*="SonataFullscreenControlsDesktop_buttonContainer"]
-) { display:contents !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] button {
-  grid-row:1 !important; grid-column:auto !important; width:52px !important; height:52px !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id="PREVIOUS_TRACK_BUTTON"] { grid-column:2 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"],[data-test-id="PAUSE_BUTTON"]) {
-  grid-column:3 !important; width:64px !important; height:64px !important;
-}
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id="NEXT_TRACK_BUTTON"] { grid-column:4 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id^="REPEAT_BUTTON"] { grid-column:5 !important; width:44px !important; height:44px !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id^="SHUFFLE"] { grid-column:1 !important; width:44px !important; height:44px !important; }
-@media (max-width:900px) {
-  html:root [data-pc-fullscreen-layout="controls"]:has([class*="FullscreenPlayerDesktopContent_meta_isSplitMode"]) [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-    left:50% !important; top:auto !important; bottom:32px !important; transform:translateX(-50%) !important; width:calc(100% - 32px) !important;
-  }
-}
-@media (max-width:500px) {
-  html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] { gap:20px 4px !important; width:calc(100% - 32px) !important; }
+    --pc-fs-button: clamp(32px, 3.5vw, 48px);
+    grid-template-columns: repeat(2, var(--pc-fs-button)) minmax(100px, 1fr) repeat(2, var(--pc-fs-button)) !important;
+    grid-template-rows: 64px auto !important;
+    align-items: center !important;
+    gap: 24px 6px !important;
+    position: absolute !important;
+    inset: auto !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(720px, calc(100% - 64px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
-/* Compact native-fullscreen composition: pill, auxiliary row, playback row. */
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-  --pc-fs-button:44px;
-  grid-template-columns:repeat(8,minmax(0,1fr)) !important;
-  grid-template-rows:56px 44px 44px !important;
-  gap:16px 4px !important;
-  width:min(420px,calc(100% - 48px)) !important;
+html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+    left: 25% !important;
+    width: min(680px, calc(50% - 64px)) !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] :is([data-test-id="TIMECODE_WRAPPER"],[class*="FullscreenPlayerDesktopContent_meta"]) {
-  grid-row:1 !important; grid-column:1 / -1 !important; height:56px !important;
+
+html:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopControls_root"], [class*="FullscreenPlayerDesktopControls_menuWrapper"], [class*="FullscreenPlayerDesktopControls_bottomRightButtonsWrapper"]) {
+    display: contents !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] { height:56px !important; }
-html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track { height:56px; }
+
+html:root [data-pc-fullscreen-layout="controls"] :is( [data-test-id="TIMECODE_WRAPPER"], [class*="FullscreenPlayerDesktopContent_meta"]) {
+    grid-row: 1 !important;
+    grid-column: 3 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"] {
+    position: relative !important;
+    display: block !important;
+    height: 64px !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+    background: rgb(255 255 255 / .12) !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"]::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--track-progress, 0%);
+    background: color-mix(in srgb, var(--ym-controls-color-accent-default-enabled) 25%, transparent);
+    pointer-events: none;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"] [class*="Timecode_root"] {
+    display: none !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 64px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    cursor: pointer;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track {
+    height: 64px;
+    background: transparent;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-thumb {
+    opacity: 0;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::before,
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::after {
+    display: none !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] {
+    z-index: 1;
+    pointer-events: none !important;
+    overflow: hidden;
+    display: grid !important;
+    place-items: center !important;
+    align-self: center !important;
+    height: 64px !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] * {
+    pointer-events: none !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_artists"] {
+    display: none !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="Meta_metaContainer"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"],
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"] :is(div, a, span) {
+    display: block !important;
+    min-width: 0 !important;
+    line-height: 24px !important;
+    font-size: clamp(14px, 1.4vw, 20px) !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+
+/* Keep badges out of the title's vertical flow and its centring axis. */
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"] {
+    position: relative !important;
+    width: 100% !important;
+    height: 24px !important;
+    overflow: visible !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"]> :not([class*="Meta_explicitMarkContainer"]) {
+    width: calc(100% - 40px) !important;
+    margin-inline: auto !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_title"] [class*="Meta_explicitMarkContainer"] {
+    position: absolute !important;
+    inset-inline-end: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 16px !important;
+    height: 16px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="Meta_explicitMarkContainer"] svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
-  grid-row:2 !important; width:44px !important; height:44px !important;
+    grid-row: 1 !important;
+    width: var(--pc-fs-button) !important;
+    height: var(--pc-fs-button) !important;
+    min-width: 0 !important;
+    padding: 10px !important;
+    align-self: center !important;
+    justify-self: center !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] { grid-column:1 / 3 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] { grid-column:3 / 5 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] { grid-column:5 / 7 !important; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] { grid-column:7 / 9 !important; }
-html:root [data-pc-fullscreen-layout="controls"] :is(
-  [class*="FullscreenPlayerDesktopControls_menuButton"],
-  [class*="FullscreenPlayerDesktopControls_syncLyricsButton"],
-  [class*="FullscreenPlayerDesktopControls_likeButton"],
-  [class*="FullscreenPlayerDesktopControls_playQueueButton"]
-) {
-  grid-column:1 / -1 !important;
-  translate:var(--pc-fs-offset,0px) 0 !important;
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
+    grid-column: 2 !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] { --pc-fs-offset:-78px; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] { --pc-fs-offset:-26px; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] { --pc-fs-offset:26px; }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] { --pc-fs-offset:78px; }
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] {
+    grid-column: 4 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] {
+    grid-column: 5 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] {
+    grid-column: 1 !important;
+}
+
 html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
-  grid-row:3 !important; grid-column:1 / -1 !important;
-  grid-template-columns:repeat(5,44px) !important; gap:8px !important;
+    grid-row: 2 !important;
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: 44px 52px 64px 52px 44px !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    height: auto !important;
 }
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] button,
-html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"],[data-test-id="PAUSE_BUTTON"]) {
-  grid-row:1 !important; width:44px !important; height:44px !important;
+
+html:root [data-pc-fullscreen-layout="controls"] :is( [class*="SonataFullscreenControlsDesktop_sonataButtons"], [class*="SonataFullscreenControlsDesktop_buttonContainer"]) {
+    display: contents !important;
 }
-@media (min-width:501px) {
-  html:root [data-pc-fullscreen-layout="controls"]:has([class*="FullscreenPlayerDesktopContent_meta_isSplitMode"]) [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-    left:25% !important; top:50% !important; bottom:auto !important;
-    transform:translate(-50%,-50%) !important; width:min(420px,calc(50% - 48px)) !important;
-  }
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] button {
+    grid-row: 1 !important;
+    grid-column: auto !important;
+    width: 52px !important;
+    height: 52px !important;
 }
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id="PREVIOUS_TRACK_BUTTON"] {
+    grid-column: 2 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"], [data-test-id="PAUSE_BUTTON"]) {
+    grid-column: 3 !important;
+    width: 64px !important;
+    height: 64px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id="NEXT_TRACK_BUTTON"] {
+    grid-column: 4 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id^="REPEAT_BUTTON"] {
+    grid-column: 5 !important;
+    width: 44px !important;
+    height: 44px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-test-id^="SHUFFLE"] {
+    grid-column: 1 !important;
+    width: 44px !important;
+    height: 44px !important;
+}
+
+@media (max-width:900px) {
+    html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        left: 50% !important;
+        top: auto !important;
+        bottom: 32px !important;
+        transform: translateX(-50%) !important;
+        width: calc(100% - 32px) !important;
+    }
+}
+
 @media (max-width:500px) {
-  html:root [data-pc-fullscreen-layout="controls"]:has([class*="FullscreenPlayerDesktopContent_meta_isSplitMode"]) [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-    width:min(420px,calc(100% - 32px)) !important;
-  }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        gap: 20px 4px !important;
+        width: calc(100% - 32px) !important;
+    }
+}
+
+
+/* Compact composition below 1200px; desktop layout is defined below. */
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+    --pc-fs-button: 44px;
+    grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+    grid-template-rows: 56px 44px 56px !important;
+    gap: 16px 4px !important;
+    width: min(420px, calc(100% - 48px)) !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] :is([data-test-id="TIMECODE_WRAPPER"], [class*="FullscreenPlayerDesktopContent_meta"]) {
+    grid-row: 1 !important;
+    grid-column: 1 / -1 !important;
+    height: 56px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] {
+    height: 56px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track {
+    height: 56px;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
+    grid-row: 2 !important;
+    width: 44px !important;
+    height: 44px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] {
+    grid-column: 1 / 3 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
+    grid-column: 3 / 5 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] {
+    grid-column: 5 / 7 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] {
+    grid-column: 7 / 9 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopControls_menuButton"], [class*="FullscreenPlayerDesktopControls_syncLyricsButton"], [class*="FullscreenPlayerDesktopControls_likeButton"], [class*="FullscreenPlayerDesktopControls_playQueueButton"]) {
+    grid-column: 1 / -1 !important;
+    translate: var(--pc-fs-offset, 0px) 0 !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] {
+    --pc-fs-offset: -78px;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
+    --pc-fs-offset: -26px;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] {
+    --pc-fs-offset: 26px;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] {
+    --pc-fs-offset: 78px;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
+    grid-row: 3 !important;
+    grid-column: 1 / -1 !important;
+    grid-template-columns: 44px 44px 56px 44px 44px !important;
+    gap: 8px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] button,
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"], [data-test-id="PAUSE_BUTTON"]) {
+    grid-row: 1 !important;
+    width: 44px !important;
+    height: 44px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"], [data-test-id="PAUSE_BUTTON"]) {
+    width: 56px !important;
+    height: 56px !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] [data-pc-shuffle-placeholder] {
+    opacity: 1 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+@media (min-width:501px) {
+    html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        left: 25% !important;
+        top: 50% !important;
+        bottom: auto !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(420px, calc(50% - 48px)) !important;
+    }
+}
+
+@media (max-width:500px) {
+    html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        width: min(420px, calc(100% - 32px)) !important;
+    }
+}
+
+
+/* Lower placement applies equally with and without the lyrics column. */
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"],
+html:root [data-pc-fullscreen-layout="controls"] [class*="Meta_metaContainer"] {
+    width: 100% !important;
+    max-width: none !important;
+    justify-self: stretch !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_meta"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: stretch !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-pc-title-scroll]> :not(.pc-fs-title-viewport):not([class*="Meta_explicitMarkContainer"]) {
+    visibility: hidden !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [data-pc-title-scroll]>.pc-fs-title-viewport {
+    position: absolute !important;
+    inset: 0 20px !important;
+    width: auto !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] .pc-fs-title-viewport>.pc-fs-title-track {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    width: max-content !important;
+    min-width: 100% !important;
+    height: 24px;
+    gap: 48px;
+    overflow: visible !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] .pc-fs-title-track>span {
+    flex: none;
+    width: max-content !important;
+    overflow: visible !important;
+}
+
+html:root [data-pc-fullscreen-layout="controls"] .pc-fs-title-overflow>.pc-fs-title-track {
+    justify-content: flex-start;
+    animation: pc-fs-title-loop var(--pc-title-duration) linear infinite;
+}
+
+@keyframes pc-fs-title-loop {
+    to {
+        transform: translateX(calc(-1 * var(--pc-title-distance)));
+    }
+}
+
+@media (prefers-reduced-motion:reduce) {
+    html:root [data-pc-fullscreen-layout="controls"] .pc-fs-title-overflow>.pc-fs-title-track {
+        animation: none;
+    }
+}
+
+html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"],
+html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+    top: auto !important;
+    bottom: clamp(24px, 7vh, 80px) !important;
+    transform: translateX(-50%) !important;
+}
+
+
+/* Wide player: auxiliary actions flank the title, transport stays centred. */
+
+@media (min-width:1200px) {
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        --pc-fs-button: 52px;
+        grid-template-columns: 52px 52px minmax(140px, 1fr) 52px 52px !important;
+        grid-template-rows: 64px 64px !important;
+        gap: 24px 8px !important;
+        width: min(800px, calc(100% - 96px)) !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
+        width: min(800px, calc(50% - 48px)) !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] :is([data-test-id="TIMECODE_WRAPPER"], [class*="FullscreenPlayerDesktopContent_meta"]) {
+        grid-column: 3 !important;
+        height: 64px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"] {
+        height: 64px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_SLIDER"]::-webkit-slider-runnable-track {
+        height: 64px;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_root"] button {
+        grid-row: 1 !important;
+        width: 52px !important;
+        height: 52px !important;
+        translate: none !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_menuButton"] {
+        grid-column: 1 !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
+        grid-column: 2 !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_likeButton"] {
+        grid-column: 4 !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_playQueueButton"] {
+        grid-column: 5 !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] {
+        grid-row: 2 !important;
+        grid-template-columns: 52px 56px 64px 56px 52px !important;
+        gap: 12px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] button {
+        width: 56px !important;
+        height: 56px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PREVIOUS_TRACK_BUTTON"], [data-test-id="NEXT_TRACK_BUTTON"], [data-test-id^="REPEAT"], [data-test-id^="SHUFFLE"]) {
+        width: 56px !important;
+        height: 56px !important;
+    }
+    html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopControls_sonataControls"] :is([data-test-id="PLAY_BUTTON"], [data-test-id="PAUSE_BUTTON"]) {
+        width: 64px !important;
+        height: 64px !important;
+    }
 }

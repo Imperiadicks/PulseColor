@@ -1,0 +1,69 @@
+/* Keep the menu's own actions, without flashing its popup when a shortcut opens it. */
+html[data-pc-vibe-shortcut-pending] [role="menu"]:has([data-test-id="VIBE_CONTEXT_MENU_SYNC_LYRICS_ITEM"], [data-test-id="VIBE_CONTEXT_MENU_PLAY_QUEUE_ITEM"]),
+[role="menu"][data-pc-vibe-shortcut-menu] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+[class*="VibePlayerControls_root"] [data-pc-vibe-action] {
+    flex-shrink: 0;
+}
+
+/* One surface recipe for every Vibe player control and its track/progress pill.
+   Keep the progress ::before fill and the native disabled/text/icon states. */
+html:root:root [data-test-id="VIBE_PLAYERBAR"] :is(button, [class*="VibePlayerbarMeta_center__"]) {
+    background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
+}
+
+.pc-vibe-settings-hint {
+    position: fixed;
+    z-index: 450;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    max-width: min(360px, calc(100vw - 32px));
+    padding: 12px 14px;
+    border-radius: 16px;
+    background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent);
+    color: var(--ym-controls-color-secondary-text-enabled, #fff);
+    backdrop-filter: var(--pulsecolor-ui-blur-heavy, blur(28px));
+    box-shadow: 0 8px 28px rgb(0 0 0 / 20%);
+    font: 14px/20px "YS Text", sans-serif;
+    animation: pc-vibe-hint-in 180ms ease both;
+}
+
+.pc-vibe-settings-hint::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: calc(var(--pc-hint-arrow-x, 50%) - 6px);
+    width: 12px;
+    height: 6px;
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    background-color: inherit;
+}
+
+html:root .pc-vibe-settings-hint button {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent !important;
+    color: inherit !important;
+    font: 22px/24px sans-serif;
+    cursor: pointer;
+}
+
+@keyframes pc-vibe-hint-in {
+    from { opacity: 0; translate: 0 -4px; }
+    to { opacity: 1; translate: 0 0; }
+}
+
+html[data-pulsecolor-appearance="fast"] .pc-vibe-settings-hint { animation: none; }
+html[data-pulsecolor-appearance="slow"] .pc-vibe-settings-hint { animation-duration: 450ms; }
+@media (prefers-reduced-motion: reduce) {
+    .pc-vibe-settings-hint { animation: none !important; }
+}

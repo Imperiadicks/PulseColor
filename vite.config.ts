@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { promises as fs } from "node:fs";
 import { defineConfig } from "vite";
+import { bundleObfuscationPlugin } from './scripts/bundle-obfuscation.mjs';
 
 import addonConfig from "./addon.config.mjs";
 import { settingsMetadata } from './src/settings.ts';
@@ -29,6 +30,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    bundleObfuscationPlugin(outDir),
     {
       name: "pulsecolor-css-theme",
       async closeBundle() {

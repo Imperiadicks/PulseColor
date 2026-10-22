@@ -1,0 +1,26 @@
+/* Global theme CSS: the native modal lives outside the web-addon's CSS scope.
+   Only native controls/background fade; the original GPU canvas stays alive. */
+#osu-pulse.pulsecolor-webgl-root.pc-fullscreen-wave-stage {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1 !important;
+}
+html[data-pc-fullscreen-scene="enter"] [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene,
+html[data-pc-fullscreen-scene="exit"] [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene {
+  pointer-events: none;
+}
+html[data-pc-fullscreen-scene="enter"] [data-test-id="FULLSCREEN_PLAYER_CLOSE_BUTTON"] {
+  pointer-events: auto;
+}
+/* The page canvas is behind the portal: the native modal's backdrop filter
+   would re-blur it and boost saturation by 80%, changing its actual colours.
+   Suppress both native paint and filtering only while presenting our wave. */
+html[data-pc-fullscreen-scene="enter"] [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene[data-pc-scene-wave],
+html[data-pc-fullscreen-scene="exit"] [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene[data-pc-scene-wave],
+html [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene[data-pc-scene-wave-held],
+html [data-test-id="FULLSCREEN_PLAYER_MODAL"].pc-fullscreen-scene:has(> #osu-pulse) {
+  background: transparent !important;
+  backdrop-filter: none !important;
+}

@@ -1,7 +1,11 @@
+import {effectivePerformanceSettings} from './performance-profiles.js';
 export const THEME_NODE = 'pulsecolor-theme-settings-v1';
 const EVENT = 'pulsecolor:theme-settings';
 const THEME_ID = '419c58cb-75c5-48bf-b053-933f3b81190f';
 const KEYS = new Set(['panelOpacity','coreColorSource','coreBackgroundImage','coreFullVibe','coreMinimalVibe','coreWhiteRecolor','fullscreenVariant','waveEnabled','waveVariant','wavePaletteMode','waveDriveMode','waveWebglQuality','waveDprLimit','waveCoverColors','waveCoverTexture','waveLogging','waveBpmHud','waveReactionIntensity','waveSensitivity','waveSmoothness','waveBrightness','waveMotionEnabled','waveMotionSpeed','tweakedLyricsMaxBlur','tweakedLyricsBlurStep','tweakedLyricsMinOpacity','tweakedLyricsOpacityStep','tweakedLyricsTransitionMs','cover2AnimColorMode','cover2AnimBlobCount','cover2AnimWarp','cover2AnimFlow','cover2AnimSaturation']);
+KEYS.add('premiumTestDenial');
+KEYS.add('vibeSettingsHintTest');
+for(const key of ['appearanceSpeed','performanceProfile','effectsFps','interfaceBlur','adaptiveQuality','staticOnPause'])KEYS.add(key);
 export const THEME_SETTING_KEYS = Object.freeze([...KEYS]);
 function cleanSettings(input) {
   const result = {};
@@ -21,6 +25,7 @@ export function publishThemeSettings(store, doc = document, onSettings) {
   let disposed = false, previous = '';
   const publish = settings => {
     if (disposed) return;
+    settings=effectivePerformanceSettings(settings);
     onSettings?.(settings, doc);
     const json = JSON.stringify({protocol:1,theme:THEME_ID,settings:cleanSettings(settings)});
     if (json === previous) return;

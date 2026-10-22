@@ -1,4 +1,14 @@
 /* ─────────────────── Общие доработки интерфейса ─────────────────── */
+/* Remove the subscription promo and its reserved grid row, not player controls. */
+[data-test-id="BAR_BELOW"],
+[class*="BarBelow_root__"] {
+  display: none !important;
+}
+
+html:root [class*="DefaultLayout_root_withBarBelow__"] {
+  grid-template-rows: minmax(0, 1fr) auto 0 !important;
+}
+
 .UwnL5AJBMMAp6NwMDdZk,
 .VibePlayerControls_playButtonIcon__OXCWN,
 :is(.UwnL5AJBMMAp6NwMDdZk, .VibePlayerControls_playButtonIcon__OXCWN) :is(svg, use, path) {
@@ -301,7 +311,24 @@ html[data-pulsecolor-playerbar-enter] :is([class*="PlayerBarDesktopWithBackgroun
   [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"]):not([class*="PlayerBarDesktopWithBackgroundProgressBar_root"] *,
   [class*="PlayerBarDesktopWithBackgroundProgressBar_important"] *,
   [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"] *) {
-  animation: pulsecolor-playerbar-appear 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: pulsecolor-playerbar-appear var(--pulsecolor-appearance-playerbar, 360ms) cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+html[data-pulsecolor-appearance="fast"] {
+  --pulsecolor-appearance-playerbar: 0ms;
+}
+
+html[data-pulsecolor-appearance="fast"] :is([data-pulsecolor-reveal-pending], [data-pulsecolor-cover-pending]) {
+  opacity: 1 !important;
+}
+
+html[data-pulsecolor-appearance="fast"] :is([class*="PlayerBarDesktopWithBackgroundProgressBar_root"],
+  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"], [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"]) {
+  animation: none !important;
+}
+
+html[data-pulsecolor-appearance="slow"] {
+  --pulsecolor-appearance-playerbar: 900ms;
 }
 
 @keyframes pulsecolor-playerbar-appear {
@@ -362,7 +389,7 @@ html:root[data-pulsecolor-minimal-vibe] [class*="Navbar_root_collapsed__"] {
 }
 
 /* Keep the native player visible; hide only its surrounding decoration. */
-html:root:is(.pulsecolor-navbar-slide-away, [data-pulsecolor-minimal-vibe]) [class*="CommonLayout_root"]:has(> [class*="Navbar_root_collapsed__"])>[class*="Content_root"] {
+html:root:is(.pulsecolor-navbar-slide-away, [data-pulsecolor-minimal-vibe]) [class*="CommonLayout_root"] > [class*="Navbar_root_collapsed__"] ~ [class*="Content_root"] {
   margin-inline-start: -.5rem;
 }
 
@@ -384,12 +411,71 @@ html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*
   transition: opacity 320ms ease-in-out, visibility 0s 320ms !important;
 }
 
+/* The wave replaces the native artist/title decoration completely. */
+html:root.pulsecolor-wave-page [class*="VibePage_entityMetaBody__"] {
+  display: none !important;
+}
+
 html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
   right: 19.2vw !important;
 }
 
 html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] {
   right: 19.2vw !important;
+}
+
+/* The secondary context/reset action is only exposed alongside open settings. */
+html:root[data-pulsecolor-minimal-vibe]:not([data-pc-vibe-settings-open]) [class*="VibePage_context__"] [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
+  display: none !important;
+}
+
+/* Settings and playback stay separate, simultaneously usable surfaces. */
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
+  translate: 0 0;
+  transition: right 380ms cubic-bezier(.4, 0, .2, 1), translate 220ms cubic-bezier(.22, 1, .36, 1) !important;
+}
+
+html:root[data-pulsecolor-minimal-vibe][data-pc-vibe-settings-docked] [class*="VibePage_player__"] {
+  translate: 0 var(--pc-vibe-settings-player-shift, 0px);
+}
+
+/* Apply on the modal's very first paint, before the runtime measures the player. */
+html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
+  position: fixed !important;
+  inset: var(--pc-vibe-settings-center-y, 50%) auto auto 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: var(--pc-vibe-settings-max-height, max(80px, calc(100dvh - 2 * var(--pc-vibe-settings-player-height, 148px) - 48px))) !important;
+  opacity: 1 !important;
+  transition: clip-path 240ms linear !important;
+  clip-path: inset(0 0 100% 0 round 16px);
+}
+
+html:root[data-pulsecolor-minimal-vibe][data-pc-vibe-settings-open] [data-test-id="VIBE_SETTINGS_BLOCK"] {
+  clip-path: inset(0 0 0 0 round 16px);
+  transition-duration: 300ms !important;
+}
+
+/* Keep the native dimming/design, but let clicks reach the docked player. */
+html:root[data-pulsecolor-minimal-vibe] [class*="VibeSettingsModal_overlay__"] {
+  pointer-events: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
+    transition: none !important;
+  }
+  html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
+    animation: none !important;
+    transition: none !important;
+    clip-path: none;
+  }
+}
+
+html:root[data-pulsecolor-minimal-vibe] [data-pc-vibe-settings-native],
+html:root:not([data-pulsecolor-minimal-vibe]) [data-pc-vibe-settings] {
+  display: none !important;
 }
 
 [data-pulsecolor-reveal-pending] {
@@ -699,7 +785,8 @@ html.pulsecolor-wave-page [class*="WithTopBanner_root"] {
   background: #0a0b0d !important;
 }
 
-html.pulsecolor-wave-page:is(.ym-light-theme, :has(.ym-light-theme)) [class*="WithTopBanner_root"] {
+html.pulsecolor-wave-page.ym-light-theme [class*="WithTopBanner_root"],
+html.pulsecolor-wave-page body.ym-light-theme [class*="WithTopBanner_root"] {
   background: #f4f3f5 !important;
 }
 
