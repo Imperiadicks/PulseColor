@@ -1,4 +1,4 @@
-import { themeId, runtimeId, coverId } from "./addon.ids.mjs";
+import { themeId, runtimeId } from "./addon.ids.mjs";
 
 const addonConfig = {
   id: themeId,
@@ -12,7 +12,7 @@ const addonConfig = {
   banner: "Assets/Banner.png",
   libraryLogo: "",
   tags: ["PulseSync", "Colored"],
-  dependencies: [runtimeId,coverId],
+  dependencies: [runtimeId],
   conflictsWith: [
     "aba24212-1fe9-4837-9211-25832a7758ba",
     "58d0eae9-587d-4b46-a77d-9fe009516a6f",

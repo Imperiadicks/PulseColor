@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {waveRenderScale} from '../../PulseColorVisual/src/modules/wave/WaveTimeline.js';
 
 test('setting names describe actual behaviour without changing saved choice values',async()=>{
-  const catalog=JSON.parse(await readFile(new URL('../src/settings.catalog.json',import.meta.url),'utf8'));
+  const catalog=JSON.parse(await readFile(new URL('../../PulseColorVisual/src/settings.catalog.json',import.meta.url),'utf8'));
   const items=catalog.sections.flatMap(section=>section.items);
   assert.ok(catalog.sections.some(section=>section.title==='Волна'));
   assert.equal(items.find(item=>item.id==='waveEnabled').name,'Включить волну');

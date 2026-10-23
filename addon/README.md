@@ -1,12 +1,7 @@
-# PulseColor — тема
+# PulseColor — CSS-тема
 
-CSS-тема PulseColor (`theme`). Функциональная зависимость — PulseColorVisual (`script`),
-который использует PulseColorAudioCore (`web-addon`). Фуллскрин вынесен в отдельный Cover-Tweaked.
-Все настройки цветов, волны, полноэкранного текста и blob находятся в этой теме PulseColor.
+Зависимости: PulseColor → PulseColorVisual → PulseColorAudioCore.
+Все настройки, Cover2Anim, Tweaked и анимация текста находятся в PulseColorVisual.
 
-Файлы готового аддона:
-
-- `script.css`;
-- `metadata.json` — метаданные темы и зависимость от Runtime.
-
-У темы нет запускаемого JavaScript и копии нейронных моделей.
+Готовый пакет содержит CSS, metadata.json, изображения и лицензии.
+У темы нет запускаемого JavaScript, handleEvents.json, настроек или копий моделей.

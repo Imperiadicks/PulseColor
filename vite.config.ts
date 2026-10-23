@@ -2,11 +2,8 @@ import path from "node:path";
 
 import { promises as fs } from "node:fs";
 import { defineConfig } from "vite";
-import { bundleObfuscationPlugin } from './scripts/bundle-obfuscation.mjs';
 
 import addonConfig from "./addon.config.mjs";
-import { settingsMetadata } from './src/settings.ts';
-import catalog from './src/settings.catalog.json' with { type: 'json' };
 const root = import.meta.dirname;
 const outDir = path.resolve(
   root,
@@ -30,7 +27,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
-    bundleObfuscationPlugin(outDir),
     {
       name: "pulsecolor-css-theme",
       async closeBundle() {
@@ -52,14 +48,14 @@ export default defineConfig(({ mode }) => ({
             {
               ...addonConfig,
               css: "script.css",
-              script: 'script.js',
-              settings: settingsMetadata.toConfig(),
             },
             null,
             4,
           ) + "\n",
         );
-        await fs.writeFile(path.join(outDir, 'handleEvents.json'), JSON.stringify(catalog, null, 4) + '\n');
+        // The JS entry only collects CSS imports. Never ship a theme runtime.
+        await fs.rm(path.join(outDir, 'script.js'), { force: true });
+        await fs.rm(path.join(outDir, 'handleEvents.json'), { force: true });
       },
     },
   ],

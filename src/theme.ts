@@ -5,4 +5,3 @@ import "../assets/css/fullscreen-controls.css";
 import "../assets/css/fullscreen-scene.css";
 import "../assets/css/vibe-shortcuts.css";
 import "../assets/css/theme.css";
-import './theme-bridge';

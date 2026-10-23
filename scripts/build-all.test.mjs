@@ -16,8 +16,8 @@ test('All builds finish before sync, and paths stay outside shell commands', () 
     calls.push({ command, args, name: path.basename(options.cwd), cwd: options.cwd });
     return { status: 0 };
   } }), 0);
-  assert.deepEqual(calls.map(c => c.name), ['PulseColorAudioCore', 'PulseColorVisual','Cover-Tweaked', 'PulseColor', 'PulseColorAudioCore', 'PulseColorVisual','Cover-Tweaked', 'PulseColor']);
-  assert.deepEqual(calls.map(c => c.args.join(' ')), ['build', 'build', 'build','build', 'sync', 'sync','sync', 'sync'].map(task => yarnInvocation(task)[1].join(' ')));
+  assert.deepEqual(calls.map(c => c.name), ['PulseColorAudioCore', 'PulseColorVisual', 'PulseColor', 'PulseColorAudioCore', 'PulseColorVisual', 'PulseColor']);
+  assert.deepEqual(calls.map(c => c.args.join(' ')), ['build', 'build', 'build', 'sync', 'sync', 'sync'].map(task => yarnInvocation(task)[1].join(' ')));
   assert.ok(calls.every(c => !c.args.includes(c.cwd)));
 });
 

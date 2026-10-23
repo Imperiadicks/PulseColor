@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import config from '../addon.config.mjs';
-import { runtimeId,coverId } from '../addon.ids.mjs';
+import { runtimeId } from '../addon.ids.mjs';
 assert.equal(config.name, 'PulseColor');
 assert.equal(config.type, 'theme');
-assert.deepEqual(config.dependencies, [runtimeId,coverId]);
+assert.deepEqual(config.dependencies, [runtimeId]);
 const entry = await readFile(new URL('../src/theme.ts', import.meta.url), 'utf8');
 assert.ok(!entry.includes('bootstrap') && !entry.includes('defineAddon'));
-console.log('PulseColor theme identity verified; bounded settings/offline transport, analysis owned by AudioCore');
+assert.ok(!entry.includes('theme-bridge'));
+console.log('PulseColor CSS-only theme identity verified; settings owned by Visual');

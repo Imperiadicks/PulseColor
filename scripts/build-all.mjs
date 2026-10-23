@@ -16,7 +16,7 @@ export function buildAll({ sync = false, run = spawnSync } = {}) {
   // Finish all builds before replacing any installed addon.
   for (const task of sync ? ['build', 'sync'] : ['build']) {
     const [command, args] = yarnInvocation(task);
-    for (const name of ['PulseColorAudioCore', 'PulseColorVisual', 'Cover-Tweaked', 'PulseColor']) {
+    for (const name of ['PulseColorAudioCore', 'PulseColorVisual', 'PulseColor']) {
       const result = run(command, args, { cwd: path.join(root, name), stdio: 'inherit' });
       if (result.error) throw new Error(`Не удалось запустить ${task} для ${name}. Проверьте yarn --version и установку зависимостей.`, { cause: result.error });
       if (result.status !== 0) return result.status || 1;

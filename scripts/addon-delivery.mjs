@@ -252,7 +252,7 @@ export async function deliverAddon(
   const migrationDir = migrateSettingsFrom
     ? path.join(targetRoot, normalizeDirectoryName(migrateSettingsFrom))
     : undefined;
-  const settingsPreserved = await preserveClientSettings(
+  const settingsPreserved = metadata.type === 'theme' ? false : await preserveClientSettings(
     targetDir,
     stagingDir,
     migrationDir,

@@ -27,11 +27,7 @@ export async function deliverFamily(buildRoot, configs, rootDir) {
         rootDir,
         {
           // Only seed a new Runtime install; never overwrite its own saved settings.
-          migrateSettingsFrom:
-            config.id === '419c58cb-75c5-48bf-b053-933f3b81190f'
-              ? 'a8a17b79-c9d3-4af7-a984-7a2037a205df'
-              : config.type === "script" && theme ? theme.directoryName : undefined,
-          migrateSettingsOnce: config.id === '419c58cb-75c5-48bf-b053-933f3b81190f',
+          migrateSettingsFrom: undefined,
         },
       ),
     );
