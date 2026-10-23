@@ -10,13 +10,13 @@
     inset-inline-end: 0;
     right: 3rem;
 }
-.DevPanel_root__Gu7qn {
+html.colorize-new-wave-page .DevPanel_root__Gu7qn {
     z-index: var(--ym-z-index-overlay);
     position: absolute;
     inset-block-end: 1.23rem;
     inset-inline-end: 1.25rem;
 }
-.cpeagBA1_PblpJn8Xgtv {
+html.colorize-new-wave-page .DevPanel_root__Gu7qn .cpeagBA1_PblpJn8Xgtv {
     font-family: var(--ym-font-text);
     font-size: var(--ym-font-size-label-s);
     font-style: normal;
@@ -24,6 +24,13 @@
     letter-spacing: normal;
     line-height: 1.4vh;
     border-radius: 25px;
+}
+html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [class*="DevPanel_root"] button {
+    background: color-mix(in srgb, var(--color-light-3, #eee) 65%, transparent) !important;
+    color: var(--color-dark-9, #292929) !important;
+}
+html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [class*="DevPanel_root"] button:hover {
+    background: color-mix(in srgb, var(--color-light-3, #eee) 85%, transparent) !important;
 }
 
 /* Only during an appearance switch: keep normal hover and wheel motion cheap. */
@@ -354,7 +361,6 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
 /* These native controls force a dark surface even inside the light Vibe route. */
 html:root :is(body[data-pc-vibe-appearance="light"], body.ym-light-theme) :is(
     [class*="VibeResetButton_button"],
-    [class*="DevPanel_root"] button,
     button[class*="MainPage_beta_"],
     [class*="AlbumCover_button"],
     [class*="AlbumCover_root"] button,
@@ -368,7 +374,6 @@ html:root :is(body[data-pc-vibe-appearance="light"], body.ym-light-theme) :is(
 }
 html:root :is(body[data-pc-vibe-appearance="light"], body.ym-light-theme) :is(
     [class*="VibeResetButton_button"],
-    [class*="DevPanel_root"] button,
     button[class*="MainPage_beta_"],
     [class*="AlbumCover_button"],
     [class*="AlbumCover_root"] button,

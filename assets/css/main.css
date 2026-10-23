@@ -332,16 +332,11 @@ html[data-pulsecolor-playerbar-enter] :is([class*="PlayerBarDesktopWithBackgroun
 }
 
 html[data-pulsecolor-appearance="fast"] {
-  --pulsecolor-appearance-playerbar: 0ms;
+  --pulsecolor-appearance-playerbar: 240ms;
 }
 
 html[data-pulsecolor-appearance="fast"] :is([data-pulsecolor-reveal-pending], [data-pulsecolor-cover-pending]) {
   opacity: 1 !important;
-}
-
-html[data-pulsecolor-appearance="fast"] :is([class*="PlayerBarDesktopWithBackgroundProgressBar_root"],
-  [class*="PlayerBarDesktopWithBackgroundProgressBar_important"], [class*="PlayerBarDesktopWithBackgroundProgressBar_playerBar"]) {
-  animation: none !important;
 }
 
 html[data-pulsecolor-appearance="slow"] {
