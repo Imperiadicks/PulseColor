@@ -1,5 +1,22 @@
 /* Native React nodes stay in place. Only their grid participation changes. */
 
+/* Centre the lyrics COLUMN, not only the text inside its native right half. */
+html:root:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_additionalContent"]:has([class*="SyncLyrics_root"]) {
+    position: absolute !important;
+    inset: 64px auto 240px 50% !important;
+    width: min(800px, calc(100% - 64px)) !important;
+    height: auto !important;
+    transform: translateX(-50%) !important;
+    translate: none !important;
+    overflow: hidden !important;
+}
+html:root:root [data-pc-fullscreen-layout="controls"] :is([class*="FullscreenPlayerDesktopContent_syncLyrics"], [data-test-id="SYNC_LYRICS_CONTENT"]) {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    text-align: center !important;
+}
+
 body[data-pc-vibe-appearance="light"], body.ym-light-theme {
     --pc-fs-light-surface: var(--color-light-3, #eee);
     --pc-fs-light-opacity: 65%;
