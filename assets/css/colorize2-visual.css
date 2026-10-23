@@ -2,8 +2,32 @@
    Page backgrounds, cover layers, wave rendering and shell geometry stay in PulseColor.
    Semantic class prefixes tolerate native YM hash changes. */
 
+/* Keep the native dev badge compact and clear of the window edges. */
+.MainPage_betaSlot_newVibe__DGtXm {
+    display: flex;
+    inset-block-end: 0;
+    inset-block-start: auto;
+    inset-inline-end: 0;
+    right: 3rem;
+}
+.DevPanel_root__Gu7qn {
+    z-index: var(--ym-z-index-overlay);
+    position: absolute;
+    inset-block-end: 1.23rem;
+    inset-inline-end: 1.25rem;
+}
+.cpeagBA1_PblpJn8Xgtv {
+    font-family: var(--ym-font-text);
+    font-size: var(--ym-font-size-label-s);
+    font-style: normal;
+    font-weight: var(--ym-font-weight-medium);
+    letter-spacing: normal;
+    line-height: 1.4vh;
+    border-radius: 25px;
+}
+
 /* Only during an appearance switch: keep normal hover and wheel motion cheap. */
-.ym-light-theme { --pc-shell-outline: var(--color-dark-4-5); }
+html.ym-light-theme, html:root .ym-light-theme { --pc-shell-outline: var(--color-dark-1) !important; }
 .ym-dark-theme { --pc-shell-outline: var(--color-light-1); }
 @media (prefers-reduced-motion: no-preference) {
     html[data-pc-theme-changing] :is(body, button, a, span, p, h1, h2, h3, svg, use, aside, [class*="Content_root"], [class*="PlayerBarDesktop"]) {
@@ -101,20 +125,23 @@ html:root:root [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
     box-shadow: inset 0 10px 30px rgba(0, 0, 0, .6) !important;
 }
 
-html:root:root [class*="CommonLayout_root__"]> :is(aside, [class*="Content_root__"]) {
-    outline: 1px solid var(--pc-shell-outline, var(--color-light-1));
+html:root:root [class*="CommonLayout_root"]> :is(aside, [class*="Content_root"]) {
+    outline: 1px solid var(--pc-shell-outline, var(--color-light-1)) !important;
     outline-offset: -1px;
     border-color: var(--pc-shell-outline, var(--color-light-1)) !important;
     border-radius: var(--ym-layout-border-radius, 12px);
 }
-html:root:root [class*="CommonLayout_root__"]>aside {
+html:root:root [class*="CommonLayout_root"]>aside {
     box-shadow: none !important;
 }
 
 /* One matte surface for sidebar, content and the ordinary bottom player. */
+html:root:root body[data-pc-vibe-appearance="light"] [class*="CommonLayout_root"]> :is(aside, [class*="Content_root"]) {
+    --pc-shell-outline: var(--color-dark-1) !important;
+}
 html:root:root body[data-pc-vibe-appearance="light"] [class*="CommonLayout_root"]> :is(aside, [class*="Content_root"]),
 html:root:root body[data-pc-vibe-appearance="light"] [class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
-    background: color-mix(in srgb, var(--color-dark-3) 24%, transparent) !important;
+    background: color-mix(in srgb, var(--color-dark-3) clamp(0%, var(--pulsecolor-panel-opacity, 10%), 20%), transparent) !important;
 }
 html:root [class*="NavbarDesktop_logoLink"] {
     --ym-logo-color-primary-back: transparent !important;
@@ -322,6 +349,35 @@ html:root [class*="SearchPage_root"] :is( [class*="SearchPage_header__"], [class
 
 :is(.ym-dark-theme, .ym-light-theme) [class*="FullscreenPlayerDesktop_closeButton__"] {
     background-color: var(--ym-controls-color-primary-default-disabled) !important
+}
+
+/* These native controls force a dark surface even inside the light Vibe route. */
+html:root :is(body[data-pc-vibe-appearance="light"], body.ym-light-theme) :is(
+    [class*="VibeResetButton_button"],
+    [class*="DevPanel_root"] button,
+    button[class*="MainPage_beta_"],
+    [class*="AlbumCover_button"],
+    [class*="AlbumCover_root"] button,
+    [class*="FullscreenPlayerDesktop_closeButton"],
+    [class*="FullscreenPlayerDesktopControls_"]:is(button, [role="button"]),
+    [class*="SonataFullscreenControlsDesktop_"] button,
+    button[class*="SonataFullscreenControlsDesktop_"]
+) {
+    background: color-mix(in srgb, var(--color-light-3, #eee) 65%, transparent) !important;
+    color: var(--color-dark-9, #292929) !important;
+}
+html:root :is(body[data-pc-vibe-appearance="light"], body.ym-light-theme) :is(
+    [class*="VibeResetButton_button"],
+    [class*="DevPanel_root"] button,
+    button[class*="MainPage_beta_"],
+    [class*="AlbumCover_button"],
+    [class*="AlbumCover_root"] button,
+    [class*="FullscreenPlayerDesktop_closeButton"],
+    [class*="FullscreenPlayerDesktopControls_"]:is(button, [role="button"]),
+    [class*="SonataFullscreenControlsDesktop_"] button,
+    button[class*="SonataFullscreenControlsDesktop_"]
+):hover:not(:disabled):not([aria-disabled="true"]) {
+    background: color-mix(in srgb, var(--color-light-3, #eee) 85%, transparent) !important;
 }
 
 
@@ -699,23 +755,33 @@ html:root [data-pc-wheel-scrolling] [class*="WheelItem_title"] {
 }
 
 /* Like search: reveal the shared wave, clip page content below the controls. */
-html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"]) {
+html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"],
+    [data-test-id="TEXT_HEADER"], [data-test-id="TEXT_HEADER_CONTAINER"]) {
     --average-color-background: transparent !important;
     background: transparent !important;
     backdrop-filter: none !important;
     box-shadow: none !important;
 }
-html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"])::before,
-html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"])::after {
+html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"],
+    [data-test-id="TEXT_HEADER"], [data-test-id="TEXT_HEADER_CONTAINER"])::before,
+html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"],
+    [data-test-id="TEXT_HEADER"], [data-test-id="TEXT_HEADER_CONTAINER"])::after {
     background: none !important;
     backdrop-filter: none !important;
     box-shadow: none !important;
 }
-html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"]) :is([class*="StickyHeader_backdrop__"], [class*="InnerHeader_backdrop__"]) {
+html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"], [data-test-id="INNER_HEADER"],
+    [data-test-id="TEXT_HEADER"], [data-test-id="TEXT_HEADER_CONTAINER"])
+    :is([class*="StickyHeader_backdrop__"], [class*="InnerHeader_backdrop__"], [class*="TextHeader_backdrop__"]) {
     display: none !important;
 }
+@property --pc-header-clip {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
 html:root [data-pc-header-viewport] {
-    clip-path: inset(var(--pc-header-clip, 0px) 0 0) !important;
+    clip-path: inset(max(0px, var(--pc-header-clip, 0px)) 0 0) !important;
 }
 
 /* Stable semantic pins: no changes to native links, drag handles or artwork. */

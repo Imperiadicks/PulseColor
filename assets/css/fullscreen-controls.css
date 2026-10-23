@@ -1,5 +1,12 @@
 /* Native React nodes stay in place. Only their grid participation changes. */
 
+body[data-pc-vibe-appearance="light"], body.ym-light-theme {
+    --pc-fs-light-surface: var(--color-light-3, #eee);
+    --pc-fs-light-opacity: 65%;
+    --pc-fs-light-overlay: color-mix(in srgb, var(--color-light-3, #eee) 65%, transparent);
+    --pc-fs-light-cover-overlay: transparent;
+}
+
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [class*="FullscreenPlayerDesktopControls_syncLyricsButton"] {
     display: grid !important;
     visibility: visible !important;
@@ -11,13 +18,13 @@ html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplaye
 }
 
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]):not([data-pc-fullscreen-layout="controls"]) [class*="FullscreenPlayerDesktopControls_root"] {
-    background: rgb(0 0 0 / .38) !important;
+    background: var(--pc-fs-light-cover-overlay, rgb(0 0 0 / .38)) !important;
     border-radius: inherit;
 }
 
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) {
-    --pc-fs-button-dark: color-mix(in srgb, var(--color-dark-6, #181818) 75%, black);
-    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-button-opacity, 95%), transparent) !important;
+    --pc-fs-button-dark: var(--pc-fs-light-surface, color-mix(in srgb, var(--color-dark-6, #181818) 75%, black));
+    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-light-opacity, var(--pc-fs-button-opacity, 95%)), transparent) !important;
     color: var(--ym-controls-color-secondary-text-enabled) !important;
     opacity: 1 !important;
     border: 1px solid rgb(255 255 255 / .12) !important;
@@ -63,13 +70,13 @@ html:root:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPl
 }
 
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]):is(:hover, :active, :focus-visible, [aria-pressed="true"], [aria-expanded="true"]):not(:disabled):not([aria-disabled="true"]) {
-    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-button-opacity, 100%), transparent) !important;
+    background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-light-opacity, var(--pc-fs-button-opacity, 100%)), transparent) !important;
     color: var(--ym-controls-color-secondary-text-hovered, var(--ym-controls-color-secondary-text-enabled)) !important;
 }
 
 
 html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) [data-test-id="FULLSCREEN_PLAYER_CLOSE_BUTTON"] {
-    --pc-fs-button-dark: var(--ym-controls-color-primary-default-disabled);
+    --pc-fs-button-dark: var(--pc-fs-light-surface, var(--ym-controls-color-primary-default-disabled));
     --pc-fs-button-opacity: 100%;
 }
 
@@ -276,8 +283,8 @@ html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDeskto
 }
 
 html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-    left: 25% !important;
-    width: min(680px, calc(50% - 64px)) !important;
+    left: 50% !important;
+    width: min(720px, calc(100% - 64px)) !important;
 }
 
 html:root [data-pc-fullscreen-layout="controls"] :is( [class*="FullscreenPlayerDesktopControls_root"], [class*="FullscreenPlayerDesktopControls_menuWrapper"], [class*="FullscreenPlayerDesktopControls_bottomRightButtonsWrapper"]) {
@@ -295,7 +302,7 @@ html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER
     height: 64px !important;
     border-radius: 999px !important;
     overflow: hidden !important;
-    background: rgb(255 255 255 / .12) !important;
+    background: var(--pc-fs-light-overlay, rgb(255 255 255 / .12)) !important;
 }
 
 html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"]::before {
@@ -599,11 +606,11 @@ html:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDeskto
 
 @media (min-width:501px) {
     html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-        left: 25% !important;
+        left: 50% !important;
         top: 50% !important;
         bottom: auto !important;
         transform: translate(-50%, -50%) !important;
-        width: min(420px, calc(50% - 48px)) !important;
+        width: min(720px, calc(100% - 64px)) !important;
     }
 }
 
@@ -693,7 +700,7 @@ html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [clas
         width: min(800px, calc(100% - 96px)) !important;
     }
     html:root [data-pc-fullscreen-layout="controls"][data-pc-fullscreen-split] [class*="FullscreenPlayerDesktopContent_fullscreenContent"] {
-        width: min(800px, calc(50% - 48px)) !important;
+        width: min(800px, calc(100% - 96px)) !important;
     }
     html:root [data-pc-fullscreen-layout="controls"] :is([data-test-id="TIMECODE_WRAPPER"], [class*="FullscreenPlayerDesktopContent_meta"]) {
         grid-column: 3 !important;

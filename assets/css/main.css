@@ -374,6 +374,12 @@ html[data-pulsecolor-playerbar-leave] :is([class*="PlayerBarDesktopWithBackgroun
 html:root [class*="CommonLayout_root"]>aside[class*="Navbar_root"] {
   margin-block-start: 0 !important;
   align-self: stretch;
+  /* Native grid follows the sidebar width; do not scale text or animate edges. */
+  transition: width var(--pulsecolor-sidebar-duration, 380ms) cubic-bezier(.22, 1, .36, 1) !important;
+}
+
+html[data-pulsecolor-appearance="slow"] {
+  --pulsecolor-sidebar-duration: 950ms;
 }
 
 /* translate creates a stacking context: lift the whole sidebar while its
@@ -391,7 +397,6 @@ html:root [class*="Navbar_root_collapsed__"] {
   translate: 0 0;
   width: var(--navbar-width, var(--navbar-collapsed-width, 4.5rem)) !important;
   margin-inline-end: 1;
-  transition: none !important;
   border: 1px solid var(--pc-glass-border) !important;
   border-radius: 12px;
   box-shadow: none !important;
@@ -509,6 +514,8 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Common
   [class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
   [class*="VibePage_player__"], [class*="VibePage_words__"],
   h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]):not([data-pulsecolor-reveal-ready]):not([class*="Shimmer_"] *,
+  [class*="SettingsPage_root"] *, [data-test-id="SETTINGS_PAGE"] *,
+  [data-test-id="SETTINGS_LIST"] *, [data-test-id="VIBE_SETTINGS_BLOCK"] *,
   [data-test-id="FULLSCREEN_PLAYER_MODAL"] *, [data-test-id="SYNC_LYRICS_CONTENT"] *,
   [class*="Content_main"] :is([class*="CommonTrack_root"], [class*="EntityCard_root"], [class*="ArtistCard_root"], [class*="Shimmer_root"],
     [class*="PageHeader_root"], [class*="PageHeaderBase_root"],
@@ -519,6 +526,15 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Common
     [class*="VibePage_player__"], [class*="VibePage_words__"],
     h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]) *) {
   opacity: 0;
+}
+
+/* Settings are controls, not a staged content feed. Never first-paint-gate
+   them while JS discovers nested labels/buttons or waits for intersection. */
+html[data-pulsecolor-content-reveal] [class*="Content_main"]
+  :is([class*="SettingsPage_root"], [data-test-id="SETTINGS_PAGE"],
+      [data-test-id="SETTINGS_LIST"], [data-test-id="VIBE_SETTINGS_BLOCK"])
+  :is([data-pulsecolor-reveal-pending], [data-pulsecolor-cover-pending]) {
+  opacity: 1 !important;
 }
 
 /* Keep the row readable while its cover loads; preserve image geometry and
@@ -559,7 +575,7 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimme
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:root [class*="Navbar_root_collapsed__"] {
+  html:root [class*="CommonLayout_root"]>aside[class*="Navbar_root"] {
     transition: none !important;
   }
 
