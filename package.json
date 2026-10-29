@@ -1,0 +1,47 @@
+{
+  "name": "pulsecolor",
+  "version": "2.0.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Imperiadicks/PulseColor.git"
+  },
+  "type": "module",
+  "description": "PulseColor CSS theme; depends on PulseColorVisual",
+  "scripts": {
+    "dev": "node ./scripts/dev-build.mjs",
+    "build": "node ./scripts/build-family.mjs",
+    "build:theme": "node ./node_modules/vite/bin/vite.js build",
+    "build:modules": "node ./scripts/module-compile.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/check-theme.mjs && node --test tests/*.test.mjs",
+    "format": "oxfmt .",
+    "sync": "node ./scripts/sync-addon.mjs",
+    "build:sync": "yarn build && yarn sync"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "dependencies": {
+    "@pulsesync/addon-sdk": "0.13.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "@types/react": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "acorn": "8.8.2",
+    "esbuild": "^0.28.0",
+    "javascript-obfuscator": "4.1.1",
+    "oxfmt": "0.71.0",
+    "prettier": "^3.9.9",
+    "react": "19.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  },
+  "allowScripts": {
+    "prettier@3.9.9": true,
+    "core-js": false,
+    "esbuild": false,
+    "protobufjs": false
+  }
+}

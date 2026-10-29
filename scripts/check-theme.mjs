@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import config from '../addon.config.mjs';
+import { runtimeId } from '../addon.ids.mjs';
+assert.equal(config.name, 'PulseColor');
+assert.equal(config.type, 'theme');
+assert.deepEqual(config.dependencies, [runtimeId]);
+const entry = await readFile(new URL('../src/theme.ts', import.meta.url), 'utf8');
+assert.ok(!entry.includes('bootstrap') && !entry.includes('defineAddon'));
+assert.ok(!entry.includes('theme-bridge'));
+console.log('PulseColor CSS-only theme identity verified; settings owned by Visual');
