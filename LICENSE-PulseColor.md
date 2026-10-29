@@ -6,19 +6,19 @@ Copyright © 2026 imperiadicks.
 
 ## English — primary version
 
-### About this license
+### 1. About this license
 
 These terms cover the original code, design, assets and documentation created by imperiadicks for PulseColor, PulseColorVisual and PulseColorAudioCore.
 
 PulseColor is an independent project, not an official product of PulseSync or Yandex Music.
 
-### Using the addons
+### 2. Using the addons
 
 You may install and use the addons, keep personal backups, study the available source code and modify your copy for personal use.
 
 You may share links to official downloads, publish reviews, screenshots and videos, and include short code excerpts in bug reports. Do not include paid components or access-bypass tools in those excerpts.
 
-### Sharing copies
+### 3. Sharing copies
 
 You need the author's written permission to publish, redistribute or sell copies of the addons or their modified versions. This includes download archives, mirrors and public repositories.
 
@@ -26,13 +26,13 @@ Viewing and forking a public repository through GitHub are allowed under GitHub'
 
 Keep author credits and license notices when sharing copies with permission. Do not claim the work as your own or describe a modified version as official.
 
-### Subscription features
+### 4. Subscription features
 
 Some features of PulseColorVisual require a PulseSync subscription. Access and payment terms are provided with the subscription.
 
 Do not distribute builds, patches or tools intended to unlock these features without the required access.
 
-### If these terms are not followed
+### 5. If these terms are not followed
 
 The author may ask you to fix the issue, stop unauthorized distribution or remove the affected copies and publications. The author may also request removal through the hosting platform.
 
@@ -40,13 +40,13 @@ If a serious violation is not corrected after notice and reasonable time to resp
 
 This license does not impose fines.
 
-### Other materials and your rights
+### 6. Other materials and your rights
 
 PulseSync materials and third-party components keep their own licenses. Music, covers and lyrics belong to their respective owners. See THIRD-PARTY-NOTICES.md.
 
 These terms do not restrict independently created work, rights granted by other licenses, rights already granted for earlier releases, or rights that applicable law protects.
 
-### Updates and language
+### 7. Updates and language
 
 The addons may contain bugs, and updates to Yandex Music or PulseSync may affect compatibility. Uninterrupted operation is not guaranteed. Your mandatory consumer rights remain unaffected.
 
@@ -58,19 +58,19 @@ This license allows personal use and local modifications; it does not give gener
 
 ## Русский перевод
 
-### Об этой лицензии
+### 1. Об этой лицензии
 
 Условия относятся к оригинальному коду, оформлению, ресурсам и документации, созданным imperiadicks для PulseColor, PulseColorVisual и PulseColorAudioCore.
 
 PulseColor — самостоятельный проект, не являющийся официальным продуктом PulseSync или Яндекс Музыки.
 
-### Использование аддонов
+### 2. Использование аддонов
 
 Можно устанавливать и использовать аддоны, делать личные резервные копии, изучать доступный исходный код и изменять свою копию для себя.
 
 Можно делиться ссылками на официальные загрузки, публиковать обзоры, скриншоты и видео, а также прикладывать короткие фрагменты кода к сообщениям об ошибках. Не включайте в такие фрагменты платные компоненты или средства обхода доступа.
 
-### Передача копий
+### 3. Передача копий
 
 Для публикации, распространения или продажи копий аддонов и их изменённых версий нужно письменное разрешение автора. Это относится в том числе к архивам для скачивания, зеркалам и публичным репозиториям.
 
@@ -78,13 +78,13 @@ PulseColor — самостоятельный проект, не являющи�
 
 При передаче копий с разрешения автора сохраняйте указание авторства и лицензионные уведомления. Не выдавайте работу за свою, а изменённую версию — за официальную.
 
-### Возможности по подписке
+### 4. Возможности по подписке
 
 Для некоторых функций PulseColorVisual требуется подписка PulseSync. Условия доступа и оплаты указаны при оформлении подписки.
 
 Не распространяйте сборки, патчи или инструменты для разблокировки этих функций без необходимого доступа.
 
-### Если условия нарушены
+### 5. Если условия нарушены
 
 Автор может попросить исправить нарушение, прекратить распространение без разрешения или удалить соответствующие копии и публикации. Также автор может запросить удаление через площадку размещения.
 
@@ -92,13 +92,13 @@ PulseColor — самостоятельный проект, не являющи�
 
 Эта лицензия не устанавливает штрафов.
 
-### Сторонние материалы и ваши права
+### 6. Сторонние материалы и ваши права
 
 Материалы PulseSync и сторонние компоненты сохраняют свои лицензии. Музыка, обложки и тексты песен принадлежат их правообладателям. См. THIRD-PARTY-NOTICES.md.
 
 Условия не ограничивают независимо созданные работы, права по другим лицензиям, права, уже предоставленные для предыдущих версий, и права, защищённые применимым законом.
 
-### Обновления и язык
+### 7. Обновления и язык
 
 В аддонах могут встречаться ошибки, а обновления Яндекс Музыки или PulseSync могут влиять на совместимость. Бесперебойная работа не гарантируется. Обязательные права потребителей сохраняются.
 
