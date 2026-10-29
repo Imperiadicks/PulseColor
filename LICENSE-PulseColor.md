@@ -66,12 +66,6 @@ PulseSync materials and third-party components keep their own licenses. Music, c
 
 These terms do not restrict independently created work, rights granted by other licenses, rights already granted for earlier releases, or rights protected by applicable law.
 
-### 8. Updates and language
-
-The addons may contain bugs. Updates to Yandex Music or PulseSync may affect compatibility. Uninterrupted operation is not guaranteed; mandatory consumer rights remain unaffected.
-
-English is the primary version. The Russian translation below is provided for convenience. If they differ, the English text applies where permitted by law.
-
 ---
 
 ## Русский перевод
@@ -135,9 +129,3 @@ PulseColorVisual и PulseColorAudioCore предназначены для исп
 Материалы PulseSync и сторонние компоненты сохраняют свои лицензии. Музыка, обложки и тексты песен принадлежат их правообладателям. См. THIRD-PARTY-NOTICES.md.
 
 Условия не ограничивают независимо созданные работы, права по другим лицензиям, права, уже предоставленные для предыдущих версий, и права, защищённые применимым законом.
-
-### 8. Обновления и язык
-
-В аддонах могут встречаться ошибки. Обновления Яндекс Музыки или PulseSync могут влиять на совместимость. Бесперебойная работа не гарантируется; обязательные права потребителей сохраняются.
-
-Основная версия — английская. Русский перевод приведён для удобства. При расхождениях применяется английский текст, если это допускается законом.
