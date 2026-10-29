@@ -1,4 +1,27 @@
 /* ─────────────────── Общие доработки интерфейса ─────────────────── */
+/* Native titlebar geometry and window controls remain unchanged. */
+html:root [class*="TitleBar_root"]::after {
+  content: "PULSECOLOR";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: max(0px, calc(100% - 320px));
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--ym-font-text, sans-serif);
+  font-size: 13px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ym-controls-color-primary-text-enabled, currentColor);
+  pointer-events: none;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
 /* Remove the subscription promo and its reserved grid row, not player controls. */
 [data-test-id="BAR_BELOW"],
 [class*="BarBelow_root__"] {
