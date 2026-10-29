@@ -9,6 +9,12 @@ html:root [class*="DefaultLayout_root_withBarBelow__"] {
   grid-template-rows: minmax(0, 1fr) auto 0 !important;
 }
 
+/* Align the bottom bar with the sidebar's lower edge, keeping the shell's
+   own window gutter rather than adding the native extra 10px bar margin. */
+html:root [class*="CommonLayout_root"] > [class*="PlayerBarDesktopWithBackgroundProgressBar_root"] {
+  margin-block-end: 0 !important;
+}
+
 .UwnL5AJBMMAp6NwMDdZk,
 .VibePlayerControls_playButtonIcon__OXCWN,
 :is(.UwnL5AJBMMAp6NwMDdZk, .VibePlayerControls_playButtonIcon__OXCWN) :is(svg, use, path) {
@@ -96,20 +102,18 @@ html.colorize-new-wave-page [class*="CommonLayout_root"]>aside,
 html.colorize-new-wave-page [class*="CommonLayout_root"]>[class*="Content_root"][class*="newVibe"] {
   align-self: stretch !important;
   box-sizing: border-box !important;
-  height: calc(100vh - 1vh) !important;
-  height: calc(100dvh - 4vh) !important;
+  height: 100% !important;
   min-height: 0 !important;
-  max-height: calc(100vh - 1vh) !important;
-  max-height: calc(100dvh - 4vh) !important;
+  max-height: 100% !important;
   margin-block-start: 0 !important;
-  margin-block-end: 1vh !important;
+  margin-block-end: 0 !important;
 }
 
 @media (max-height: 750px) {
 
   html.colorize-new-wave-page [class*="CommonLayout_root"]>aside,
   html.colorize-new-wave-page [class*="CommonLayout_root"]>[class*="Content_root"][class*="newVibe"] {
-    height: calc(100dvh - 5.5vh) !important;
+    height: 100% !important;
   }
 
 }
@@ -141,21 +145,30 @@ html:root[data-pulsecolor-layout] [class*="CommonLayout_root"]>[class*="Content_
 
 html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>aside,
 html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>[class*="Content_root"] {
-  height: calc(100dvh - 4vh) !important;
-  max-height: calc(100dvh - 4vh) !important;
-  margin-block-end: 1vh !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  margin-block-end: 0 !important;
 }
 
 @media (max-height: 750px) {
 
   html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>aside,
   html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>[class*="Content_root"] {
-    height: calc(100dvh - 5.5vh) !important;
+    height: 100% !important;
   }
 }
 
 .SHvrm0VRiLVwGqJJjNO8:before {
   background: var(--ym-controls-color-secondary-text-enabled) !important;
+}
+
+/* Fit the available grid, including titlebar/banner padding, at every size. */
+html:root [class*="CommonLayout_root"][class*="DefaultLayout_rootNewVibe"] {
+  grid-template-rows: minmax(0, 1fr) 0 !important;
+}
+html:root[data-pulsecolor-layout="compact"] [class*="CommonLayout_root"]:not([class*="modSettings_alwaysWideBar"]) > aside[class*="Navbar_root"] {
+  height: 100% !important;
+  max-height: 100% !important;
 }
 
 html.colorize-new-wave-page [class*="Content_root"][class*="newVibe"] {
@@ -501,7 +514,7 @@ html:root:not([data-pulsecolor-minimal-vibe]) [data-pc-vibe-settings] {
 
 /* First-paint gate, mirrored by ContentReveal.CONTENT. Only outer semantic
    units enter: never multiply opacity across their nested text/icons/buttons. */
-html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="CommonTrack_root"], [class*="EntityCard_root"], [class*="ArtistCard_root"],
+html[data-pulsecolor-content-reveal]:not([data-pulsecolor-instant-settings]) [class*="Content_main"] :is([class*="CommonTrack_root"], [class*="EntityCard_root"], [class*="ArtistCard_root"],
   [class*="PageHeader_root"], [class*="PageHeaderBase_root"],
   [class^="Banner_root"], [class*=" Banner_root"],
   [class*="CommonControlsBar_root"], [class*="EmptyState_root"],
@@ -525,6 +538,13 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Common
 
 /* Settings are controls, not a staged content feed. Never first-paint-gate
    them while JS discovers nested labels/buttons or waits for intersection. */
+html[data-pulsecolor-instant-settings] [class*="Content_main"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+html[data-pulsecolor-instant-settings] :is([data-pulsecolor-reveal-pending], [data-pulsecolor-cover-pending]) {
+  opacity: 1 !important;
+}
 html[data-pulsecolor-content-reveal] [class*="Content_main"]
   :is([class*="SettingsPage_root"], [data-test-id="SETTINGS_PAGE"],
       [data-test-id="SETTINGS_LIST"], [data-test-id="VIBE_SETTINGS_BLOCK"])

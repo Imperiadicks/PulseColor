@@ -2,19 +2,41 @@
    Page backgrounds, cover layers, wave rendering and shell geometry stay in PulseColor.
    Semantic class prefixes tolerate native YM hash changes. */
 
-/* Keep the native dev badge compact and clear of the window edges. */
-.MainPage_betaSlot_newVibe__DGtXm {
+/* Reserve space only while YM actually mounts its developer badge.
+   With developer mode off, leave the native version-slot geometry untouched. */
+html.colorize-new-wave-page:has([class*="DevPanel_root"]) [class*="MainPage_betaSlot_newVibe"] {
     display: flex;
     inset-block-end: 0;
     inset-block-start: auto;
     inset-inline-end: 0;
     right: 3rem;
 }
-html.colorize-new-wave-page .DevPanel_root__Gu7qn {
+/* The theme clips the content shell to rounded corners; preserve an inner
+   gutter instead of letting the native right:0 clip the version pill. */
+html.colorize-new-wave-page:not(:has([class*="DevPanel_root"])) [class*="MainPage_betaSlot_newVibe"] {
+    inset-inline-end: 12px;
+}
+html.colorize-new-wave-page [class*="MainPage_betaSlot_newVibe"] [data-test-id="RELEASE_NOTES_BUTTON"] {
+    anchor-name: --pc-vibe-version-row;
+}
+html.colorize-new-wave-page [class*="DevPanel_root"] {
     z-index: var(--ym-z-index-overlay);
-    position: absolute;
-    inset-block-end: 1.23rem;
-    inset-inline-end: 1.25rem;
+    position: fixed !important;
+    position-anchor: --pc-vibe-version-row;
+    left: calc(anchor(right) + 8px) !important;
+    top: anchor(center) !important;
+    right: auto !important;
+    bottom: auto !important;
+    translate: 0 -50%;
+    height: anchor-size(height);
+    max-width: calc(100vw - 16px);
+}
+html.colorize-new-wave-page [class*="DevPanel_root"] button {
+    line-height: 1.4 !important;
+    height: 100% !important;
+    min-height: 0;
+    padding-block: 0 !important;
+    box-sizing: border-box;
 }
 html.colorize-new-wave-page .DevPanel_root__Gu7qn .cpeagBA1_PblpJn8Xgtv {
     font-family: var(--ym-font-text);
@@ -22,7 +44,7 @@ html.colorize-new-wave-page .DevPanel_root__Gu7qn .cpeagBA1_PblpJn8Xgtv {
     font-style: normal;
     font-weight: var(--ym-font-weight-medium);
     letter-spacing: normal;
-    line-height: 1.4vh;
+    line-height: 1.4;
     border-radius: 25px;
 }
 html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [class*="DevPanel_root"] button {

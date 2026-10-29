@@ -15,7 +15,7 @@ test('setting names describe actual behaviour without changing saved choice valu
     const option=quality.options[String(index+1)];
     const scale=waveRenderScale(3840,2160,2,option.event);
     assert.ok(Math.abs(3840*2160*scale*scale-budget)<1);
-    assert.ok(option.name.includes(String(budget/1000000).replace('.',',')));
+    assert.ok(quality.description.includes(String(budget/1000000).replace('.',',')), 'Technical limits belong in explanations, not setting names');
   }
   assert.ok(!JSON.stringify(catalog).includes('без ограничений'));
   const source=items.find(item=>item.id==='waveDriveMode');
