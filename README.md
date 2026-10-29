@@ -72,10 +72,6 @@ PulseColor — оформление Яндекс Музыки для PulseSync. 
 
 Добавьте их в PulseSync, включите оба дополнения и выберите тему **PulseColor**. После этого откройте **PulseColorVisual**, чтобы настроить оформление.
 
-## Для разработчиков
-
-[Сборка и структура проекта](https://github.com/Imperiadicks/PulseColor/blob/dev/docs/THEME-DEVELOPMENT.md).
-
 ## Лицензии
 
 Условия использования указаны в LICENSE-PulseColor.md, LICENSE, LICENSE.ru.md и THIRD-PARTY-NOTICES.md каждого компонента.
