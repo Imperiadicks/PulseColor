@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => ({
           force: true,
         });
         for (const file of [
+          "README.md",
           "LICENSE-PulseColor.md",
           "THIRD-PARTY-NOTICES.md",
           "LICENSE",
