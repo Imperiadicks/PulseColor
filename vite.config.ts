@@ -41,7 +41,12 @@ export default defineConfig(({ mode }) => ({
           "LICENSE",
           "LICENSE.ru.md",
         ]) {
-          await fs.copyFile(path.join(root, file), path.join(outDir, file));
+          if (file === "README.md") {
+            const readme = await fs.readFile(path.join(root, file), "utf8");
+            await fs.writeFile(path.join(outDir, file), readme.replace(/## Установка\n[\s\S]*?(?=\n## |$)/, ""));
+          } else {
+            await fs.copyFile(path.join(root, file), path.join(outDir, file));
+          }
         }
         await fs.writeFile(
           path.join(outDir, "metadata.json"),
