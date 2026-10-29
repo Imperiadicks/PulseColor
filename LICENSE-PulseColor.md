@@ -12,7 +12,7 @@ This license covers the original code, design, assets and documentation of Pulse
 
 PulseSync templates and SDK materials, third-party libraries, artwork, music, lyrics and other third-party content keep their own licenses and permissions. See THIRD-PARTY-NOTICES.md. This license does not replace them or restrict rights already granted for earlier releases.
 
-PulseColor is an independent project and does not imply endorsement by PulseSync or Yandex Music.
+PulseColor is an independent project, not an official product of PulseSync or Yandex Music.
 
 ### 2. What you may do
 
@@ -66,7 +66,7 @@ This is a proprietary license with permission for personal use and local changes
 
 Материалы шаблона и SDK PulseSync, сторонние библиотеки, обложки, музыка, тексты песен и другие сторонние материалы сохраняют собственные лицензии и разрешения. См. THIRD-PARTY-NOTICES.md. Эта лицензия не заменяет их и не ограничивает права, ранее предоставленные для предыдущих версий.
 
-PulseColor — независимый проект. Его название не означает одобрения со стороны PulseSync или Яндекс Музыки.
+PulseColor — самостоятельный проект, не являющийся официальным продуктом PulseSync или Яндекс Музыки.
 
 ### 2. Что разрешено
 
