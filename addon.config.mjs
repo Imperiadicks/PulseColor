@@ -7,7 +7,7 @@ const addonConfig = {
   description: "Для тех кто хочет живую музыку и красивый интерфейс.",
   type: "theme",
   version: "2.0.0",
-  author: ["imperiadicks", "dieugh"],
+  author: ["imperiadicks"],
   image: "Assets/image.png",
   banner: "Assets/Banner.png",
   libraryLogo: "",
