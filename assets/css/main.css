@@ -849,6 +849,11 @@ html.pulsecolor-wave-page :is([class*="Content_main"],[class*="VibePage_root"]) 
   transition-property:opacity,transform !important;
 }
 
+/* Search now wraps Popular/History in a separate opaque sticky header. */
+[class*="SearchPage_root"] [data-test-id="COMPOSITE_HEADER_CONTAINER"][class*="Skeleton_header"] {
+  background: transparent !important;
+}
+
 /* PulseColor v2: the runtime owns one full-screen WebGL surface. */
 /* Only page shells become transparent; cards, menus and lyrics keep surfaces.
    Scope is owned by the renderer and removed when wave/theme is disabled. */
