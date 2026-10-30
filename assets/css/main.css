@@ -1,6 +1,7 @@
 /* ─────────────────── Общие доработки интерфейса ─────────────────── */
 /* Native titlebar geometry and window controls remain unchanged. */
 html:root [class*="TitleBar_root"]::after {
+  display: var(--pulsecolor-title-display, block);
   content: "PULSECOLOR";
   position: absolute;
   left: 50%;
