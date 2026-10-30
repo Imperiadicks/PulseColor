@@ -323,6 +323,22 @@ html:root [class*="SearchPage_root"] {
     padding-block-start: var(--search-header-height-with-filters, 7.5rem) !important;
 }
 
+/* Keep the empty-search tabs in the reserved controls area, above Lumen.
+   Their containing block is outside the scrolling recommendations viewport. */
+html:root [class*="SearchPage_root"]:has([class*="Skeleton_upperBlocks"] [class*="Q2vSuggestions_root"]) {
+    position: relative;
+    padding-block-start: calc(var(--search-header-height, 4rem) + 60px) !important;
+}
+
+html:root [class*="SearchPage_root"]:has([class*="Skeleton_upperBlocks"] [class*="Q2vSuggestions_root"]) [data-test-id="COMPOSITE_HEADER_CONTAINER"][class*="Skeleton_header"] {
+    position: absolute !important;
+    inset-block-start: var(--search-header-height, 4rem) !important;
+    inset-inline: 0;
+    margin: 0;
+    height: 60px;
+    z-index: var(--ym-z-index-player);
+}
+
 html:root [class*="SearchPage_root"] [class*="StickyHeader_backdrop__"] {
     display: none !important;
 }
