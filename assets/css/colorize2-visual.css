@@ -19,26 +19,26 @@ html.colorize-new-wave-page:not(:has([class*="DevPanel_root"])) [class*="MainPag
 html.colorize-new-wave-page [class*="MainPage_betaSlot_newVibe"] [data-test-id="RELEASE_NOTES_BUTTON"] {
     anchor-name: --pc-vibe-version-row;
 }
-html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] {
     z-index: var(--ym-z-index-overlay);
     position: fixed !important;
     position-anchor: --pc-vibe-version-row;
-    left: calc(anchor(right) + 8px) !important;
-    top: anchor(center) !important;
+    left: calc(anchor(right, calc(100vw - 50px)) + 8px) !important;
+    top: anchor(center, calc(100dvh - 20px)) !important;
     right: auto !important;
     bottom: auto !important;
     translate: 0 -50%;
-    height: anchor-size(height);
+    height: anchor-size(height, 26px);
     max-width: calc(100vw - 16px);
 }
-html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
     line-height: 1.4 !important;
     height: 100% !important;
     min-height: 0;
     padding-block: 0 !important;
     box-sizing: border-box;
 }
-html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
     font-family: var(--ym-font-text);
     font-size: var(--ym-font-size-label-s);
     font-style: normal;

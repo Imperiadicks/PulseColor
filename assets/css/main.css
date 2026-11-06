@@ -167,6 +167,12 @@ html:root[data-pulsecolor-layout] [class*="CommonLayout_root"]>[class*="Content_
   border-radius: 12px !important;
 }
 
+/* Route intent must release the player row before React swaps the native
+   layout class; otherwise 100% still means the old compact grid row. */
+html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"] {
+  grid-template-rows: minmax(0, 1fr) 0 0 !important;
+}
+
 html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>aside,
 html:root[data-pulsecolor-layout="expanded"] [class*="CommonLayout_root"]>[class*="Content_root"] {
   height: 100% !important;
