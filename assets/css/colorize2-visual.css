@@ -19,7 +19,7 @@ html.colorize-new-wave-page:not(:has([class*="DevPanel_root"])) [class*="MainPag
 html.colorize-new-wave-page [class*="MainPage_betaSlot_newVibe"] [data-test-id="RELEASE_NOTES_BUTTON"] {
     anchor-name: --pc-vibe-version-row;
 }
-html.colorize-new-wave-page [class*="DevPanel_root"] {
+html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] {
     z-index: var(--ym-z-index-overlay);
     position: fixed !important;
     position-anchor: --pc-vibe-version-row;
@@ -31,14 +31,14 @@ html.colorize-new-wave-page [class*="DevPanel_root"] {
     height: anchor-size(height);
     max-width: calc(100vw - 16px);
 }
-html.colorize-new-wave-page [class*="DevPanel_root"] button {
+html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
     line-height: 1.4 !important;
     height: 100% !important;
     min-height: 0;
     padding-block: 0 !important;
     box-sizing: border-box;
 }
-html.colorize-new-wave-page .DevPanel_root__Gu7qn .cpeagBA1_PblpJn8Xgtv {
+html.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
     font-family: var(--ym-font-text);
     font-size: var(--ym-font-size-label-s);
     font-style: normal;
@@ -53,6 +53,19 @@ html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [class*="DevPa
 }
 html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [class*="DevPanel_root"] button:hover {
     background: color-mix(in srgb, var(--color-light-3, #eee) 85%, transparent) !important;
+}
+/* The popup is a surface of its own, not transparent text over the wave.
+   Keep native item geometry; only the small direct-child badge is resized. */
+html body[data-pc-vibe-appearance="light"] [class*="DevPanel_panel"] {
+    background: color-mix(in srgb, var(--ym-background-color-primary-enabled-content, #eee) 95%, transparent) !important;
+    color: var(--color-dark-9, #292929) !important;
+}
+html:root body[data-pc-vibe-appearance="light"] [class*="DevPanel_panel"] button {
+    background: color-mix(in srgb, var(--color-light-3, #eee) 95%, transparent) !important;
+    color: var(--color-dark-9, #292929) !important;
+}
+html:root body[data-pc-vibe-appearance="light"] [class*="DevPanel_panel"] button:hover {
+    background: var(--color-light-1, #ddd) !important;
 }
 
 /* Only during an appearance switch: keep normal hover and wheel motion cheap. */
