@@ -92,6 +92,15 @@ html:root [class*="CommonLayout_root"] > [class*="PlayerBarDesktopWithBackground
   overflow: hidden;
 }
 
+/* YM fits artist text to this box with ResizeObserver. Its intrinsic text
+   size must not feed back into the flex minimum while we expand the page.
+   Target only the live box, not YM's detached font-measurement clones. */
+[data-test-id="VIBE_DYNAMIC_ARTISTS"] {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  contain: size layout;
+}
+
 html.colorize-new-wave-page {
   --colorize-wave-radius: 12px;
 }
