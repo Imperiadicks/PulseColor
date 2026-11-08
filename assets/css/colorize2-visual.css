@@ -707,6 +707,13 @@ html:root [class*="CommonLayout_root"]>aside:not([class*="Navbar_root_collapsed"
     background-color: #ffffff14 !important;
 }
 
+/* Artist recommendation cards use a filled primary CTA, not a toolbar icon. */
+html:root:root button[data-test-id="PLAY_BUTTON"][class*="AlbumPromoCard_button__"]:not(:disabled):not([aria-disabled="true"])
+  :is([class*="AlbumPromoCard_buttonText__"], [class*="AlbumPromoCard_buttonIcon__"], [class*="AlbumPromoCard_buttonIcon__"] :is(use, path)) {
+    color: #171319 !important;
+    fill: currentColor !important;
+}
+
  :is(.ym-dark-theme, .ym-light-theme) :is([class*='SonataFullscreenControlsDesktop_sonataPlayButton'], .cover-download-button) {
     background-color: var(--ym-controls-color-secondary-card-enabled);
 }
