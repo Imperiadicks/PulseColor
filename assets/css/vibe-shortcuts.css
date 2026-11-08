@@ -10,8 +10,18 @@ html[data-pc-vibe-menu-background] [data-floating-ui-portal]:has([data-test-id="
 
 /* One surface recipe for every Vibe player control and its track/progress pill.
    Keep the progress ::before fill and the native disabled/text/icon states. */
-html:root:root [data-test-id="VIBE_PLAYERBAR"] :is(button, [class*="VibePlayerbarMeta_center__"]) {
+html:root:root [data-test-id="VIBE_PLAYERBAR"] :is(button, [class*="VibePlayerbarMeta_center__"]),
+html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]),
+html:root:root.colorize-new-wave-page:not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) :is(
+    [class*="MainPage_betaSlot_newVibe"] :is(button, [class*="MainPage_beta__"]),
+    [class*="DevPanel_root"] > button
+) {
     background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
+}
+
+html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]) {
+    background-image: none !important;
+    backdrop-filter: none !important;
 }
 
 .pc-vibe-settings-hint {

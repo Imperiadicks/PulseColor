@@ -494,17 +494,17 @@ html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] {
 }
 
 /* The secondary context/reset action is only exposed alongside open settings. */
-html:root[data-pulsecolor-minimal-vibe]:not([data-pc-vibe-settings-open]) [class*="VibePage_context__"] [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"]:not([data-pc-vibe-context-open]) [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
   display: none !important;
 }
 
 /* Settings and playback stay separate, simultaneously usable surfaces. */
 html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
   translate: 0 0;
-  transition: right 380ms cubic-bezier(.4, 0, .2, 1), translate 220ms cubic-bezier(.22, 1, .36, 1) !important;
+  transition: right 380ms cubic-bezier(.4, 0, .2, 1), translate 260ms cubic-bezier(.22, 1, .36, 1) !important;
 }
 
-html:root[data-pulsecolor-minimal-vibe][data-pc-vibe-settings-docked] [class*="VibePage_player__"] {
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"][data-pc-vibe-dock] {
   translate: 0 var(--pc-vibe-settings-player-shift, 0px);
 }
 
@@ -517,13 +517,24 @@ html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
   max-width: calc(100vw - 32px) !important;
   max-height: var(--pc-vibe-settings-max-height, max(80px, calc(100dvh - 2 * var(--pc-vibe-settings-player-height, 148px) - 48px))) !important;
   opacity: 1 !important;
-  transition: clip-path 240ms linear !important;
-  clip-path: inset(0 0 100% 0 round 16px);
+  border-radius: 16px;
+  overflow: hidden;
+  clip-path: inset(0 0 100% 0);
+  pointer-events: none;
+  will-change: clip-path;
+  transition: clip-path 150ms cubic-bezier(.30, .08, .65, 1) !important;
 }
 
-html:root[data-pulsecolor-minimal-vibe][data-pc-vibe-settings-open] [data-test-id="VIBE_SETTINGS_BLOCK"] {
-  clip-path: inset(0 0 0 0 round 16px);
-  transition-duration: 300ms !important;
+html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"][data-pc-vibe-reveal] {
+  clip-path: inset(0);
+  pointer-events: auto;
+  transition: clip-path 260ms cubic-bezier(.22, 1, .36, 1) !important;
+}
+
+@starting-style {
+  html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"][data-pc-vibe-reveal] {
+    clip-path: inset(0 0 100% 0);
+  }
 }
 
 /* Keep the native dimming/design, but let clicks reach the docked player. */
@@ -538,8 +549,17 @@ html:root[data-pulsecolor-minimal-vibe] [class*="VibeSettingsModal_overlay__"] {
   html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
     animation: none !important;
     transition: none !important;
-    clip-path: none;
+    will-change: auto;
   }
+  html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"][data-pc-vibe-reveal] {
+    transition: none !important;
+  }
+}
+
+html:root[data-pulsecolor-minimal-vibe] [data-pc-vibe-settings-static] {
+  color: inherit;
+  border-radius: 999px;
+  padding: 8px 16px;
 }
 
 html:root[data-pulsecolor-minimal-vibe] [data-pc-vibe-settings-native],
@@ -675,12 +695,6 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimme
   z-index: 2;
 }
 
-.VibeAnimation_enter_active__j0jOl,
-.VibeAnimation_enter_done__Oi2Kz,
-.VibeAnimation_exit__ioGXk {
-  opacity: 0 !important;
-}
-
 .SonataFullscreenControlsDesktop_sonataButton__69FFc,
 .iJVAJMgccD4vj4E4o068,
 .WsKeF73pWotx9W1tWdYY,
@@ -761,15 +775,9 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimme
   border-color: var(--ym-controls-color-secondary-text-enabled) !important;
 }
 
-.VibeAnimation_enter_active__j0jOl,
-.VibeAnimation_enter_done__Oi2Kz,
-.VibeAnimation_exit__ioGXk {
-  opacity: 0 !important;
-}
-
-[class*="VibeAnimation_enter_active__"],
+:where(html:not([data-pc-native-wave])) :is([class*="VibeAnimation_enter_active__"],
 [class*="VibeAnimation_enter_done__"],
-[class*="VibeAnimation_exit__"] {
+[class*="VibeAnimation_exit__"]) {
   opacity: 0 !important;
 }
 
@@ -855,7 +863,7 @@ html[data-pulsecolor-content-reveal] [class*="Content_main"] :is([class*="Shimme
       var(--ym-background-color-secondary-enabled-blur) 82%) !important;
 }
 
-.VibeWidgetAnimation_root__7fpeP {
+:where(html:not([data-pc-native-wave])) [class*="VibeWidgetAnimation_root"] {
   opacity: 0;
 }
 
