@@ -6,7 +6,7 @@ const addonConfig = {
   name: "PulseColor",
   description: "Тема для Яндекс Музыки. Требуются PulseColorVisual и PulseColorAudioCore.",
   type: "theme",
-  version: "2.1.0",
+  version: "2.1.1",
   author: ["imperiadicks"],
   image: "Assets/image.png",
   banner: "Assets/Banner.png",

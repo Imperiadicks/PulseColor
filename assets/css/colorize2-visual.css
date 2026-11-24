@@ -4,7 +4,7 @@
 
 /* Reserve space only while YM actually mounts its developer badge.
    With developer mode off, leave the native version-slot geometry untouched. */
-html.colorize-new-wave-page:has([class*="DevPanel_root"]) [class*="MainPage_betaSlot_newVibe"] {
+html.colorize-new-wave-page[data-pc-dev-present] [class*="MainPage_betaSlot_newVibe"] {
     display: flex;
     inset-block-end: 0;
     inset-block-start: auto;
@@ -13,13 +13,13 @@ html.colorize-new-wave-page:has([class*="DevPanel_root"]) [class*="MainPage_beta
 }
 /* The theme clips the content shell to rounded corners; preserve an inner
    gutter instead of letting the native right:0 clip the version pill. */
-html.colorize-new-wave-page:not(:has([class*="DevPanel_root"])) [class*="MainPage_betaSlot_newVibe"] {
+html.colorize-new-wave-page:not([data-pc-dev-present]) [class*="MainPage_betaSlot_newVibe"] {
     inset-inline-end: 12px;
 }
 html.colorize-new-wave-page [class*="MainPage_betaSlot_newVibe"] [data-test-id="RELEASE_NOTES_BUTTON"] {
     anchor-name: --pc-vibe-version-row;
 }
-html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not([data-pc-dev-fullscreen]) [class*="DevPanel_root"] {
     z-index: var(--ym-z-index-overlay);
     position: fixed !important;
     position-anchor: --pc-vibe-version-row;
@@ -31,14 +31,14 @@ html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([da
     height: anchor-size(height, 26px);
     max-width: calc(100vw - 16px);
 }
-html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not([data-pc-dev-fullscreen]) [class*="DevPanel_root"] > button {
     line-height: 1.4 !important;
     height: 100% !important;
     min-height: 0;
     padding-block: 0 !important;
     box-sizing: border-box;
 }
-html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not(:has([data-test-id="FULLSCREEN_PLAYER_MODAL"])) [class*="DevPanel_root"] > button {
+html.colorize-new-wave-page:not([data-pulsecolor-layout="compact"]):not([data-pc-dev-fullscreen]) [class*="DevPanel_root"] > button {
     font-family: var(--ym-font-text);
     font-size: var(--ym-font-size-label-s);
     font-style: normal;
@@ -708,6 +708,53 @@ html:root [class*="CommonLayout_root"]>aside:not([class*="Navbar_root_collapsed"
 }
 
 /* Artist recommendation cards use a filled primary CTA, not a toolbar icon. */
+html:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"], [data-test-id="NEW_RELEASE_CARD"], [class*="NewRelease_root__"]) {
+    --pc-promo-base: var(--new-release-color, var(--artist-recommendation-glow-color, var(--pc-release-accent, #353942)));
+    --pc-promo-title: color-mix(in oklab, var(--pc-promo-base) 22%, white);
+    --pc-promo-detail: color-mix(in oklab, var(--pc-promo-base) 34%, white);
+    --pc-promo-button: color-mix(in oklab, var(--pc-promo-base) 45%, white);
+    --pc-promo-ink: color-mix(in oklab, var(--pc-promo-base) 35%, black);
+    color: var(--pc-promo-detail);
+}
+
+html:root [data-test-id="NEW_RELEASE_CARD_DESCRIPTION"],
+html:root [data-test-id="NEW_RELEASE_CARD_TYPE"],
+html:root [data-test-id="ARTIST_RECOMMENDATION_CARD"] [class*="ArtistRecommendationMeta_artistNames__"],
+html:root [data-test-id="ARTIST_RECOMMENDATION_CARD"] [class*="ArtistRecommendationMeta_artistCaption__"] {
+    color: var(--pc-promo-detail) !important;
+    font-weight: 600 !important;
+}
+
+html:root [data-test-id="NEW_RELEASE_CARD_TITLE"],
+html:root [data-test-id="ARTIST_RECOMMENDATION_CARD"] [class*="ArtistRecommendationMeta_title__"],
+html:root [class*="NewRelease_root__"] [class*="NewRelease_artistCaption__"],
+html:root [class*="NewRelease_root__"] [class*="NewRelease_artistLink__"] {
+    color: var(--pc-promo-title) !important;
+    font-weight: 700 !important;
+}
+
+html:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="NEW_RELEASE_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"]) :is([class*="NewReleaseCard_explicitMark__"], [class*="ArtistRecommendationMeta_explicitMark__"]) {
+    color: var(--pc-promo-detail) !important;
+}
+
+html:root:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="NEW_RELEASE_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"]) :is([class*="NewReleaseCard_button__"], [class*="ArtistRecommendationCard_playButton__"], [class*="NewRelease_trailerButton__"]):not(:disabled, [disabled], [aria-disabled="true"]) {
+    --ym-controls-color-secondary-text-enabled: var(--pc-promo-ink) !important;
+    --ym-controls-color-primary-text-hovered: var(--pc-promo-ink) !important;
+    --ym-controls-color-primary-default-pressed: var(--pc-promo-ink) !important;
+    background-color: var(--pc-promo-button) !important;
+    outline-color: var(--pc-promo-title) !important;
+    font-weight: 700 !important;
+}
+
+html:root:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="NEW_RELEASE_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"]) :is([class*="NewReleaseCard_button__"], [class*="ArtistRecommendationCard_playButton__"], [class*="NewRelease_trailerButton__"]):is(:hover, :focus-visible):not(:disabled, [disabled], [aria-disabled="true"]) {
+    background-color: var(--pc-promo-title) !important;
+}
+
+html:root:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="NEW_RELEASE_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"]) :is([class*="NewReleaseCard_button__"], [class*="ArtistRecommendationCard_playButton__"], [class*="NewRelease_trailerButton__"]):not(:disabled, [disabled], [aria-disabled="true"]),
+html:root:root :is([data-test-id="SIMPLE_ALBUM_PROMO_CARD"], [data-test-id="NEW_RELEASE_CARD"], [data-test-id="ARTIST_RECOMMENDATION_CARD"]) button:is([class*="NewReleaseCard_button__"], [class*="ArtistRecommendationCard_playButton__"], [class*="NewRelease_trailerButton__"]):not(:disabled):not([disabled]):not([aria-disabled="true"]) :is(svg, use, path, span) {
+    color: var(--pc-promo-ink) !important;
+}
+
 html:root:root button[data-test-id="PLAY_BUTTON"][class*="AlbumPromoCard_button__"]:not(:disabled):not([aria-disabled="true"])
   :is([class*="AlbumPromoCard_buttonText__"], [class*="AlbumPromoCard_buttonIcon__"], [class*="AlbumPromoCard_buttonIcon__"] :is(use, path)) {
     color: #171319 !important;
@@ -842,6 +889,12 @@ html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"
     syntax: "<length>";
     inherits: false;
     initial-value: 0px;
+}
+/* Filtered playlists pin two rows above a virtual list. The native sticky
+   surface must cover moving rows even before the list viewport is measured. */
+html:root [data-pc-opaque-playlist-header],
+html:root [class*="PlaylistPageFilters_stickyFilters__"] {
+    background: rgb(from var(--ym-background-color-primary-enabled-content, Canvas) r g b / 1) !important;
 }
 html:root [data-pc-header-viewport] {
     clip-path: inset(max(0px, var(--pc-header-clip, 0px)) 0 0) !important;

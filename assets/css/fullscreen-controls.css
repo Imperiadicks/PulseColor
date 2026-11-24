@@ -39,9 +39,13 @@ html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplaye
     border-radius: inherit;
 }
 
-html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) {
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is([class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]),
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"][data-pc-fullscreen-layout="controls"]:not([data-pc-betterplayer]) [data-test-id="TIMECODE_WRAPPER"] {
     --pc-fs-button-dark: var(--pc-fs-light-surface, color-mix(in srgb, var(--color-dark-6, #181818) 75%, black));
     background: color-mix(in srgb, var(--pc-fs-button-dark) var(--pc-fs-light-opacity, var(--pc-fs-button-opacity, 95%)), transparent) !important;
+}
+
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-betterplayer]) :is( [class*="FullscreenPlayerDesktopControls_root"] button, [class*="FullscreenPlayerDesktop_closeButton"]) {
     color: var(--ym-controls-color-secondary-text-enabled) !important;
     opacity: 1 !important;
     border: 1px solid rgb(255 255 255 / .12) !important;
@@ -319,7 +323,6 @@ html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER
     height: 64px !important;
     border-radius: 999px !important;
     overflow: hidden !important;
-    background: var(--pc-fs-light-overlay, rgb(255 255 255 / .12)) !important;
 }
 
 html:root [data-pc-fullscreen-layout="controls"] [data-test-id="TIMECODE_WRAPPER"]::before {
