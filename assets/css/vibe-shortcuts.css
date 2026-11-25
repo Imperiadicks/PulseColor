@@ -1,7 +1,9 @@
-/* Keep the React subtree alive, but hide its overlay and focus guards too. */
+/* Hide the entire portal without collapsing Floating UI's measured boxes. */
 html[data-pc-vibe-menu-background] [data-floating-ui-portal]:has([data-test-id="VIBE_CONTEXT_MENU"]),
 [data-pc-vibe-background-menu] {
-    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 [class*="VibePlayerControls_root"] [data-pc-vibe-action] {

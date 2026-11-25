@@ -1,10 +1,39 @@
 /* Native React nodes stay in place. Only their grid participation changes. */
 
-/* Centre the lyrics COLUMN, not only the text inside its native right half. */
+/* Keep the cover, track caption and seek bar the same width in compact windows. */
+@media (760px <= width < 1060px) and (height >= 520px) {
+    html:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-fullscreen-layout="controls"]):not([data-pc-betterplayer])
+        [class*="FullscreenPlayerDesktopContent_root__"] {
+        --fullscreen-player-poster-size-px: min(var(--pc-fs-compact-cover-size, 25rem), calc(50dvw - 2.5rem), calc(100dvh - 10.5rem));
+    }
+}
+@media (width < 960px) {
+    html:root [data-test-id="FULLSCREEN_PLAYER_MODAL"] [class*="FullscreenPlayerDesktopContent_root__"] {
+        --pc-fs-compact-cover-size: 22rem;
+    }
+}
+
+/* Extend the native lyrics panel into the gap, without changing its slide animation. */
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-fullscreen-layout="controls"])
+    [class*="FullscreenPlayerDesktopContent_root__"]:has([class*="FullscreenPlayerDesktopContent_additionalContent__"] :is([class*="SyncLyrics_root__"], [data-test-id="SYNC_LYRICS_CONTENT"])) {
+    --pc-fs-cover-shift: clamp(0px, calc((100dvw - 1200px) * .1), 64px);
+}
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-fullscreen-layout="controls"])
+    [class*="FullscreenPlayerDesktopContent_fullscreenContent__"]:has([class*="FullscreenPlayerDesktopContent_meta_isSplitMode"]) {
+    left: calc(-1 * var(--pc-fs-cover-shift, 0px));
+}
+html:root:root [data-test-id="FULLSCREEN_PLAYER_MODAL"]:not([data-pc-fullscreen-layout="controls"])
+    [class*="FullscreenPlayerDesktopContent_additionalContent__"]:has(:is([class*="SyncLyrics_root__"], [data-test-id="SYNC_LYRICS_CONTENT"])) {
+    --pc-fs-lyrics-extra: calc(clamp(0px, calc((100dvw - 1080px) * .18), 144px) + var(--pc-fs-cover-shift, 0px));
+    left: calc(-1 * var(--pc-fs-lyrics-extra));
+    width: calc(50% + var(--pc-fs-lyrics-extra));
+}
+
+/* Centre the lyrics column and give scaled lines room in wide windows. */
 html:root:root [data-pc-fullscreen-layout="controls"] [class*="FullscreenPlayerDesktopContent_additionalContent"]:has([class*="SyncLyrics_root"]) {
     position: absolute !important;
     inset: 64px auto 240px 50% !important;
-    width: min(800px, calc(100% - 64px)) !important;
+    width: min(1280px, calc(100% - clamp(24px, 5vw, 64px))) !important;
     height: auto !important;
     transform: translateX(-50%) !important;
     translate: none !important;

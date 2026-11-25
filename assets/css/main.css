@@ -1,5 +1,10 @@
 /* ─────────────────── Общие доработки интерфейса ─────────────────── */
-/* Native titlebar geometry and window controls remain unchanged. */
+/* Keep the window's drag region and PulseSync controls above the full player. */
+html:root:has([data-test-id="FULLSCREEN_PLAYER_MODAL"]) [class*="TitleBar_root__"] {
+  z-index: calc(var(--ym-z-index-overlay, 100) + 1);
+  background-color: transparent !important;
+}
+
 html:root [class*="TitleBar_root"]::after {
   display: var(--pulsecolor-title-display, block);
   content: "PULSECOLOR";
@@ -98,6 +103,14 @@ html:root [class*="CommonLayout_root"] > [class*="PlayerBarDesktopWithBackground
   min-width: 0 !important;
   min-height: 0 !important;
   contain: size layout;
+}
+
+/* YM appends a hidden, fixed-width measuring copy directly to body during
+   ResizeObserver delivery. Keep it out of document scroll geometry without
+   applying size containment: YM still needs the copy's intrinsic text size. */
+body > [data-test-id="VIBE_DYNAMIC_ARTISTS"][style*="visibility: hidden"][style*="position: absolute"] {
+  inset: auto auto 100% 0 !important;
+  contain: layout;
 }
 
 /* The marquee measures its slot and renders a different child when it
