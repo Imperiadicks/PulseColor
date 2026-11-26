@@ -440,12 +440,14 @@ html[data-pulsecolor-playerbar-leave] :is([class*="PlayerBarDesktopWithBackgroun
 html:root [class*="CommonLayout_root"]>aside[class*="Navbar_root"] {
   margin-block-start: 0 !important;
   align-self: stretch;
-  /* Native grid follows the sidebar width; do not scale text or animate edges. */
-  transition: width var(--pulsecolor-sidebar-duration, 380ms) cubic-bezier(.22, 1, .36, 1) !important;
+  /* Commit the grid width once; LayoutMotion animates the visible bounds. */
+  transition: none !important;
 }
 
-html[data-pulsecolor-appearance="slow"] {
-  --pulsecolor-sidebar-duration: 950ms;
+/* YM also animates the intrinsic width/margins of labels in every playlist
+   row. Keep visual fades, but do not resize the navigation per frame. */
+html:root [class*="CommonLayout_root"] > aside[class*="Navbar_root"] :is([class*="NavbarDesktop_navigation__"], .nxMXCBiVfgH4oxds3f2y, .buOTZq_TKQOVyjMLrXvB) {
+  transition-property: opacity, color, background-color, transform, translate !important;
 }
 
 /* translate creates a stacking context: lift the whole sidebar while its
@@ -462,23 +464,51 @@ html:root:not([data-pulsecolor-layout]):not(.colorize-new-wave-page) [class*="Co
 html:root [class*="Navbar_root_collapsed__"] {
   translate: 0 0;
   width: var(--navbar-width, var(--navbar-collapsed-width, 4.5rem)) !important;
-  margin-inline-end: 1;
+  margin-inline-end: 0;
   border: 1px solid var(--pc-glass-border) !important;
   border-radius: 12px;
   box-shadow: none !important;
   outline: 1px solid var(--pc-shell-outline, var(--color-light-1, rgba(255, 255, 255, .15)));
 }
 
-html:root.pulsecolor-navbar-slide-away [class*="Navbar_root_collapsed__"],
-html:root[data-pulsecolor-minimal-vibe] [class*="Navbar_root_collapsed__"] {
+/* Keep the same transitions on both sides so an interrupted toggle reverses
+   from the current frame. Slide the sidebar as its layout space closes. */
+html:root.colorize-new-wave-page {
+  --pc-only-player-motion: 440ms cubic-bezier(.4, 0, .2, 1);
+}
+
+html:root.colorize-new-wave-page [class*="CommonLayout_root"] > aside[class*="Navbar_root_collapsed__"] {
+  transition: translate var(--pc-only-player-motion),
+    margin-inline-end var(--pc-only-player-motion) !important;
+}
+
+html:root.colorize-new-wave-page [class*="CommonLayout_root"] > [class*="Navbar_root_collapsed__"] ~ [class*="Content_root"] {
+  transition: margin-inline-start var(--pc-only-player-motion);
+}
+
+html:root.pulsecolor-navbar-slide-away [class*="Navbar_root_collapsed__"] {
   translate: calc(-100% - 2rem) 0;
   margin-inline-end: calc(-1 * var(--navbar-width, var(--navbar-collapsed-width, 4.5rem)));
   pointer-events: none;
 }
 
 /* Keep the native player visible; hide only its surrounding decoration. */
-html:root:is(.pulsecolor-navbar-slide-away, [data-pulsecolor-minimal-vibe]) [class*="CommonLayout_root"] > [class*="Navbar_root_collapsed__"] ~ [class*="Content_root"] {
+html:root.pulsecolor-navbar-slide-away [class*="CommonLayout_root"] > [class*="Navbar_root_collapsed__"] ~ [class*="Content_root"] {
   margin-inline-start: -.5rem;
+}
+
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] {
+  grid-template-columns: 0 minmax(0, 1fr) !important;
+  column-gap: 0 !important;
+}
+
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > aside {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > [class*="Content_root"] {
+  margin-inline-start: 0 !important;
 }
 
 html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
@@ -488,7 +518,8 @@ html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
 
 html:root :is([class*="VibePage_player__"], [class*="VibePage_context__"]) {
   right: 0;
-  transition: right 380ms cubic-bezier(.4, 0, .2, 1) !important;
+  translate: var(--pc-only-player-x, 0px) var(--pc-only-player-y, 0px);
+  transition: translate var(--pc-only-player-motion, 380ms ease-in-out) !important;
 }
 
 html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
@@ -499,32 +530,55 @@ html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*
   transition: opacity 320ms ease-in-out, visibility 0s 320ms !important;
 }
 
-/* The wave replaces the native artist/title decoration completely. */
-html:root.pulsecolor-wave-page [class*="VibePage_entityMetaBody__"] {
+/* Keep the native artist photo when YM provides it. Text-only decoration
+   still yields to the visualizer, and Only Player keeps its own hide rules. */
+html:root.pulsecolor-wave-page [class*="VibePage_entityMetaBody__"]:not(:has([class*="VibePage_artistCover__"])) {
   display: none !important;
 }
 
-html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
-  right: 19.2vw !important;
+html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_player__"], [class*="VibePage_context__"]) {
+  --pc-only-player-x: -19.2vw;
 }
 
-html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] {
-  right: 19.2vw !important;
+/* YM's narrow scene already centers the player and can leave the desktop
+   grid with an intrinsic (titlebar-only) height. Keep the whole scene usable. */
+html.colorize-new-wave-page:has([class*="VibePage_context_mobile__"]) :is(body, [class*="CommonLayout_root"][class*="DefaultLayout_rootNewVibe"]) {
+  height: 100dvh !important;
+}
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe]:has([class*="VibePage_context_mobile__"]) :is([class*="VibePage_player__"], [class*="VibePage_context__"]) {
+  --pc-only-player-x: 0px;
+}
+/* PulseSync inserts the device button in the same slot as YM's absolute
+   paused-state like button. Let them occupy separate slots on mobile. */
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe]:has([class*="VibePage_context_mobile__"]) .PulseSync_waveSideControls_right > [data-test-id="LIKE_BUTTON"][class*="mobilePaused"] {
+  position: relative !important;
+  inset: auto !important;
+  flex-shrink: 0;
 }
 
-/* The secondary context/reset action is only exposed alongside open settings. */
-html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"]:not([data-pc-vibe-context-open]) [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
-  display: none !important;
+/* Do not re-center the primary trigger when its secondary action appears. */
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] > [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
+  position: absolute !important;
+  inset: 50% auto auto calc(100% + 4px);
+  translate: 0 -50%;
+  transition: opacity 160ms ease-out, visibility 0s !important;
+}
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"]:not([data-pc-vibe-context-open]) > [data-test-id="RESET_VIBE_CONTEXT_BUTTON"] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: opacity 160ms ease-out, visibility 0s 160ms !important;
 }
 
 /* Settings and playback stay separate, simultaneously usable surfaces. */
-html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"] {
-  translate: 0 0;
-  transition: right 380ms cubic-bezier(.4, 0, .2, 1), translate 260ms cubic-bezier(.22, 1, .36, 1) !important;
+html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"][data-pc-vibe-dock] {
+  --pc-only-player-y: var(--pc-vibe-settings-player-shift, 0px);
 }
 
-html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"][data-pc-vibe-dock] {
-  translate: 0 var(--pc-vibe-settings-player-shift, 0px);
+@media (prefers-reduced-motion: reduce) {
+  html:root.colorize-new-wave-page {
+    --pc-only-player-motion: 0ms linear;
+  }
 }
 
 /* Apply on the modal's very first paint, before the runtime measures the player. */
@@ -534,7 +588,7 @@ html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
   max-width: calc(100vw - 32px) !important;
-  max-height: var(--pc-vibe-settings-max-height, max(80px, calc(100dvh - 2 * var(--pc-vibe-settings-player-height, 148px) - 48px))) !important;
+  max-height: var(--pc-vibe-settings-max-height, max(0px, calc(100dvh - 2 * var(--pc-vibe-settings-player-height, 148px) - 48px))) !important;
   opacity: 1 !important;
   border-radius: 16px;
   overflow: hidden;
@@ -544,10 +598,18 @@ html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
   transition: clip-path 150ms cubic-bezier(.30, .08, .65, 1) !important;
 }
 
+html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] [class*="VibeSettingsModal_modalContent__"] {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"][data-pc-vibe-reveal] {
   clip-path: inset(0);
   pointer-events: auto;
-  transition: clip-path 260ms cubic-bezier(.22, 1, .36, 1) !important;
+  /* Both start together: the panel must not unfold faster than the player
+     can move out of its way, particularly with the compact cover controls. */
+  transition: clip-path var(--pc-only-player-motion, 380ms ease-in-out) !important;
 }
 
 @starting-style {
@@ -599,7 +661,7 @@ html[data-pulsecolor-content-reveal]:not([data-pulsecolor-instant-settings]) [cl
   [class*="LandingPage_root"] :is([class*="BlockHeader_root"], [class*="LikesAndHistoryItem_root"], [class*="NewRelease_root"]),
   [class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"],
   [class*="VibePage_player__"], [class*="VibePage_words__"],
-  h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]):not([data-pulsecolor-reveal-ready]):not([class*="Shimmer_"] *,
+  h1, h2, h3, p, a[href], button, input, select, textarea, img, [role="tablist"], [role="button"]):not([data-pulsecolor-reveal-ready]):not([class*="VibePage_root__"], [class*="VibePage_root__"] *):not([class*="Shimmer_"] *,
   [class*="SettingsPage_root"] *, [data-test-id="SETTINGS_PAGE"] *,
   [data-test-id="SETTINGS_LIST"] *, [data-test-id="VIBE_SETTINGS_BLOCK"] *,
   [data-test-id="FULLSCREEN_PLAYER_MODAL"] *, [data-test-id="SYNC_LYRICS_CONTENT"] *,
