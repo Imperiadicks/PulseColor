@@ -497,18 +497,37 @@ html:root.pulsecolor-navbar-slide-away [class*="CommonLayout_root"] > [class*="N
   margin-inline-start: -.5rem;
 }
 
-html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] {
-  grid-template-columns: 0 minmax(0, 1fr) !important;
+/* Keep both panels in the grid, with a continuous outer frame. */
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"]:has(> aside) {
   column-gap: 0 !important;
 }
 
-html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > aside {
-  visibility: hidden !important;
-  pointer-events: none !important;
+html:root:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"]:has(> aside)
+  > :where(aside, [class*="Content_root"]) {
+  box-sizing: border-box;
+  outline: none !important;
+  border: 1px solid var(--pc-shell-outline, var(--color-light-1, #ffffff26)) !important;
 }
 
-html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > [class*="Content_root"] {
+html:root:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"]:has(> aside) > aside {
+  border-start-start-radius: 12px !important;
+  border-end-start-radius: 12px !important;
+  border-inline-end-color: transparent !important;
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+html:root:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"]:has(> aside) > [class*="Content_root"] {
   margin-inline-start: 0 !important;
+  border-inline-start-color: transparent !important;
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > aside > * {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
