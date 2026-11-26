@@ -10,15 +10,17 @@ html[data-pc-vibe-menu-background] [data-floating-ui-portal]:has([data-test-id="
     flex-shrink: 0;
 }
 
-/* One surface recipe for every Vibe player control and its track/progress pill.
+/* One surface recipe for the Vibe controls and the track/progress pill.
    Keep the progress ::before fill and the native disabled/text/icon states. */
+html:root:root.colorize-new-wave-page :is([class*="VibePage_context__"], [class*="VibePage_context_mobile__"])
+    :is([class*="VibeResetButton_button"], [data-test-id="RESET_VIBE_CONTEXT_BUTTON"]),
 html:root:root [data-test-id="VIBE_PLAYERBAR"] :is(button, [class*="VibePlayerbarMeta_center__"], [class*="VibePlayerbarTimecodeContent_center__"]),
 html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]),
 html:root:root.colorize-new-wave-page:not([data-pc-dev-fullscreen]) :is(
     [class*="MainPage_betaSlot_newVibe"] :is(button, [class*="MainPage_beta__"]),
     [class*="DevPanel_root"] > button
 ) {
-    background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
+    background: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
 }
 
 html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]) {
