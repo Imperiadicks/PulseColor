@@ -10,137 +10,17 @@ html[data-pc-vibe-menu-background] [data-floating-ui-portal]:has([data-test-id="
     flex-shrink: 0;
 }
 
-/* One surface recipe for every Vibe player control and its track/progress pill.
+/* One surface recipe for the Vibe controls and the track/progress pill.
    Keep the progress ::before fill and the native disabled/text/icon states. */
+html:root:root.colorize-new-wave-page :is([class*="VibePage_context__"], [class*="VibePage_context_mobile__"])
+    :is([class*="VibeResetButton_button"], [data-test-id="RESET_VIBE_CONTEXT_BUTTON"]),
 html:root:root [data-test-id="VIBE_PLAYERBAR"] :is(button, [class*="VibePlayerbarMeta_center__"], [class*="VibePlayerbarTimecodeContent_center__"]),
 html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]),
 html:root:root.colorize-new-wave-page:not([data-pc-dev-fullscreen]) :is(
     [class*="MainPage_betaSlot_newVibe"] :is(button, [class*="MainPage_beta__"]),
-    [class*="DevPanel_root"] > button,
-    [data-pc-wave-toolbar] > button
+    [class*="DevPanel_root"] > button
 ) {
-    background-color: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
-}
-
-[data-pc-wave-toolbar] { display: none; }
-
-html[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [data-pc-wave-toolbar-source] {
-    display: none !important;
-}
-
-html.colorize-new-wave-page[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) {
-    --pc-wave-shell-gutter: .75rem;
-}
-
-html.colorize-new-wave-page[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [class*="CommonLayout_root"][class*="DefaultLayout_root_applicationPreserveTitleBar"] {
-    padding: var(--pc-wave-shell-gutter) !important;
-}
-
-html.colorize-new-wave-page[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen], [data-pulsecolor-minimal-vibe]) [class*="CommonLayout_root"][class*="DefaultLayout_root_applicationPreserveTitleBar"] {
-    column-gap: var(--pc-wave-shell-gutter) !important;
-}
-
-html.colorize-new-wave-page[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [class*="TitleBar_root"]::after {
-    top: calc(var(--pc-wave-shell-gutter) + .45rem);
-    transform: translateX(-50%);
-}
-
-html[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [class*="DevPanel_root"] > button {
-    anchor-name: --pc-vibe-toolbar-badge;
-}
-
-html[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [data-pc-wave-toolbar] {
-    position: fixed;
-    position-anchor: --pc-vibe-toolbar-badge;
-    left: anchor(center, calc(100vw - 28px));
-    top: calc(anchor(top, calc(100dvh - 36px)) - 8px - var(--pc-wave-toolbar-anchor-offset, 0px));
-    translate: -50% -100%;
-    z-index: calc(var(--ym-z-index-overlay, 700) - 1);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    animation: pc-toolbar-column-in 220ms cubic-bezier(.22, 1, .36, 1) both;
-    -webkit-app-region: no-drag;
-}
-
-/* Reserve room on the right so both controls follow dev in the same row. */
-html:not(.colorize-new-wave-page)[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [class*="DevPanel_root"] {
-    inset-inline-end: calc(0.3125rem + 80px) !important;
-}
-
-html:not(.colorize-new-wave-page)[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) [data-pc-wave-toolbar] {
-    left: calc(anchor(right, calc(100vw - 85px)) + 8px);
-    top: anchor(center, calc(100dvh - 20px));
-    translate: 0 -50%;
-    flex-direction: row;
-    animation-name: pc-toolbar-row-in;
-}
-
-/* CSS anchor coordinates do not include the dev wrapper's translateY(-50%). */
-html.colorize-new-wave-page[data-pc-dev-present]:not([data-pulsecolor-layout="compact"]) [data-pc-wave-toolbar] {
-    --pc-wave-toolbar-anchor-offset: calc(anchor-size(height, 0px) / 2);
-}
-
-[data-pc-wave-toolbar] > button {
-    display: grid;
-    place-items: center;
-    inline-size: 32px;
-    block-size: 26px;
-    border: 0;
-    border-radius: 999px;
-    padding: 0;
-    background: var(--ym-controls-color-secondary-default-enabled, transparent);
-    color: var(--ym-controls-color-primary-text-enabled);
-    cursor: pointer;
-    transition: background-color 180ms ease, color 180ms ease, scale 160ms ease;
-}
-
-html:not(.colorize-new-wave-page) [data-pc-wave-toolbar] > button {
-    block-size: 30px;
-    border-radius: var(--ym-radius-size-s, 8px);
-}
-
-/* These buttons sit across different layers of the player frame. A shared
-   opaque surface keeps the backdrop from changing their apparent density. */
-html:root:not(.colorize-new-wave-page)[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) :is([data-pc-wave-toolbar], [class*="DevPanel_root"]) > button {
-    background-color: color-mix(in srgb,
-        rgb(from var(--ym-controls-color-primary-text-enabled, #ddd) r g b / 1) 16%,
-        rgb(from var(--ym-background-color-primary-enabled-content, #171214) r g b / 1)
-    ) !important;
-}
-
-[data-pc-wave-toolbar] > button:hover {
-    filter: brightness(1.18);
-}
-
-/* Use one foreground for the badges and glyphs, not the muted TitleBar icon color. */
-html:root[data-pc-wave-toolbar-enabled]:not([data-pc-dev-fullscreen]) :is([data-pc-wave-toolbar], [class*="DevPanel_root"]) > button {
-    color: rgb(from var(--ym-controls-color-primary-text-enabled, currentColor) r g b / 1) !important;
-}
-html:root[data-pc-wave-toolbar-enabled] [data-pc-wave-toolbar] > button svg,
-html:root[data-pc-wave-toolbar-enabled] [data-pc-wave-toolbar] > button svg * {
-    color: inherit !important;
-}
-html:root[data-pc-wave-toolbar-enabled] [data-pc-wave-toolbar] [fill="currentColor"] { fill: currentColor !important; }
-html:root[data-pc-wave-toolbar-enabled] [data-pc-wave-toolbar] [stroke="currentColor"] { stroke: currentColor !important; }
-[data-pc-wave-toolbar] > button:active { scale: .94; }
-
-@keyframes pc-toolbar-column-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: none; }
-}
-@keyframes pc-toolbar-row-in {
-    from { opacity: 0; transform: translateX(-6px); }
-    to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-    html[data-pc-wave-toolbar-enabled] [data-pc-wave-toolbar] { animation: none; }
-    [data-pc-wave-toolbar] > button { transition: none; }
-}
-
-html.colorize-new-wave-page body[data-pc-vibe-appearance="light"] [data-pc-wave-toolbar] > button {
-    background: color-mix(in srgb, var(--color-light-3, #eee) 65%, transparent) !important;
-    color: var(--color-dark-9, #292929) !important;
+    background: color-mix(in srgb, var(--ym-controls-color-primary-outline-enabled) 65%, transparent) !important;
 }
 
 html:root:root[data-pulsecolor-minimal-vibe] :is([data-pc-vibe-settings], [data-test-id="VIBE_SETTINGS_BLOCK"]) {
