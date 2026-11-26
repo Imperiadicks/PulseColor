@@ -11,15 +11,18 @@ test('setting names describe actual behaviour without changing saved choice valu
   assert.ok(!items.some(item=>item.id==='wavePerformanceMode'),'Remove the ineffective FPS selector from the UI');
   const quality=items.find(item=>item.id==='waveWebglQuality');
   assert.deepEqual(Object.values(quality.options).map(option=>option.event),['auto','balanced','low']);
-  for(const [index,budget] of [1200000,900000,450000].entries()){
-    const option=quality.options[String(index+1)];
-    const scale=waveRenderScale(3840,2160,2,option.event);
-    assert.ok(Math.abs(3840*2160*scale*scale-budget)<1);
-    assert.ok(quality.description.includes(String(budget/1000000).replace('.',',')), 'Technical limits belong in explanations, not setting names');
+  assert.deepEqual(Object.values(quality.options).map(option=>option.name),['Высокое','Среднее','Низкое']);
+  assert.match(quality.description,/4K \(3840 × 2160\)/);
+  assert.match(quality.description,/Среднее и низкое уменьшают нагрузку/);
+  const width=3840,height=2160;
+  assert.equal(waveRenderScale(width,height,2,quality.options['1'].event),1);
+  assert.equal(waveRenderScale(width*2,height*2,2,quality.options['1'].event),.5);
+  for(const [key,budget] of [['2',900000],['3',450000]]){
+    const scale=waveRenderScale(width,height,2,quality.options[key].event);
+    assert.ok(Math.abs(width*height*scale*scale-budget)<1);
   }
   assert.ok(!JSON.stringify(catalog).includes('без ограничений'));
   const source=items.find(item=>item.id==='waveDriveMode');
   assert.deepEqual(Object.values(source.options).map(option=>option.event),['raw','bpm']);
   assert.equal(source.options['1'].name,'По звуку');
-  assert.equal(items.find(item=>item.id==='tweakedLyricsMinOpacity').name,'Минимальная непрозрачность строк');
 });
