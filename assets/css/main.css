@@ -632,7 +632,7 @@ html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"][dat
   pointer-events: auto;
   /* Both start together: the panel must not unfold faster than the player
      can move out of its way, particularly with the compact cover controls. */
-  transition: clip-path var(--pc-only-player-motion, 380ms ease-in-out) !important;
+  transition: clip-path var(--pc-only-player-motion, 190ms ease-in-out) !important;
 }
 
 @starting-style {
