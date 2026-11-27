@@ -474,7 +474,7 @@ html:root [class*="Navbar_root_collapsed__"] {
 /* Keep the same transitions on both sides so an interrupted toggle reverses
    from the current frame. Slide the sidebar as its layout space closes. */
 html:root.colorize-new-wave-page {
-  --pc-only-player-motion: 440ms cubic-bezier(.4, 0, .2, 1);
+  --pc-only-player-motion: 220ms cubic-bezier(.4, 0, .2, 1);
 }
 
 html:root.colorize-new-wave-page [class*="CommonLayout_root"] > aside[class*="Navbar_root_collapsed__"] {
@@ -535,13 +535,13 @@ html.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_
 
 html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
   [class*="VibePage_root"] [class*="AlbumCover_cover__"]) {
-  transition: opacity 320ms ease-in-out, visibility 0s !important;
+  transition: opacity 160ms ease-in-out, visibility 0s !important;
 }
 
 html:root :is([class*="VibePage_player__"], [class*="VibePage_context__"]) {
   right: 0;
   translate: var(--pc-only-player-x, 0px) var(--pc-only-player-y, 0px);
-  transition: translate var(--pc-only-player-motion, 380ms ease-in-out) !important;
+  transition: translate var(--pc-only-player-motion, 190ms ease-in-out) !important;
 }
 
 html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],
@@ -549,7 +549,7 @@ html:root[data-pulsecolor-minimal-vibe] :is([class*="VibePage_wheel__"], [class*
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transition: opacity 320ms ease-in-out, visibility 0s 320ms !important;
+  transition: opacity 160ms ease-in-out, visibility 0s 160ms !important;
 }
 
 /* Keep the native artist photo when YM provides it. Text-only decoration
@@ -591,7 +591,7 @@ html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_context__"] > [data-te
   translate: none;
   flex: none;
   margin: 0 !important;
-  transition: opacity 160ms ease-out, visibility 0s !important;
+  transition: opacity 80ms ease-out, visibility 0s !important;
 }
 /* Settings and playback stay separate, simultaneously usable surfaces. */
 html:root[data-pulsecolor-minimal-vibe] [class*="VibePage_player__"][data-pc-vibe-dock] {
@@ -618,7 +618,7 @@ html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] {
   clip-path: inset(0 0 100% 0);
   pointer-events: none;
   will-change: clip-path;
-  transition: clip-path 150ms cubic-bezier(.30, .08, .65, 1) !important;
+  transition: clip-path 75ms cubic-bezier(.30, .08, .65, 1) !important;
 }
 
 html:root[data-pulsecolor-minimal-vibe] [data-test-id="VIBE_SETTINGS_BLOCK"] [class*="VibeSettingsModal_modalContent__"] {
