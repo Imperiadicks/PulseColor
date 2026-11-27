@@ -525,9 +525,12 @@ html:root:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="Com
 }
 
 html:root.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > aside > * {
+  pointer-events: none !important;
+}
+
+html.colorize-new-wave-page[data-pulsecolor-minimal-vibe] [class*="CommonLayout_root"] > aside:not([data-pc-seam-fading]) > * {
   opacity: 0 !important;
   visibility: hidden !important;
-  pointer-events: none !important;
 }
 
 html:root :is([class*="VibePage_wheel__"], [class*="VibePage_entityMetaBody__"], [class*="VibePage_words__"],

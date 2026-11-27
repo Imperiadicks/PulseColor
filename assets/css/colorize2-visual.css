@@ -885,16 +885,23 @@ html:root :is([data-test-id="STICKY_HEADER"], [data-test-id="TEXT_STICKY_HEADER"
     :is([class*="StickyHeader_backdrop__"], [class*="InnerHeader_backdrop__"], [class*="TextHeader_backdrop__"]) {
     display: none !important;
 }
+html:root main[class*="Content_main"] :is(
+    [data-test-id="COMPOSITE_HEADER"], [data-test-id="COMPOSITE_STICKY_HEADER"],
+    [class*="StickyHeader_container__"], [class*="PlaylistPageFilters_stickyFilters__"]
+) {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+html:root main[class*="Content_main"] :is(
+    [data-test-id="COMPOSITE_STICKY_HEADER"], [class*="StickyHeader_container__"]
+) [class*="StickyHeader_backdrop__"] {
+    display: none !important;
+}
 @property --pc-header-clip {
     syntax: "<length>";
     inherits: false;
     initial-value: 0px;
-}
-/* Filtered playlists pin two rows above a virtual list. The native sticky
-   surface must cover moving rows even before the list viewport is measured. */
-html:root [data-pc-opaque-playlist-header],
-html:root [class*="PlaylistPageFilters_stickyFilters__"] {
-    background: rgb(from var(--ym-background-color-primary-enabled-content, Canvas) r g b / 1) !important;
 }
 html:root [data-pc-header-viewport] {
     clip-path: inset(max(0px, var(--pc-header-clip, 0px)) 0 0) !important;
